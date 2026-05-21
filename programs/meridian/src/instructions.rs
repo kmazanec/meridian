@@ -1,3 +1,6 @@
+// NOTE: the `ambiguous_glob_reexports` from the globs below (overlapping
+// `handler`/`pause`/`unpause` names) is allowed crate-wide in lib.rs, since the
+// same ambiguity also surfaces at the crate root's `pub use instructions::*`.
 pub mod add_strike;
 pub mod admin_pause;
 pub mod admin_settle;
@@ -13,11 +16,6 @@ pub mod place_order;
 pub mod redeem;
 pub mod settle_market;
 
-// Each instruction module defines a `handler` fn surfaced only via its fully
-// qualified path (`instructions::<module>::handler`) from `lib.rs`. The globs
-// below exist to re-export the Anchor `Context` structs and `*Args` types; the
-// resulting `handler` name overlap is harmless and expected.
-#[allow(ambiguous_glob_reexports)]
 pub use add_strike::*;
 pub use admin_pause::*;
 pub use admin_settle::*;

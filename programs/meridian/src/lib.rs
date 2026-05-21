@@ -11,6 +11,12 @@
 // emitted against macro-generated code that a module-level `#[allow]` can't
 // reach, so suppress it crate-wide.
 #![allow(clippy::diverging_sub_expression)]
+// Instruction modules each expose `handler` (and admin_pause `pause`/`unpause`),
+// surfaced only via fully qualified paths. The `pub use instructions::*` /
+// `pub use state::*` globs below — and the per-module globs in instructions.rs —
+// re-export the Anchor `Context`/`*Args` types; the resulting name overlap is
+// harmless. The ambiguity surfaces at every glob layer, so suppress it crate-wide.
+#![allow(ambiguous_glob_reexports)]
 
 pub mod constants;
 pub mod error;
