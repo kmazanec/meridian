@@ -41,6 +41,12 @@ default:
   # Define `run_in_docker` once; inherited by every job's shell session.
   before_script:
     - |
+      # For lean images (rust:1.89, node:20): run as the runner user so build
+      # outputs stay runner-owned. CARGO_HOME inside the project dir keeps the
+      # cargo cache archivable. NB `bash -c`, NOT `bash -lc`: a login shell
+      # sources /etc/profile and resets PATH, dropping the image's ENV PATH
+      # (/usr/local/cargo/bin) — which yields `cargo: command not found` for a
+      # non-root UID. A non-login shell preserves the image's ENV PATH.
       run_in_docker() {
         image="$1"; shift
         docker run --rm \
@@ -52,11 +58,18 @@ default:
           -e npm_config_cache=/build/.npm \
           "$image" bash -c "mkdir -p /build/.home && $*"
       }
-      # NB: `bash -c`, NOT `bash -lc`. A login shell sources /etc/profile, which
-      # resets PATH to a default that drops the rust image's /usr/local/cargo/bin
-      # (set via ENV, not profile) — yielding `cargo: command not found` when we
-      # also run as a non-root UID with no passwd entry. A non-login shell keeps
-      # the image's ENV PATH.
+      # For the Anchor image: its Rust/Solana toolchain is installed under /root
+      # (cargo at /root/.cargo/bin) and the image runs as root, so a non-root `-u`
+      # mapping can't traverse /root → `cargo: command not found`. Run as root
+      # (default HOME=/root, so the toolchain resolves), then chown the build
+      # outputs back to the runner UID/GID so GitLab can archive artifacts/cache.
+      run_in_docker_root() {
+        image="$1"; shift
+        docker run --rm \
+          -v "$CI_PROJECT_DIR":/build -w /build \
+          -e CARGO_TERM_COLOR=always \
+          "$image" bash -c "$* ; rc=\$? ; chown -R $(id -u):$(id -g) target .cargo 2>/dev/null || true ; exit \$rc"
+      }
 
 variables:
   CARGO_TERM_COLOR: always
@@ -86,7 +99,7 @@ workflow:
 build-program:
   stage: build
   script:
-    - run_in_docker solanafoundation/anchor:v1.0.2 'cargo build-sbf'
+    - run_in_docker_root solanafoundation/anchor:v1.0.2 'cargo build-sbf'
     - test -f target/deploy/meridian.so   # fail loudly if the artifact is missing
   artifacts:
     paths:
@@ -105,13 +118,13 @@ clippy:
   stage: check
   needs: ["build-program"]
   script:
-    - run_in_docker solanafoundation/anchor:v1.0.2 'cargo clippy --workspace --all-targets -- -D warnings'
+    - run_in_docker_root solanafoundation/anchor:v1.0.2 'cargo clippy --workspace --all-targets -- -D warnings'
 
 test:
   stage: test
   needs: ["build-program"]
   script:
-    - run_in_docker solanafoundation/anchor:v1.0.2 'cargo test --workspace'
+    - run_in_docker_root solanafoundation/anchor:v1.0.2 'cargo test --workspace'
 
 # TypeScript is linted with prettier (the only JS tooling the repo declares).
 # We run prettier via `npx` rather than `yarn install`: it needs no global
