@@ -4,28 +4,45 @@
 # prettier check on the TypeScript. The day-to-day dev loop runs entirely
 # in-process via LiteSVM, so this pipeline needs no Solana validator and no
 # Anchor toolchain. The Rust version is pinned by rust-toolchain.toml (1.89.0),
-# which rustup honors automatically inside the repo.
+# bundled in the rust:1.89 image (which also ships rustfmt + clippy).
 #
 # Later phases will add `anchor build` (BPF artifact) and a devnet deploy stage;
 # those are intentionally NOT here yet (see docs/ROADMAP.md, F-10).
+#
+# EXECUTOR NOTE: the `gauntlet-droplet` runner is a *shell* executor, so the
+# GitLab `image:` keyword is ignored — jobs run directly on the host shell, which
+# has no Rust/Node toolchain. We therefore run each job's real work inside a
+# container with `docker run`. The host only needs Docker (+ git for checkout).
+# `IN_DOCKER` centralizes the invocation:
+#   -v "$CI_PROJECT_DIR":/build -w /build   mount the checked-out repo
+#   -u $(id -u):$(id -g)                     write artifacts as the runner user
+#                                            (so GitLab cache/cleanup can manage
+#                                            target/ and node_modules/)
+#   -e CARGO_HOME=/build/.cargo              keep the cargo cache inside the
+#                                            project dir so `cache:` can archive it
 
 stages:
   - check
   - test
 
 default:
-  image: rust:1.89
   # Pin every job to the project's dedicated runner. A job that sets its own
   # `tags:` overrides this, so don't add per-job tags unless you mean to.
   tags:
     - gauntlet-droplet
 
-# Cache the Cargo registry and build output across jobs/runs. The key is tied to
-# Cargo.lock so a dependency change invalidates the cache cleanly.
 variables:
-  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
   CARGO_TERM_COLOR: always
+  # Reusable docker-run prefix. Append an image + `bash -lc '<cmds>'`.
+  IN_DOCKER: >-
+    docker run --rm
+    -v "$CI_PROJECT_DIR":/build -w /build
+    -u "$(id -u):$(id -g)"
+    -e CARGO_HOME=/build/.cargo
+    -e CARGO_TERM_COLOR=always
 
+# Cache the Cargo registry and build output across runs. The key is tied to
+# Cargo.lock so a dependency change invalidates the cache cleanly.
 cache:
   key:
     files:
@@ -46,36 +63,36 @@ workflow:
 fmt:
   stage: check
   script:
-    - rustup component add rustfmt
-    - cargo fmt --all -- --check
+    - $IN_DOCKER rust:1.89 bash -lc 'cargo fmt --all -- --check'
 
 clippy:
   stage: check
   script:
-    - rustup component add clippy
-    - cargo clippy --workspace --all-targets -- -D warnings
+    - $IN_DOCKER rust:1.89 bash -lc 'cargo clippy --workspace --all-targets -- -D warnings'
 
 test:
   stage: test
   script:
-    - cargo test --workspace
+    - $IN_DOCKER rust:1.89 bash -lc 'cargo test --workspace'
 
 # TypeScript is linted with prettier (the only JS tooling the repo declares).
-# Separate Node image so the Rust jobs stay lean.
+# We run prettier via `npx` rather than `yarn install`: it needs no global
+# install (corepack/yarn shims would write to root-owned /usr/local/bin and fail
+# under the non-root `-u` mapping), and prettier is the only thing `yarn lint`
+# actually invokes. The version is pinned to match package.json (prettier ^2).
+# Cache is the project-local npm cache so repeat runs skip the download.
 #
-# NOTE: no yarn.lock is committed yet, so installs are not reproducible. When the
-# off-chain workspace lands (F-06+), commit a lockfile and switch the install to
-# `yarn install --frozen-lockfile` to pin dependencies in CI.
+# NOTE: when the off-chain workspace lands (F-06+) with a committed yarn.lock,
+# switch this to a real `yarn install --frozen-lockfile && yarn lint`.
 lint-ts:
   stage: check
-  image: node:20
   cache:
     key:
       files:
         - package.json
     paths:
-      - node_modules/
+      - .npm/
   script:
-    - corepack enable
-    - yarn install
-    - yarn lint
+    - >-
+      $IN_DOCKER -e npm_config_cache=/build/.npm node:20
+      bash -lc 'npx --yes prettier@2 "*/**/*{.js,.ts}" --check'
