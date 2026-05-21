@@ -82,8 +82,44 @@ Decisions: `add_strike` = thin distinct instruction reusing the shared create lo
   `populate_market`; `StrikeAdded` event. Tests: happy path (accounts provisioned, `Open`,
   mints/vault PDA-owned with no external authority); duplicate rejected; non-admin rejected;
   added strike supports `mint_pair`. *(AC: add_strike under admin authority)*
-- [ ] **Chunk 4 — adversarial review + deliver**: review, fix high/medium, re-run suite,
+- [x] **Chunk 4 — adversarial review + deliver**: review, fix high/medium, re-run suite,
   rebase onto main, push, open MR.
+
+## Implementation notes
+
+### Scope finding (propagated)
+Most of the spec's literal text was already delivered by merged F-02/F-03 (see the
+"already satisfied" list above). F-05's net new on-chain surface is `pause`/`unpause`,
+`add_strike`, and a shared `populate_market` refactor. No cross-cutting *contract* change.
+
+### Adversarial review outcome
+An independent review attacked the authority model, the refactor parity, add_strike vs
+create equivalence, pause completeness, and invariant preservation. It found **no
+critical/high** issues (auth, seeds, mint/vault PDA-ownership, duplicate protection, and
+field-for-field refactor parity all verified sound). Medium/low fixes applied:
+
+- **Double-event on `add_strike` (M-2, fixed):** `populate_market` used to emit
+  `MarketCreated`, so `add_strike` fired both `MarketCreated` *and* `StrikeAdded`. Moved
+  the event emit out of the shared helper into each caller — `create_strike_market` emits
+  `MarketCreated`, `add_strike` emits only `StrikeAdded`. Clean event surface per
+  instruction.
+- **`trading_day` not validated (M-3, fixed):** added `require!(trading_day > 0)` in
+  `populate_market` (covers both create and add_strike) — a zero/negative close instant
+  would otherwise yield a market settleable the moment it's created. New rejection test.
+- **Pause-exemption documentation (M-1, fixed):** `admin_pause.rs` now explicitly lists
+  which instructions honor the pause flag (`mint_pair`, `place_order`, `match_orders`) and
+  which are intentionally exempt for safe wind-down (`cancel_order`, `redeem`,
+  `settle_market`, `admin_settle`).
+- **Nits (L-1/L-3 fixed):** dropped the dead `admin` param in `set_paused` (emit from the
+  verified `config.admin`); the non-admin-pause test now also asserts the flag is unchanged
+  after rejection.
+
+**Low, recorded (not actioned):** `add_strike` does not enforce that the ticker/day already
+has a market (L-4) — intentional: the strike-selection algorithm and "which day" decision
+live off-chain (ARCHITECTURE §9) and the admin is the trusted provisioner; enforcing it
+on-chain would require per-ticker-day existence state the design deliberately avoids.
+
+Final: **109 tests green**, `anchor build` clean with **zero** stack-offset warnings.
 
 **Already satisfied by merged F-02/F-03 (not re-implemented, pointers only):**
 - `create_strike_market` provisions Market+mints+vault, `Open` state, duplicate rejected,

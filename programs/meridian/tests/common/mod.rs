@@ -279,6 +279,13 @@ pub fn read_market(svm: &LiteSVM, market: &Pubkey) -> Market {
     Market::try_deserialize(&mut acct.data.as_slice()).expect("deserialize Market")
 }
 
+/// Read the singleton Config account.
+pub fn read_config(svm: &LiteSVM) -> Config {
+    let (config, _) = config_pda();
+    let acct = svm.get_account(&config).expect("config exists");
+    Config::try_deserialize(&mut acct.data.as_slice()).expect("deserialize Config")
+}
+
 /// Read an SPL token account amount (0 if missing).
 pub fn token_balance(svm: &LiteSVM, addr: &Pubkey) -> u64 {
     match svm.get_account(addr) {

@@ -83,6 +83,10 @@ fn non_admin_cannot_pause_or_unpause() {
         send(&mut f.svm, &attacker.pubkey(), ix_pause(&attacker.pubkey()), &[&attacker]).is_err(),
         "non-admin pause must be rejected"
     );
+    // The rejection must not have mutated the flag (defense against an auth bypass
+    // that writes before failing).
+    assert!(!read_config(&f.svm).paused, "paused must remain false after rejected pause");
+
     assert!(
         send(&mut f.svm, &attacker.pubkey(), ix_unpause(&attacker.pubkey()), &[&attacker]).is_err(),
         "non-admin unpause must be rejected"
@@ -167,5 +171,17 @@ fn add_strike_rejects_zero_strike() {
     assert!(
         send(&mut f.svm, &f.admin.pubkey(), ix, &[&admin]).is_err(),
         "zero strike must be rejected"
+    );
+}
+
+#[test]
+fn add_strike_rejects_zero_trading_day() {
+    // trading_day = 0 would make the market settleable the instant it's created.
+    let mut f = setup(5 * ONE);
+    let admin = f.admin.insecure_clone();
+    let ix = ix_add_strike(&f.admin.pubkey(), &f.usdc_mint, Ticker::Meta, STRIKE, 0);
+    assert!(
+        send(&mut f.svm, &f.admin.pubkey(), ix, &[&admin]).is_err(),
+        "zero trading_day must be rejected"
     );
 }

@@ -4,8 +4,14 @@
 //! already honor (their handlers reject when `paused` is true). `pause` halts new
 //! minting and all trading program-wide; `unpause` restores them. Both are
 //! admin-only and idempotent (setting the flag to its current value is a harmless
-//! no-op write). Settlement and redemption are intentionally *not* gated by the
-//! pause flag, so a paused program can still wind down safely.
+//! no-op write).
+//!
+//! Instructions that honor the pause flag: `mint_pair`, `place_order`,
+//! `match_orders`. Intentionally **exempt** (must stay available so a paused
+//! program can wind down safely): `cancel_order` (a user must always be able to
+//! reclaim their own escrowed funds), `redeem` (claim payouts on a settled
+//! market), and both settlement paths `settle_market` / `admin_settle`. Do not add
+//! a pause gate to any of those without revisiting this wind-down guarantee.
 
 use crate::constants::CONFIG_SEED;
 use crate::error::MeridianError;
@@ -26,15 +32,20 @@ pub struct SetPause<'info> {
 }
 
 pub fn pause(ctx: Context<SetPause>) -> Result<()> {
-    set_paused(&mut ctx.accounts.config, ctx.accounts.admin.key(), true)
+    set_paused(&mut ctx.accounts.config, true)
 }
 
 pub fn unpause(ctx: Context<SetPause>) -> Result<()> {
-    set_paused(&mut ctx.accounts.config, ctx.accounts.admin.key(), false)
+    set_paused(&mut ctx.accounts.config, false)
 }
 
-fn set_paused(config: &mut Account<Config>, admin: Pubkey, paused: bool) -> Result<()> {
+fn set_paused(config: &mut Account<Config>, paused: bool) -> Result<()> {
     config.paused = paused;
-    emit!(crate::events::PauseSet { paused, admin });
+    // `config.admin` is the verified authority (the accounts struct enforces
+    // `has_one = admin`), so it is the correct actor to record.
+    emit!(crate::events::PauseSet {
+        paused,
+        admin: config.admin,
+    });
     Ok(())
 }

@@ -109,7 +109,18 @@ pub fn handler(ctx: Context<CreateStrikeMarket>, args: CreateStrikeMarketArgs) -
             vault: ctx.bumps.vault,
             mint_authority: ctx.bumps.mint_authority,
         },
-    )
+    )?;
+
+    emit!(crate::events::MarketCreated {
+        market: ctx.accounts.market.key(),
+        ticker: args.ticker,
+        strike: args.strike,
+        trading_day: args.trading_day,
+        yes_mint: ctx.accounts.yes_mint.key(),
+        no_mint: ctx.accounts.no_mint.key(),
+    });
+
+    Ok(())
 }
 
 /// PDA bumps captured at provisioning time.
@@ -120,9 +131,10 @@ pub struct MarketBumps {
 }
 
 /// Initialize a freshly-`init`ed `Market` account for one ticker-strike-day:
-/// validate the strike, write the opening state, and emit `MarketCreated`. Shared
-/// by every instruction that provisions a market so the on-chain shape of a market
-/// is defined in exactly one place.
+/// validate the args and write the opening state. Shared by every instruction that
+/// provisions a market so the on-chain shape of a market is defined in exactly one
+/// place. The caller is responsible for emitting the appropriate provisioning event
+/// (so each instruction owns its event surface).
 pub fn populate_market(
     market: &mut Account<Market>,
     args: &CreateStrikeMarketArgs,
@@ -132,6 +144,10 @@ pub fn populate_market(
     bumps: MarketBumps,
 ) -> Result<()> {
     require!(args.strike > 0, MeridianError::InvalidArgument);
+    // A trading day is a unix timestamp of the session's close instant; a
+    // non-positive value would otherwise yield a market that is settleable the
+    // moment it is created, violating the lifecycle.
+    require!(args.trading_day > 0, MeridianError::InvalidArgument);
 
     market.ticker = args.ticker;
     market.strike = args.strike;
@@ -149,15 +165,6 @@ pub fn populate_market(
     market.bump = bumps.market;
     market.vault_bump = bumps.vault;
     market.mint_authority_bump = bumps.mint_authority;
-
-    emit!(crate::events::MarketCreated {
-        market: market.key(),
-        ticker: args.ticker,
-        strike: args.strike,
-        trading_day: args.trading_day,
-        yes_mint,
-        no_mint,
-    });
 
     Ok(())
 }
