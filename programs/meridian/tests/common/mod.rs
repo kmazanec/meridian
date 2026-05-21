@@ -566,6 +566,115 @@ pub fn ix_cancel_order(
     )
 }
 
+/// Build a `match_orders` crank instruction. `pairs` are appended as remaining_accounts
+/// in `[bid_owner_yes, ask_owner_usdc]` order, one pair per expected fill.
+pub fn ix_match_orders(
+    cranker: &Pubkey,
+    market: &Pubkey,
+    max_fills: u8,
+    pair_accounts: &[Pubkey],
+) -> Instruction {
+    let (config, _) = config_pda();
+    let (order_book, _) = order_book_pda(market);
+    let (mint_authority, _) = mint_authority_pda(market);
+    let (yes_mint, _) = yes_mint_pda(market);
+    let (usdc_escrow, _) = usdc_escrow_pda(market);
+    let (yes_escrow, _) = yes_escrow_pda(market);
+    let mut metas = meridian::accounts::MatchOrders {
+        cranker: *cranker,
+        config,
+        market: *market,
+        order_book,
+        mint_authority,
+        yes_mint,
+        usdc_escrow,
+        yes_escrow,
+        token_program: token_program_id(),
+    }
+    .to_account_metas(None);
+    for acct in pair_accounts {
+        metas.push(anchor_lang::solana_program::instruction::AccountMeta::new(*acct, false));
+    }
+    Instruction::new_with_bytes(
+        meridian::id(),
+        &meridian::instruction::MatchOrders {
+            args: meridian::instructions::MatchOrdersArgs { max_fills },
+        }
+        .data(),
+        metas,
+    )
+}
+
+/// Test shim: overwrite the order book with a single crossing (bid, ask) pair and fund
+/// the escrows to match, so `match_orders` has a crossed book to settle. (Under
+/// taker-crosses-on-placement the public API never leaves the book crossed, so this shim
+/// is the way to exercise the crank's settlement path directly.)
+#[allow(clippy::too_many_arguments)]
+pub fn seed_crossed_book(
+    svm: &mut LiteSVM,
+    market: &Pubkey,
+    bid_owner: &Pubkey,
+    bid_price: u64,
+    bid_size: u64,
+    ask_owner: &Pubkey,
+    ask_price: u64,
+    ask_size: u64,
+) {
+    let (ob_key, _) = order_book_pda(market);
+    let mut ob = read_order_book(svm, &ob_key);
+    ob.bids = vec![meridian::state::Order {
+        owner: *bid_owner,
+        price: bid_price,
+        size: bid_size,
+        seq: ob.next_seq,
+        side: OrderSide::Bid,
+        active: true,
+    }];
+    ob.asks = vec![meridian::state::Order {
+        owner: *ask_owner,
+        price: ask_price,
+        size: ask_size,
+        seq: ob.next_seq + 1,
+        side: OrderSide::Ask,
+        active: true,
+    }];
+    ob.next_seq += 2;
+    // Rewrite the account data (preserve lamports/owner/size).
+    let existing = svm.get_account(&ob_key).unwrap();
+    let mut data = vec![0u8; existing.data.len()];
+    {
+        let mut cursor = std::io::Cursor::new(&mut data[..]);
+        ob.try_serialize(&mut cursor).unwrap();
+    }
+    svm.set_account(
+        ob_key,
+        Account {
+            lamports: existing.lamports,
+            data,
+            owner: meridian::id(),
+            executable: false,
+            rent_epoch: existing.rent_epoch,
+        },
+    )
+    .unwrap();
+
+    // Fund the escrows to match the resting orders: bid USDC = ceil(price*size), ask Yes.
+    let (usdc_escrow, _) = usdc_escrow_pda(market);
+    let (yes_escrow, _) = yes_escrow_pda(market);
+    let (mint_auth, _) = mint_authority_pda(market);
+    let (yes_mint, _) = yes_mint_pda(market);
+    let bid_usdc = ((bid_price as u128 * bid_size as u128 + (PRICE_SCALE_T - 1))
+        / PRICE_SCALE_T) as u64;
+    let usdc_mint = svm
+        .get_account(&usdc_escrow)
+        .map(|a| SplAccount::unpack(&a.data[..SplAccount::LEN]).unwrap().mint)
+        .unwrap();
+    seed_token_account(svm, &usdc_escrow, &usdc_mint, &mint_auth, bid_usdc);
+    seed_token_account(svm, &yes_escrow, &yes_mint, &mint_auth, ask_size);
+}
+
+const PRICE_SCALE_T: u128 = 1_000_000;
+
 /// Create a market AND a fully-grown, wired order book. The common path for the
 /// place/cancel/match tests. Returns the market pubkey.
 pub fn create_market_and_book(

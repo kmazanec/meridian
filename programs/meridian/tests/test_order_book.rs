@@ -702,3 +702,143 @@ fn cancel_rejects_missing_order() {
     let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
     assert!(res.is_err(), "cancelling a nonexistent order must be rejected");
 }
+
+// ---------------------------------------------------------------------------
+// Chunk 5 — match_orders crank + trustlessness
+// ---------------------------------------------------------------------------
+
+/// Set up a crossed book between user (bid) and user2 (ask), with their receiving ATAs
+/// created. Returns (bid_owner_yes_ata, ask_owner_usdc_ata).
+fn setup_crossed(
+    f: &mut Fixture,
+    market: &solana_pubkey::Pubkey,
+    bid_price: u64,
+    bid_size: u64,
+    ask_price: u64,
+    ask_size: u64,
+) -> (solana_pubkey::Pubkey, solana_pubkey::Pubkey) {
+    let bid_owner = f.user.pubkey();
+    let ask_owner = f.user2.pubkey();
+    // Receiving accounts: bid owner gets Yes; ask owner gets USDC (already has a USDC ATA).
+    ensure_yes_ata(f, bid_owner, market);
+    seed_crossed_book(
+        &mut f.svm, market, &bid_owner, bid_price, bid_size, &ask_owner, ask_price, ask_size,
+    );
+    let (yes_mint, _) = yes_mint_pda(market);
+    (ata(&bid_owner, &yes_mint), ata(&ask_owner, &f.usdc_mint))
+}
+
+#[test]
+fn crank_settles_crossed_pair() {
+    let mut f = setup(10 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+    // Bid 2.0 @ $0.60 crosses ask 2.0 @ $0.50. Trade at bid price $0.60 → $1.20.
+    let (bid_yes, ask_usdc) = setup_crossed(&mut f, &market, 600_000, 2 * ONE, 500_000, 2 * ONE);
+    let ask_usdc_before = token_balance(&f.svm, &ask_usdc);
+
+    let cranker = f.admin.insecure_clone(); // a third party cranks
+    let ix = ix_match_orders(&f.admin.pubkey(), &market, 4, &[bid_yes, ask_usdc]);
+    send(&mut f.svm, &f.admin.pubkey(), ix, &[&cranker]).expect("crank");
+
+    // Bid owner received 2.0 Yes; ask owner received $1.20; book + escrows cleared.
+    assert_eq!(token_balance(&f.svm, &bid_yes), 2 * ONE, "bid owner got 2 Yes");
+    assert_eq!(token_balance(&f.svm, &ask_usdc), ask_usdc_before + 1_200_000, "ask owner got $1.20");
+    let (ob_pda, _) = order_book_pda(&market);
+    let ob = read_order_book(&f.svm, &ob_pda);
+    assert!(ob.bids.is_empty() && ob.asks.is_empty(), "crossed pair fully settled");
+    let (usdc_escrow, _) = usdc_escrow_pda(&market);
+    let (yes_escrow, _) = yes_escrow_pda(&market);
+    assert_eq!(token_balance(&f.svm, &usdc_escrow), 0, "usdc escrow drained");
+    assert_eq!(token_balance(&f.svm, &yes_escrow), 0, "yes escrow drained");
+}
+
+#[test]
+fn crank_is_noop_on_uncrossed_book() {
+    let mut f = setup(10 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+    // Place a non-crossing bid and ask through the real API (bid $0.40 < ask $0.70).
+    let _u = f.user.pubkey();
+    ensure_yes_ata(&mut f, _u, &market);
+    let user = f.user.insecure_clone();
+    let ix = ix_place_order(
+        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 400_000, ONE, false, &[],
+    );
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("bid");
+    let maker = f.user2.insecure_clone();
+    mint_pairs_for(&mut f, &maker, &market, 1);
+    let ix = ix_place_order(
+        &f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 700_000, ONE, false, &[],
+    );
+    send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("ask");
+
+    // Crank with no remaining accounts → no-op (nothing crosses), succeeds.
+    let cranker = f.admin.insecure_clone();
+    let ix = ix_match_orders(&f.admin.pubkey(), &market, 4, &[]);
+    send(&mut f.svm, &f.admin.pubkey(), ix, &[&cranker]).expect("crank no-op");
+    let (ob_pda, _) = order_book_pda(&market);
+    let ob = read_order_book(&f.svm, &ob_pda);
+    assert_eq!(ob.bids.len(), 1, "bid still resting");
+    assert_eq!(ob.asks.len(), 1, "ask still resting");
+}
+
+#[test]
+fn crank_cannot_misdirect_funds_to_wrong_account() {
+    // Trustlessness: the cranker supplies maker accounts, but the handler verifies each
+    // belongs to the recorded order owner. Passing the cranker's own account is rejected.
+    let mut f = setup(10 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+    let (_bid_yes, _ask_usdc) = setup_crossed(&mut f, &market, 600_000, ONE, 500_000, ONE);
+
+    // Attacker (admin) substitutes their OWN usdc account for the ask-owner payout.
+    let attacker_usdc = usdc_ata(&f, &f.admin.pubkey());
+    let (yes_mint, _) = yes_mint_pda(&market);
+    let bid_yes = ata(&f.user.pubkey(), &yes_mint);
+    let cranker = f.admin.insecure_clone();
+    let ix = ix_match_orders(&f.admin.pubkey(), &market, 4, &[bid_yes, attacker_usdc]);
+    let res = send(&mut f.svm, &f.admin.pubkey(), ix, &[&cranker]);
+    assert!(res.is_err(), "crank must reject a maker account not owned by the order owner");
+    // Book untouched.
+    let (ob_pda, _) = order_book_pda(&market);
+    assert_eq!(read_order_book(&f.svm, &ob_pda).bids.len(), 1, "no settlement happened");
+}
+
+#[test]
+fn crank_uses_onchain_price_not_caller_supplied() {
+    // The crank takes no price/size from the caller — settlement amounts derive purely
+    // from the on-chain orders. Verify the settled USDC equals the on-chain bid price ×
+    // size (here 1.0 @ $0.60 = $0.60), regardless of who cranks.
+    let mut f = setup(10 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+    let (bid_yes, ask_usdc) = setup_crossed(&mut f, &market, 600_000, ONE, 500_000, ONE);
+    let ask_usdc_before = token_balance(&f.svm, &ask_usdc);
+
+    let cranker = f.user2.insecure_clone(); // ask owner themselves crank — still fine
+    let ix = ix_match_orders(&f.user2.pubkey(), &market, 4, &[bid_yes, ask_usdc]);
+    send(&mut f.svm, &f.user2.pubkey(), ix, &[&cranker]).expect("crank");
+    assert_eq!(token_balance(&f.svm, &bid_yes), ONE, "1.0 Yes delivered");
+    assert_eq!(token_balance(&f.svm, &ask_usdc), ask_usdc_before + 600_000, "settled at on-chain $0.60");
+}
+
+#[test]
+fn crank_rejected_when_paused() {
+    let mut f = setup(10 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+    let (bid_yes, ask_usdc) = setup_crossed(&mut f, &market, 600_000, ONE, 500_000, ONE);
+    set_paused(&mut f.svm, true);
+    let cranker = f.admin.insecure_clone();
+    let ix = ix_match_orders(&f.admin.pubkey(), &market, 4, &[bid_yes, ask_usdc]);
+    let res = send(&mut f.svm, &f.admin.pubkey(), ix, &[&cranker]);
+    assert!(res.is_err(), "crank must be rejected when paused");
+}
+
+#[test]
+fn crank_rejected_when_settled() {
+    let mut f = setup(10 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+    let (bid_yes, ask_usdc) = setup_crossed(&mut f, &market, 600_000, ONE, 500_000, ONE);
+    force_settle(&mut f.svm, &market, meridian::state::Outcome::YesWins);
+    let cranker = f.admin.insecure_clone();
+    let ix = ix_match_orders(&f.admin.pubkey(), &market, 4, &[bid_yes, ask_usdc]);
+    let res = send(&mut f.svm, &f.admin.pubkey(), ix, &[&cranker]);
+    assert!(res.is_err(), "crank must be rejected on a settled market");
+}

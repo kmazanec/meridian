@@ -109,9 +109,13 @@ Chunks:
   the slot. `OrderCancelled`. Allowed even when paused/settled (users must always reclaim
   escrow). Tests: cancel bid/ask returns escrow; **partially-filled bid refunds exactly the
   remaining** (validates telescoping escrow); non-owner rejected; missing order rejected.
-- [ ] **Chunk 5 — `match_orders` crank + trustlessness.** Permissionless sweep of crossed
-  resting pairs; bounded per call. Tests: third party cranks crossed orders correctly;
-  cranker cannot alter price/size; no trading when paused/settled.
+- [x] **Chunk 5 — `match_orders` crank + trustlessness.** Permissionless sweep of crossed
+  resting pairs, `max_fills`-bounded, settled from escrow (no party signs); trades at the
+  bid's price so the bid escrow drains exactly. Tests: third party cranks a crossed pair
+  correctly; **no-op on an uncrossed book** (normal state under taker-crosses-on-placement);
+  **cranker cannot misdirect funds** (wrong-owner account rejected); **settlement uses
+  on-chain price/size, not caller input**; rejected when paused/settled. Crossed-book test
+  shim documented (the public API never leaves the book crossed).
 - [ ] **Chunk 6 — Escrow/invariant sweep + four-path smoke.** Vault never touched by
   trading (invariant #1); escrow reconciles to resting orders; four trade paths smoke at
   book level.
@@ -193,7 +197,22 @@ cannot alter terms or misdirect funds. This is the main manual-review hotspot.
 `PlannedFill`s, (2) a settlement pass doing the CPIs with maker-account verification, then
 (3) an apply pass mutating the book (decrement partial makers; remove emptied ones
 back-to-front so indices stay valid). Splitting phases avoids holding a book borrow across
-CPIs and keeps the matching logic auditable.
+CPIs and keeps the matching logic auditable. `match_orders` uses the same three-phase
+shape.
+
+### `match_orders` is a defensive/liveness no-op in normal operation
+
+Because `place_order` crosses on placement, a correctly-operated book is never left
+crossed, so `match_orders` normally finds nothing and is a no-op (proven by a test). It
+exists for the architecture's trustlessness/liveness guarantee (ARCH §5): anyone can
+trigger settlement of a crossed pair, and the cranker can only trigger — prices/sizes come
+only from on-chain orders, and each maker payout account is verified against the order's
+`owner` + mint. **Crank trade price = the bid's price** (deliberate simplification): when
+the book is crossed (`bid.price ≥ ask.price`), this drains the bid's escrow exactly with
+no price-improvement surplus to refund and no third account per fill; the seller receives
+≥ their ask. Tested via a `seed_crossed_book` shim because the public API can't leave the
+book crossed; the trustlessness tests (wrong-owner account rejected; on-chain price used
+regardless of cranker) run against that shim.
 
 ### Escrow accounts (invariant #1 safety)
 

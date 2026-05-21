@@ -78,4 +78,12 @@ pub mod meridian {
     pub fn cancel_order(ctx: Context<CancelOrder>, args: CancelOrderArgs) -> Result<()> {
         instructions::cancel_order::handler(ctx, args)
     }
+
+    /// Permissionless crank: settle any crossed resting bid/ask pairs. (F-03)
+    pub fn match_orders<'info>(
+        ctx: Context<'info, MatchOrders<'info>>,
+        args: MatchOrdersArgs,
+    ) -> Result<()> {
+        instructions::match_orders::handler(ctx, args)
+    }
 }
