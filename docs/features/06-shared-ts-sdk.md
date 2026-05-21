@@ -91,7 +91,7 @@ Build chunks (test-first; each ends in a tickable item):
   program instruction (callers pass domain args, not addresses); each proven by a tx that
   succeeds against the real program in LiteSVM with the expected state effect; error
   surfacing tested (duplicate create, unauthorized admin).
-- [ ] **4. Reading helpers (both perspectives)** — typed account fetchers + Yes-view/No-view
+- [x] **4. Reading helpers (both perspectives)** — typed account fetchers + Yes-view/No-view
   of the single book (No = `PRICE_SCALE − p` mirror, time priority preserved) + user
   balances and settled-market payout/PNL summary.
 - [ ] **5. Four-button intent translation** — one `buildTradeIntent(...)` API: BUY_YES→bid,
@@ -187,3 +187,25 @@ Build chunks (test-first; each ends in a tickable item):
   blockhash or the second silently fails with empty logs. The harness calls
   `expireBlockhash()` after every send. Any future TS test harness (F-09 E2E) must do the
   same.
+
+### Chunk 4 — reading helpers (both perspectives)
+
+- **The No book is a pure projection of the one Yes book, computed in `dualBook`.** Because
+  `Yes + No = $1.00`: a Yes **bid** @ p maps to a No **ask** @ `1−p`; a Yes **ask** @ p maps
+  to a No **bid** @ `1−p`; sizes are identical. So `no.bids` come from `yes.asks` (mirrored)
+  and `no.asks` from `yes.bids` (mirrored). The test asserts the exact `1−p` mirror and the
+  cross-perspective invariant (best Yes bid + best No ask = `PRICE_SCALE`). Consumers (F-08)
+  render either side without re-deriving — the contract this feature exists to centralize.
+- **Levels are aggregated** (price → summed size + order count), best-price-first per side,
+  for direct order-book rendering.
+- **Account fetchers use `program.account.*.fetchNullable`** (RPC) and normalize the Anchor
+  enum/option shapes into clean TS (`Outcome`, `state`, `BN | null`). The dual-book and
+  payout transforms are *pure* (book/market in, view out), so they are unit-tested directly
+  against a book provisioned in LiteSVM — no RPC needed in tests.
+- `payoutFor` encodes settled PNL: a winning token redeems for `PRICE_SCALE` (=$1.00) base
+  units 1:1, a losing token $0; it throws on an unsettled market so callers can't mis-display
+  a pending outcome as a payout.
+- **Reinforced finding:** `place_order` requires `user_yes` *and* `user_usdc` to exist for
+  *either* side (the accounts struct lists both unconditionally) — even a pure bid needs the
+  Yes account present. The harness gained `ensureUserAtas`; consumers use `createAtaIfNeeded`
+  (and the intent layer prepends them).

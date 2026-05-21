@@ -219,6 +219,22 @@ export class Harness {
   }
 
   /**
+   * Ensure the user's Yes/No/USDC token accounts exist (empty), so a `place_order`
+   * (which requires `user_yes`/`user_usdc` to already exist) doesn't fail with
+   * `AccountNotInitialized`. Sets only the ones not already present.
+   */
+  ensureUserAtas(
+    owner: PublicKey,
+    market: { yesMint: PublicKey; noMint: PublicKey },
+    usdcMint: PublicKey
+  ): void {
+    for (const mint of [usdcMint, market.yesMint, market.noMint]) {
+      const addr = ata(mint, owner);
+      if (!this.exists(addr)) this.setTokenBalance(mint, owner, 0);
+    }
+  }
+
+  /**
    * Provision a fully tradeable market: `create_strike_market` then the two-step
    * order-book creation (`init_order_book` + `grow_order_book`). Requires a seeded
    * config. Returns the market identity for use with the SDK builders.
