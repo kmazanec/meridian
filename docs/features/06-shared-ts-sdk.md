@@ -94,7 +94,7 @@ Build chunks (test-first; each ends in a tickable item):
 - [x] **4. Reading helpers (both perspectives)** — typed account fetchers + Yes-view/No-view
   of the single book (No = `PRICE_SCALE − p` mirror, time priority preserved) + user
   balances and settled-market payout/PNL summary.
-- [ ] **5. Four-button intent translation** — one `buildTradeIntent(...)` API: BUY_YES→bid,
+- [x] **5. Four-button intent translation** — one `buildTradeIntent(...)` API: BUY_YES→bid,
   SELL_YES→ask, BUY_NO→`mint_pair + sell Yes`, SELL_NO→`buy Yes`; unit-asserted ix mapping
   (the anti-drift contract test) + end-to-end BUY_NO/SELL_NO in LiteSVM.
 - [ ] **6. Pyth/Hermes helper** — `fetchPriceUpdate` / `postPriceUpdate` / `settleWithPyth`;
@@ -209,3 +209,27 @@ Build chunks (test-first; each ends in a tickable item):
   *either* side (the accounts struct lists both unconditionally) — even a pure bid needs the
   Yes account present. The harness gained `ensureUserAtas`; consumers use `createAtaIfNeeded`
   (and the intent layer prepends them).
+
+### Chunk 5 — four-button intent translation (cross-cutting UX contract)
+
+- **`buildTradeIntent` is the single source of the mapping** (ROADMAP concern #5;
+  ARCHITECTURE §6/§8.2): BUY_YES→bid@p; SELL_YES→ask@p; BUY_NO→`mint_pair` + sell Yes
+  ask@`1−p` (keep the No); SELL_NO→buy Yes bid@`1−p`. For No actions the caller passes the
+  **No** price and the module reflects it (`reflectPrice = PRICE_SCALE − p`, its own inverse).
+  F-08 must call this, never re-derive it.
+- **It returns an ordered instruction list for one transaction (one wallet approval)** and
+  prepends idempotent ATA-creates so the order legs don't trip the `AccountNotInitialized`
+  precondition. `BuiltIntent` also reports the resolved `bookSide`, `yesPrice`, and
+  `mintPairs` count for display/inspection.
+- **BUY_NO size must be a whole multiple of `PAYOFF_UNIT`** (whole tokens). `mint_pair`
+  issues 1.0 Yes + 1.0 No per call and the Yes is sold in full; a fractional No would strand
+  Yes. The builder throws on a non-multiple rather than silently leaving dust — a deliberate,
+  documented constraint of the mint mechanic, surfaced to the caller.
+- **Crossing counterparties stay caller-supplied.** When an order is marketable it must list
+  the resting makers' payout accounts in `remaining_accounts`; the intent can't know these
+  without the live book, so `TradeIntent.makerAccounts` is an optional passthrough the caller
+  computes from `reads.dualBook`/`fetchOrderBook`. This keeps the intent layer book-agnostic
+  while still supporting marketable orders.
+- **Contract test asserts the *encoded bytes*** of each leg (decoded via the program's own
+  instruction coder), and an end-to-end LiteSVM test proves BUY_NO leaves the trader holding
+  exactly No (Yes sold) and SELL_NO nets a Yes (closing the No exposure).
