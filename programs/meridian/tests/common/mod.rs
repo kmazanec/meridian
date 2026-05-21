@@ -15,10 +15,10 @@ use {
     litesvm::LiteSVM,
     meridian::{
         constants::{
-            CONFIG_SEED, MARKET_SEED, MINT_AUTH_SEED, NO_MINT_SEED, NUM_TICKERS, VAULT_SEED,
-            YES_MINT_SEED,
+            CONFIG_SEED, MARKET_SEED, MINT_AUTH_SEED, NO_MINT_SEED, NUM_TICKERS, ORDER_BOOK_SEED,
+            USDC_ESCROW_SEED, VAULT_SEED, YES_ESCROW_SEED, YES_MINT_SEED,
         },
-        state::{Config, Market, Outcome, Ticker, TickerConfig},
+        state::{Config, Market, OrderBook, OrderSide, Outcome, Ticker, TickerConfig},
     },
     solana_account::Account,
     solana_keypair::Keypair,
@@ -41,6 +41,8 @@ pub struct Fixture {
     pub svm: LiteSVM,
     pub admin: Keypair,
     pub user: Keypair,
+    /// A second funded user (USDC ATA seeded), for two-sided order-book tests.
+    pub user2: Keypair,
     pub usdc_mint: Pubkey,
 }
 
@@ -90,6 +92,21 @@ pub fn no_mint_pda(market: &Pubkey) -> (Pubkey, u8) {
 pub fn vault_pda(market: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[VAULT_SEED, market.as_ref()], &meridian::id())
 }
+pub fn order_book_pda(market: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[ORDER_BOOK_SEED, market.as_ref()], &meridian::id())
+}
+pub fn usdc_escrow_pda(market: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[USDC_ESCROW_SEED, market.as_ref()], &meridian::id())
+}
+pub fn yes_escrow_pda(market: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[YES_ESCROW_SEED, market.as_ref()], &meridian::id())
+}
+
+/// Read an OrderBook account.
+pub fn read_order_book(svm: &LiteSVM, order_book: &Pubkey) -> OrderBook {
+    let acct = svm.get_account(order_book).expect("order book exists");
+    OrderBook::try_deserialize(&mut acct.data.as_slice()).expect("deserialize OrderBook")
+}
 
 /// Build a fixture with the program loaded, a USDC mint, a funded user (with a
 /// USDC ATA holding `user_usdc` base units), and a seeded Config singleton.
@@ -100,8 +117,10 @@ pub fn setup(user_usdc: u64) -> Fixture {
 
     let admin = Keypair::new();
     let user = Keypair::new();
+    let user2 = Keypair::new();
     svm.airdrop(&admin.pubkey(), 100_000_000_000).unwrap();
     svm.airdrop(&user.pubkey(), 100_000_000_000).unwrap();
+    svm.airdrop(&user2.pubkey(), 100_000_000_000).unwrap();
 
     // USDC mint (no mint authority needed in tests; we seed balances directly).
     let usdc_mint = Pubkey::new_unique();
@@ -110,6 +129,9 @@ pub fn setup(user_usdc: u64) -> Fixture {
     // User USDC ATA with a starting balance.
     let user_usdc_ata = ata(&user.pubkey(), &usdc_mint);
     seed_token_account(&mut svm, &user_usdc_ata, &usdc_mint, &user.pubkey(), user_usdc);
+    // Second user funded with the same starting balance.
+    let user2_usdc_ata = ata(&user2.pubkey(), &usdc_mint);
+    seed_token_account(&mut svm, &user2_usdc_ata, &usdc_mint, &user2.pubkey(), user_usdc);
 
     // Seed the Config singleton directly (test shim).
     seed_config(&mut svm, &admin.pubkey(), &usdc_mint);
@@ -118,6 +140,7 @@ pub fn setup(user_usdc: u64) -> Fixture {
         svm,
         admin,
         user,
+        user2,
         usdc_mint,
     }
 }
@@ -234,6 +257,16 @@ pub fn token_balance(svm: &LiteSVM, addr: &Pubkey) -> u64 {
             SplAccount::unpack(&a.data[..SplAccount::LEN]).map(|t| t.amount).unwrap_or(0)
         }
         _ => 0,
+    }
+}
+
+/// Read a full SPL token account (mint/owner/amount), `None` if missing/invalid.
+pub fn read_token_account(svm: &LiteSVM, addr: &Pubkey) -> Option<SplAccount> {
+    match svm.get_account(addr) {
+        Some(a) if a.data.len() >= SplAccount::LEN => {
+            SplAccount::unpack(&a.data[..SplAccount::LEN]).ok()
+        }
+        _ => None,
     }
 }
 
@@ -403,4 +436,68 @@ pub fn ix_redeem(
         }
         .to_account_metas(None),
     )
+}
+
+pub fn ix_init_order_book(payer: &Pubkey, usdc_mint: &Pubkey, market: &Pubkey) -> Instruction {
+    let (order_book, _) = order_book_pda(market);
+    let (mint_authority, _) = mint_authority_pda(market);
+    let (yes_mint, _) = yes_mint_pda(market);
+    let (vault, _) = vault_pda(market);
+    let (usdc_escrow, _) = usdc_escrow_pda(market);
+    let (yes_escrow, _) = yes_escrow_pda(market);
+    Instruction::new_with_bytes(
+        meridian::id(),
+        &meridian::instruction::InitOrderBook {}.data(),
+        meridian::accounts::InitOrderBook {
+            payer: *payer,
+            market: *market,
+            order_book,
+            mint_authority,
+            yes_mint,
+            usdc_mint: *usdc_mint,
+            vault,
+            usdc_escrow,
+            yes_escrow,
+            token_program: token_program_id(),
+            system_program: anchor_lang::system_program::ID,
+            rent: RENT_SYSVAR_ID,
+        }
+        .to_account_metas(None),
+    )
+}
+
+pub fn ix_grow_order_book(payer: &Pubkey, market: &Pubkey) -> Instruction {
+    let (order_book, _) = order_book_pda(market);
+    Instruction::new_with_bytes(
+        meridian::id(),
+        &meridian::instruction::GrowOrderBook {}.data(),
+        meridian::accounts::GrowOrderBook {
+            payer: *payer,
+            market: *market,
+            order_book,
+            system_program: anchor_lang::system_program::ID,
+        }
+        .to_account_metas(None),
+    )
+}
+
+/// Create a market AND a fully-grown, wired order book. The common path for the
+/// place/cancel/match tests. Returns the market pubkey.
+pub fn create_market_and_book(
+    f: &mut Fixture,
+    ticker: Ticker,
+    strike: u64,
+    trading_day: i64,
+) -> Pubkey {
+    let admin = f.admin.insecure_clone();
+    let ix = ix_create_strike_market(&f.admin.pubkey(), &f.usdc_mint, ticker, strike, trading_day);
+    send(&mut f.svm, &f.admin.pubkey(), ix, &[&admin]).expect("create market");
+    let market = market_pda(ticker, strike, trading_day).0;
+
+    let payer = f.admin.insecure_clone();
+    let ix = ix_init_order_book(&f.admin.pubkey(), &f.usdc_mint, &market);
+    send(&mut f.svm, &f.admin.pubkey(), ix, &[&payer]).expect("init order book");
+    let ix = ix_grow_order_book(&f.admin.pubkey(), &market);
+    send(&mut f.svm, &f.admin.pubkey(), ix, &[&payer]).expect("grow order book");
+    market
 }

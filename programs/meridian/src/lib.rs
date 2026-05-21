@@ -52,4 +52,16 @@ pub mod meridian {
     pub fn redeem(ctx: Context<Redeem>, side: RedeemSide, amount: u64) -> Result<()> {
         instructions::redeem::handler(ctx, side, amount)
     }
+
+    /// Create the bounded order book (at initial size) + escrow accounts.
+    /// Permissionless; first half of two-step creation (see `grow_order_book`). (F-03)
+    pub fn init_order_book(ctx: Context<InitOrderBook>) -> Result<()> {
+        instructions::init_order_book::handler(ctx)
+    }
+
+    /// Realloc the order book to full size and wire it into the market (enables
+    /// trading). Second half of two-step creation. Permissionless. (F-03)
+    pub fn grow_order_book(ctx: Context<GrowOrderBook>) -> Result<()> {
+        instructions::grow_order_book::handler(ctx)
+    }
 }

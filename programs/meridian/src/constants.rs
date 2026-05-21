@@ -58,8 +58,17 @@ pub const NUM_TICKERS: usize = 7;
 //   Mint authority: [MINT_AUTH_SEED, market.key()]
 //   Yes mint      : [YES_MINT_SEED, market.key()]
 //   No mint       : [NO_MINT_SEED, market.key()]
+//   USDC escrow   : [USDC_ESCROW_SEED, market.key()]   (order-book bid escrow — added in F-03)
+//   Yes escrow    : [YES_ESCROW_SEED, market.key()]    (order-book ask escrow — added in F-03)
 //
 // Downstream features MUST use these exact byte strings and seed orderings.
+//
+// NOTE (F-03 contract addition): the two escrow seeds below were NOT anticipated
+// by F-01. The order book needs token accounts to hold bidders' USDC and askers'
+// Yes tokens *separately from the collateralization vault* (invariant #1 requires
+// the vault to equal PAYOFF_UNIT * pairs_minted - winning_redeemed exactly, so it
+// must never hold order-book funds). These seeds are the source of truth and are
+// mirrored in ROADMAP.md concern #3 so F-06 (SDK) derives them identically.
 
 /// Singleton global config PDA seed.
 pub const CONFIG_SEED: &[u8] = b"config";
@@ -75,3 +84,10 @@ pub const MINT_AUTH_SEED: &[u8] = b"mint_auth";
 pub const YES_MINT_SEED: &[u8] = b"yes_mint";
 /// Per-market No mint PDA seed.
 pub const NO_MINT_SEED: &[u8] = b"no_mint";
+/// Per-market order-book USDC escrow token account PDA seed (holds bidders'
+/// escrowed USDC while buy-Yes orders rest). Added in F-03; distinct from the
+/// collateralization vault so it never affects invariant #1.
+pub const USDC_ESCROW_SEED: &[u8] = b"usdc_escrow";
+/// Per-market order-book Yes escrow token account PDA seed (holds askers'
+/// escrowed Yes tokens while sell-Yes orders rest). Added in F-03.
+pub const YES_ESCROW_SEED: &[u8] = b"yes_escrow";

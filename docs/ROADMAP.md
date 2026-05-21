@@ -146,6 +146,18 @@ not duplicate the rule into each feature — reference it.
    F-01. Seeds for the vault PDA, mint-authority PDA, `Market`, and `OrderBook` must
    be defined once in F-01 and reused verbatim by F-02–F-05 (on-chain) and F-06
    (client derivation). A change here is a breaking change for everything downstream.
+   - **Added in F-03 (source of truth: `constants.rs`):** two per-market order-book
+     escrow token accounts, owned by the existing mint-authority PDA, with seeds
+     `[b"usdc_escrow", market]` (bidders' USDC) and `[b"yes_escrow", market]` (askers'
+     Yes tokens). They are deliberately **separate from the collateralization vault** so
+     order-book funds never affect invariant #1. F-06 must derive these for any client
+     that places/cancels/matches orders.
+   - **Also discovered in F-03:** the `OrderBook` PDA (~14.9 KB) exceeds Solana's
+     10,240-byte per-instruction realloc cap, so it is created by **two** instructions —
+     `init_order_book` (alloc ≤10 KB) then `grow_order_book` (realloc to full + wire
+     `Market.order_book`). F-01's "one-shot `init`" note was incorrect. The frozen seed
+     and `ORDERBOOK_N = 128` are unchanged; only the creation flow differs. F-05/F-06
+     market-provisioning flows must call both (init then grow) before trading.
 
 4. **IDL as the client interface.** Source: the compiled Anchor program. F-06 wraps
    the IDL; F-07/F-08 consume only F-06, never hand-rolled serialization. The IDL is
