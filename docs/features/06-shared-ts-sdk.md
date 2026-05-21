@@ -83,7 +83,7 @@ Build chunks (test-first; each ends in a tickable item):
 - [x] **1. Workspace + IDL plumbing** — yarn workspaces at root, committed `yarn.lock`,
   `packages/sdk` (`@meridian/sdk`) skeleton, vendored IDL + IDL type, `getProgram()` typed
   program factory, constants re-exported from the IDL.
-- [ ] **2. PDA derivation** — pure functions for every PDA (config, market, order_book,
+- [x] **2. PDA derivation** — pure functions for every PDA (config, market, order_book,
   vault, mint_auth, yes/no mint, usdc/yes escrow) + ATA helpers + `Ticker` codec; verified
   against the accounts the program actually creates in LiteSVM and by direct seed-byte
   assertions for the market seed ordering.
@@ -138,3 +138,29 @@ Build chunks (test-first; each ends in a tickable item):
   `node_modules`, not PnP). Because the worktree lives *under* the main repo dir, yarn
   needed a `yarn.lock` present to treat the worktree as its own project root — and the
   committed lockfile is exactly what CI note #9 asked for at F-06+ anyway.
+
+### Chunk 2 — PDA derivation + LiteSVM harness
+
+- **`pdas.ts` mirrors `constants.rs` seed strings verbatim.** The trap the program docs
+  call out is real: the mint-authority seed is **`"mint_auth"`**, not `"mint_authority"`.
+  The market seed is `["market", ticker:u8, strike:u64 LE, trading_day:i64 LE]`; `i64le`
+  uses two's-complement for negative timestamps to be faithful to the program's `i64`,
+  though `trading_day` is normally positive.
+- **Test runtime is litesvm `^0.8.0`, deliberately not `1.x`.** litesvm 1.x migrated its TS
+  bindings to `@solana/kit` (web3.js v2) types (`Address`/`Transaction`/`EncodedAccount`),
+  which would force a v1↔v2 bridge in every test (Anchor builds v1 `Transaction`s). litesvm
+  0.8.x's bindings use web3.js **v1** directly, so Anchor instructions, signing, and account
+  reads flow through with zero conversion glue. This is a *test-only* dependency choice; it
+  does not affect the shipped SDK surface.
+- **Strongest possible seed-contract test:** rather than asserting derivations against
+  hard-coded addresses, the harness provisions a real market in LiteSVM
+  (`create_strike_market` + `init_order_book` + `grow_order_book`) and the test asserts the
+  SDK's independently-derived `vault`/`yes_mint`/`no_mint`/`order_book` equal the keys the
+  *program itself* stored in the `Market` account, and that escrow PDAs exist and differ
+  from the vault. If any seed drifts, this fails.
+- **Config bootstrap is a test shim** (`harness.seedConfig`): it Anchor-encodes a `Config`
+  and writes it directly with `setAccount`, exactly as the program's Rust tests do — because
+  `initialize_config` requires a `program_data` upgrade-authority account that is awkward to
+  stand up in LiteSVM, and that instruction is already covered by the program's own tests.
+  Per-ticker test feed id is `[ticker_index; 32]`, matching the Rust shim so settlement
+  tests line up.
