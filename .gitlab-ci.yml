@@ -15,6 +15,10 @@ stages:
 
 default:
   image: rust:1.89
+  # Pin every job to the project's dedicated runner. A job that sets its own
+  # `tags:` overrides this, so don't add per-job tags unless you mean to.
+  tags:
+    - gauntlet-droplet
 
 # Cache the Cargo registry and build output across jobs/runs. The key is tied to
 # Cargo.lock so a dependency change invalidates the cache cleanly.
