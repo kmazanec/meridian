@@ -275,12 +275,19 @@ Build chunks (test-first; each ends in a tickable item):
   and asserts the **Pyth peer deps don't load at import time** — only when a network helper
   is actually called — so a non-settling consumer/browser bundle stays lean.
 - **Cross-cutting propagation (CI note #9):** the off-chain workspace + committed `yarn.lock`
-  resolves the open item in `.gitlab-ci.yml`. The `lint-ts` job now installs with
-  `--immutable` (Berry's frozen-lockfile), keys its cache on `yarn.lock`, and additionally
-  runs `yarn workspace @meridian/sdk typecheck`. The SDK's LiteSVM tests need
-  `target/deploy/meridian.so` (an `anchor build` artifact), so wiring them into CI is left to
-  F-10 alongside the BPF/deploy stage (consistent with the CI file's stated scope); they run
-  locally after `anchor build`.
+  resolves the open item in `.gitlab-ci.yml`. After rebasing onto main (which had moved CI to
+  a shell-executor `run_in_docker` pattern, a `build-program` job that emits
+  `target/deploy/meridian.so` as an artifact, and a consolidated `verify` job replacing the
+  separate `clippy`+`test` so the host-target workspace compiles once), the `lint-ts` job now
+  does a real `corepack yarn@4.10.2 install --immutable` (Berry's frozen-lockfile) and runs
+  `yarn lint` + `yarn workspace @meridian/sdk typecheck` + `yarn workspace @meridian/sdk test`
+  **in one job** — so the workspace install (and node_modules link) happens exactly once per
+  pipeline, no duplicate/uncached install. It consumes `build-program`'s `.so` (so the LiteSVM
+  suite runs in CI, no Solana toolchain in the Node image) — F-06's tests are wired into CI
+  now, not deferred to F-10. yarn is invoked via `corepack yarn@<ver>` (no global shim) with
+  the download cache pinned inside the project dir for the non-root container mapping. The job
+  lives in the `check` stage (main folded the `test` stage away); ordering after the build is
+  enforced by `needs`, not the stage.
 
 ### Chunk 8 — adversarial review
 
