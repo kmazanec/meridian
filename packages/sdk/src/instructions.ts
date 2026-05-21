@@ -16,6 +16,7 @@ import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountIdempotentInstruction,
 } from "@solana/spl-token";
 import { SystemProgram, SYSVAR_RENT_PUBKEY } from "@solana/web3.js";
 import type { MeridianProgram } from "./program";
@@ -49,6 +50,30 @@ function toBN(value: BNLike): BN {
 
 function pdasFor(id: MarketId): MarketPdas {
   return deriveMarketPdas(marketPda(id.ticker, id.strike, id.tradingDay));
+}
+
+/**
+ * An idempotent "create the owner's associated token account for `mint`" instruction.
+ *
+ * Several program instructions require a token account to *already exist* (e.g.
+ * `place_order`'s `user_yes`/`user_usdc`, `redeem`'s payout account). Unlike
+ * `mint_pair`, they do not create it for you. Prepend this (idempotent: a no-op if the
+ * ATA already exists) so a buy/sell/redeem doesn't fail with `AccountNotInitialized`.
+ * The four-button intent builder prepends these automatically.
+ */
+export function createAtaIfNeeded(
+  payer: PublicKey,
+  owner: PublicKey,
+  mint: PublicKey
+): TransactionInstruction {
+  return createAssociatedTokenAccountIdempotentInstruction(
+    payer,
+    ata(mint, owner),
+    owner,
+    mint,
+    TOKEN_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -248,10 +273,11 @@ export interface MintPairParams {
 }
 
 /**
- * Build `mint_pair` (deposit $1.00 × `?`... — the program mints from the user's USDC
- * balance; amount is implied by the instruction's fixed unit, see program). Creates
- * the user's Yes/No/USDC ATAs as needed (the program uses `init_if_needed`-style
- * associated-token accounts).
+ * Build `mint_pair`: deposit exactly $1.00 (PAYOFF_UNIT USDC base units) and receive
+ * 1.0 Yes + 1.0 No. The instruction takes no amount — each call mints one unit pair;
+ * mint N pairs by sending N instructions. The user's Yes/No token accounts are created
+ * on demand (the program's associated-token accounts are `init_if_needed`); the user's
+ * USDC account must already exist and hold ≥ PAYOFF_UNIT.
  */
 export function mintPair(
   program: MeridianProgram,

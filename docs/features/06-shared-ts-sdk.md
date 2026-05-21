@@ -87,7 +87,7 @@ Build chunks (test-first; each ends in a tickable item):
   vault, mint_auth, yes/no mint, usdc/yes escrow) + ATA helpers + `Ticker` codec; verified
   against the accounts the program actually creates in LiteSVM and by direct seed-byte
   assertions for the market seed ordering.
-- [ ] **3. Instruction builders (full set) + LiteSVM harness** — one typed builder per
+- [x] **3. Instruction builders (full set) + LiteSVM harness** — one typed builder per
   program instruction (callers pass domain args, not addresses); each proven by a tx that
   succeeds against the real program in LiteSVM with the expected state effect; error
   surfacing tested (duplicate create, unauthorized admin).
@@ -164,3 +164,26 @@ Build chunks (test-first; each ends in a tickable item):
   stand up in LiteSVM, and that instruction is already covered by the program's own tests.
   Per-ticker test feed id is `[ticker_index; 32]`, matching the Rust shim so settlement
   tests line up.
+
+### Chunk 3 — instruction builders
+
+- **Builders use `.accountsStrict()`, not `.accounts()`.** Anchor's resolver-driven
+  `.accounts()` types only let you pass the accounts it *cannot* itself derive, and its PDA
+  resolution would re-derive seeds independently. Since the SDK already derives every PDA
+  from the frozen seed contract, `.accountsStrict()` is the right call: it forces a complete,
+  explicit account set wired by *our* derivations — no hidden resolver step that could drift
+  from the program. The LiteSVM tests prove the strict set is correct against the real program.
+- **`mint_pair` takes no amount** — each call mints exactly one $1.00 pair (`PAYOFF_UNIT` of
+  each token for `PAYOFF_UNIT` USDC). Mint N pairs by sending N instructions. The builder
+  doc says so explicitly to prevent a caller assuming an amount arg.
+- **Finding → `createAtaIfNeeded` helper (consumer-facing).** `place_order` requires the
+  taker's `user_yes`/`user_usdc` token accounts to *already exist* (no `init_if_needed`),
+  unlike `mint_pair`. A buy that lands Yes into a non-existent ATA fails with
+  `AccountNotInitialized (3012)`. The SDK exposes `createAtaIfNeeded(payer, owner, mint)` (an
+  idempotent ATA-create) for callers to prepend; the four-button intent layer prepends these
+  automatically. This is a real ergonomics gap the SDK closes for F-07/F-08.
+- **Test-harness gotcha worth noting for F-09:** LiteSVM dedupes transactions by signature,
+  so two *structurally identical* txs (e.g. re-posting the same order) need a fresh
+  blockhash or the second silently fails with empty logs. The harness calls
+  `expireBlockhash()` after every send. Any future TS test harness (F-09 E2E) must do the
+  same.

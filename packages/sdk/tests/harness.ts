@@ -110,19 +110,35 @@ export class Harness {
     this.svm.setClock(clock);
   }
 
-  /** Send a set of instructions as one transaction signed by `signers[0]` (payer). */
-  send(
+  /**
+   * Build, sign, and submit a transaction. After each send the blockhash is expired so
+   * two *structurally identical* transactions (e.g. re-posting the same order) get
+   * distinct signatures — otherwise LiteSVM dedupes them and the second silently fails
+   * with empty logs. This mirrors how a real validator advances blockhashes.
+   */
+  private submit(
     instructions: TransactionInstruction[],
     signers: Keypair[]
-  ): TransactionMetadata {
-    if (signers.length === 0)
+  ): TransactionMetadata | FailedTransactionMetadata {
+    if (signers.length === 0) {
       throw new Error("send() requires at least one signer (the payer)");
+    }
     const tx = new Transaction();
     tx.recentBlockhash = this.svm.latestBlockhash();
     tx.feePayer = signers[0].publicKey;
     for (const ix of instructions) tx.add(ix);
     tx.sign(...signers);
     const res = this.svm.sendTransaction(tx);
+    this.svm.expireBlockhash();
+    return res;
+  }
+
+  /** Send a set of instructions as one transaction signed by `signers[0]` (payer). */
+  send(
+    instructions: TransactionInstruction[],
+    signers: Keypair[]
+  ): TransactionMetadata {
+    const res = this.submit(instructions, signers);
     if (res instanceof FailedTransactionMetadata) {
       throw new TxError(res);
     }
@@ -134,12 +150,7 @@ export class Harness {
     instructions: TransactionInstruction[],
     signers: Keypair[]
   ): TransactionMetadata | FailedTransactionMetadata {
-    const tx = new Transaction();
-    tx.recentBlockhash = this.svm.latestBlockhash();
-    tx.feePayer = signers[0].publicKey;
-    for (const ix of instructions) tx.add(ix);
-    tx.sign(...signers);
-    return this.svm.sendTransaction(tx);
+    return this.submit(instructions, signers);
   }
 
   /** Raw account bytes (or null), as the program sees them. */
