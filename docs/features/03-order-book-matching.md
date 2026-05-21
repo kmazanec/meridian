@@ -97,10 +97,12 @@ Chunks:
   module added (`bid_cost_ceil`, `fill_cost_floor`, `insert_sorted`, `cross_incoming` stub).
   Tests pass: bid/ask rest + escrow exact; price-time priority incl. seq tiebreak;
   zero-size, price-out-of-range, paused, settled all rejected; `BookFull` at capacity.
-- [ ] **Chunk 3 — `place_order` crossing + market + partial fills.** Cross resting opposite
-  side at maker price-time priority; full/partial fills across levels; market fill-or-cancel
-  + refund; limit remainder rests. Atomic settlement via `remaining_accounts`.
-  `OrderMatched`. Tests cover all named edge cases incl. seq-tie priority.
+- [x] **Chunk 3 — `place_order` crossing + market + partial fills.** `matching::cross_incoming`
+  does taker-crosses-on-placement: plan fills (read-only, price-time from index 0) → settle
+  CPIs (verifying each `remaining_accounts` maker account) → apply size decrements/removals.
+  `OrderMatched` per fill. Tests pass: taker buy full-fill; taker sell full-fill; partial
+  fill across two price levels; crossing limit fills then rests remainder; market remainder
+  cancelled (not rested); non-crossing limit doesn't fill.
 - [ ] **Chunk 4 — `cancel_order`.** Owner-only; refund full remaining escrow; remove slot.
   `OrderCancelled`. Tests: owner cancels + escrow returned; `NotOrderOwner`; `OrderNotFound`.
 - [ ] **Chunk 5 — `match_orders` crank + trustlessness.** Permissionless sweep of crossed
@@ -156,6 +158,38 @@ remainder is refunded to the bidder when the order leaves the book (fill-complet
 cancel), so no dust is stranded. Required-account note: `place_order` needs the caller's
 Yes ATA *and* USDC ATA to exist (a pure resting bid still names `user_yes` because a
 crossing bid receives Yes); the SDK/frontend must create these ATAs first.
+
+### Matching: exact escrow via telescoping (no dust, no Order field)
+
+The frozen `Order` struct has no escrow field, so escrow must be reconstructable from
+`price` + `size` at every point. The trade USDC for a fill that shrinks a resting order
+from `s_before` to `s_after` is defined as **`ceil(price*s_before) − ceil(price*s_after)`**
+(`matching::fill_usdc`). Over any sequence of partial fills this telescopes to exactly
+`ceil(price*original_size)` — which is exactly what a bid escrows (`bid_cost_ceil`). So a
+bid's escrow drains to **zero** when fully filled and the remaining escrow always equals
+`ceil(price*remaining_size)` — no dust, no stranded funds, and `cancel_order` (Chunk 4)
+can refund exactly `ceil(price*remaining)` without tracking anything. Both taker
+directions use the same `fill_usdc`, so a buy and a sell at the same maker price move
+identical USDC. Trade price is always the **maker's** resting price (price-time priority).
+
+### `remaining_accounts` trust model (security-critical)
+
+A taker fill pays an arbitrary set of makers, so maker payout accounts can't be named in
+the fixed `Accounts` struct — they're passed via `ctx.remaining_accounts`, aligned in
+fill order (best price/time first). For each matched maker the handler deserializes the
+supplied token account and **requires** `account.owner == on-chain order.owner` and
+`account.mint == the correct mint` (USDC when an ask-maker is paid; Yes when a bid-maker
+receives tokens) before transferring. Prices and sizes are read **only** from the
+on-chain `Order`s, never from the caller — so a cranker/taker can trigger matching but
+cannot alter terms or misdirect funds. This is the main manual-review hotspot.
+
+### Three-phase matching (borrow-safe)
+
+`cross_incoming` runs (1) a read-only planning pass over the sorted book collecting
+`PlannedFill`s, (2) a settlement pass doing the CPIs with maker-account verification, then
+(3) an apply pass mutating the book (decrement partial makers; remove emptied ones
+back-to-front so indices stay valid). Splitting phases avoids holding a book borrow across
+CPIs and keeps the matching logic auditable.
 
 ### Escrow accounts (invariant #1 safety)
 

@@ -324,3 +324,255 @@ fn book_full_rejects_new_resting_order() {
     let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
     assert!(res.is_err(), "resting beyond capacity must be rejected (BookFull)");
 }
+
+// ---------------------------------------------------------------------------
+// Chunk 3 — place_order crossing + market orders + partial fills
+// ---------------------------------------------------------------------------
+
+/// A maker's USDC ATA (what an ASK maker receives when a taker buys Yes).
+fn usdc_ata(f: &Fixture, owner: &solana_pubkey::Pubkey) -> solana_pubkey::Pubkey {
+    ata(owner, &f.usdc_mint)
+}
+/// A maker's Yes ATA (what a BID maker receives when a taker sells Yes).
+fn yes_ata(market: &solana_pubkey::Pubkey, owner: &solana_pubkey::Pubkey) -> solana_pubkey::Pubkey {
+    let (yes_mint, _) = yes_mint_pda(market);
+    ata(owner, &yes_mint)
+}
+
+#[test]
+fn taker_buy_crosses_resting_ask_full_fill() {
+    let mut f = setup(10 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+    let (yes_mint, _) = yes_mint_pda(&market);
+
+    // user2 = maker: mint 2 Yes, post an ask to sell 2.0 Yes @ $0.50.
+    let maker = f.user2.insecure_clone();
+    mint_pairs_for(&mut f, &maker, &market, 2);
+    let ix = ix_place_order(
+        &f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 500_000, 2 * ONE, false, &[],
+    );
+    send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("maker ask");
+
+    // user = taker: buy 2.0 Yes (market). Maker (seller) receives USDC.
+    let _u = f.user.pubkey();
+    ensure_yes_ata(&mut f, _u, &market);
+    let taker = f.user.insecure_clone();
+    let maker_usdc = usdc_ata(&f, &f.user2.pubkey());
+    let taker_usdc_before = token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey()));
+    let maker_usdc_before = token_balance(&f.svm, &maker_usdc);
+
+    let ix = ix_place_order(
+        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 0, 2 * ONE, true, &[maker_usdc],
+    );
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&taker]).expect("taker market buy");
+
+    // Book empty (ask fully consumed; market remainder not rested).
+    let (ob_pda, _) = order_book_pda(&market);
+    let ob = read_order_book(&f.svm, &ob_pda);
+    assert!(ob.asks.is_empty() && ob.bids.is_empty(), "book cleared");
+
+    // Taker holds 2.0 Yes; paid $1.00 (2.0 @ $0.50). Maker received $1.00.
+    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), 2 * ONE, "taker got 2 Yes");
+    assert_eq!(
+        token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey())),
+        taker_usdc_before - 1_000_000,
+        "taker paid $1.00"
+    );
+    assert_eq!(token_balance(&f.svm, &maker_usdc), maker_usdc_before + 1_000_000, "maker got $1.00");
+    // Yes escrow drained.
+    let (yes_escrow, _) = yes_escrow_pda(&market);
+    assert_eq!(token_balance(&f.svm, &yes_escrow), 0, "yes escrow emptied");
+}
+
+#[test]
+fn taker_sell_crosses_resting_bid_full_fill() {
+    let mut f = setup(10 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+    let (yes_mint, _) = yes_mint_pda(&market);
+
+    // user2 = maker: post a bid to buy 2.0 Yes @ $0.60 (escrows $1.20).
+    let maker = f.user2.insecure_clone();
+    let _u2 = f.user2.pubkey();
+    ensure_yes_ata(&mut f, _u2, &market); // maker will receive Yes
+    let ix = ix_place_order(
+        &f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 600_000, 2 * ONE, false, &[],
+    );
+    send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("maker bid");
+
+    // user = taker: sell 2.0 Yes (market). Maker (buyer) receives Yes; taker gets USDC.
+    let taker = f.user.insecure_clone();
+    mint_pairs_for(&mut f, &taker, &market, 2); // taker has 2.0 Yes
+    let maker_yes = yes_ata(&market, &f.user2.pubkey());
+    let taker_usdc_before = token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey()));
+
+    let ix = ix_place_order(
+        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 0, 2 * ONE, true, &[maker_yes],
+    );
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&taker]).expect("taker market sell");
+
+    let (ob_pda, _) = order_book_pda(&market);
+    let ob = read_order_book(&f.svm, &ob_pda);
+    assert!(ob.asks.is_empty() && ob.bids.is_empty(), "book cleared");
+
+    // Maker holds 2.0 Yes; taker received $1.20; USDC escrow drained.
+    assert_eq!(token_balance(&f.svm, &maker_yes), 2 * ONE, "maker got 2 Yes");
+    assert_eq!(
+        token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey())),
+        taker_usdc_before + 1_200_000,
+        "taker received $1.20"
+    );
+    let (usdc_escrow, _) = usdc_escrow_pda(&market);
+    assert_eq!(token_balance(&f.svm, &usdc_escrow), 0, "usdc escrow emptied");
+    let _ = yes_mint;
+}
+
+#[test]
+fn partial_fill_across_two_price_levels() {
+    let mut f = setup(20 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+    let (yes_mint, _) = yes_mint_pda(&market);
+
+    // Maker posts two asks: 1.0 @ $0.40 (seq0) and 1.0 @ $0.50 (seq1).
+    let maker = f.user2.insecure_clone();
+    mint_pairs_for(&mut f, &maker, &market, 2);
+    for p in [400_000u64, 500_000] {
+        let ix = ix_place_order(
+            &f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, p, ONE, false, &[],
+        );
+        send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("ask");
+    }
+
+    // Taker market-buys 1.5 Yes → fills 1.0 @ $0.40 then 0.5 @ $0.50 = $0.65 total.
+    let _u = f.user.pubkey();
+    ensure_yes_ata(&mut f, _u, &market);
+    let taker = f.user.insecure_clone();
+    let maker_usdc = usdc_ata(&f, &f.user2.pubkey());
+    let taker_usdc_before = token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey()));
+
+    // Best-price-first order: the $0.40 ask is consumed first, then the $0.50.
+    let ix = ix_place_order(
+        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 0, 3 * ONE / 2, true,
+        &[maker_usdc, maker_usdc],
+    );
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&taker]).expect("taker partial");
+
+    // Taker holds 1.5 Yes; paid $0.40 + $0.25 = $0.65.
+    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), 3 * ONE / 2, "1.5 Yes");
+    assert_eq!(
+        token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey())),
+        taker_usdc_before - 650_000,
+        "paid $0.65"
+    );
+
+    // One ask remains: 0.5 Yes @ $0.50.
+    let (ob_pda, _) = order_book_pda(&market);
+    let ob = read_order_book(&f.svm, &ob_pda);
+    assert_eq!(ob.asks.len(), 1, "one ask left");
+    assert_eq!(ob.asks[0].price, 500_000);
+    assert_eq!(ob.asks[0].size, ONE / 2, "0.5 Yes remaining");
+}
+
+#[test]
+fn crossing_limit_fills_then_rests_remainder() {
+    let mut f = setup(20 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+
+    // Maker: ask 1.0 Yes @ $0.50.
+    let maker = f.user2.insecure_clone();
+    mint_pairs_for(&mut f, &maker, &market, 1);
+    let ix = ix_place_order(
+        &f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 500_000, ONE, false, &[],
+    );
+    send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("ask");
+
+    // Taker: LIMIT buy 3.0 Yes @ $0.50 → fills 1.0 @ $0.50, remainder 2.0 rests as a bid.
+    let _u = f.user.pubkey();
+    ensure_yes_ata(&mut f, _u, &market);
+    let taker = f.user.insecure_clone();
+    let maker_usdc = usdc_ata(&f, &f.user2.pubkey());
+    let ix = ix_place_order(
+        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 500_000, 3 * ONE, false,
+        &[maker_usdc],
+    );
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&taker]).expect("crossing limit");
+
+    let (yes_mint, _) = yes_mint_pda(&market);
+    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), ONE, "got 1.0 Yes");
+
+    // Remainder 2.0 @ $0.50 rests as a bid; escrow holds $1.00 for it.
+    let (ob_pda, _) = order_book_pda(&market);
+    let ob = read_order_book(&f.svm, &ob_pda);
+    assert!(ob.asks.is_empty(), "ask consumed");
+    assert_eq!(ob.bids.len(), 1, "remainder rests");
+    assert_eq!(ob.bids[0].size, 2 * ONE);
+    let (usdc_escrow, _) = usdc_escrow_pda(&market);
+    assert_eq!(token_balance(&f.svm, &usdc_escrow), 1_000_000, "escrow for resting remainder");
+}
+
+#[test]
+fn market_order_remainder_is_cancelled_not_rested() {
+    let mut f = setup(20 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+
+    // Maker: ask only 1.0 Yes @ $0.50.
+    let maker = f.user2.insecure_clone();
+    mint_pairs_for(&mut f, &maker, &market, 1);
+    let ix = ix_place_order(
+        &f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 500_000, ONE, false, &[],
+    );
+    send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("ask");
+
+    // Taker: MARKET buy 3.0 Yes → only 1.0 available; remainder dropped (no rest).
+    let _u = f.user.pubkey();
+    ensure_yes_ata(&mut f, _u, &market);
+    let taker = f.user.insecure_clone();
+    let maker_usdc = usdc_ata(&f, &f.user2.pubkey());
+    let usdc_before = token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey()));
+    let ix = ix_place_order(
+        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 0, 3 * ONE, true, &[maker_usdc],
+    );
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&taker]).expect("market buy");
+
+    let (yes_mint, _) = yes_mint_pda(&market);
+    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), ONE, "got only 1.0 Yes");
+    // Only $0.50 spent (for the 1.0 filled); nothing escrowed for the dropped remainder.
+    assert_eq!(
+        token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey())),
+        usdc_before - 500_000,
+        "paid only for filled portion"
+    );
+    let (ob_pda, _) = order_book_pda(&market);
+    let ob = read_order_book(&f.svm, &ob_pda);
+    assert!(ob.bids.is_empty(), "market remainder not rested");
+    assert!(ob.asks.is_empty(), "ask consumed");
+}
+
+#[test]
+fn non_crossing_limit_does_not_fill() {
+    let mut f = setup(20 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+
+    // Maker: ask 1.0 Yes @ $0.70.
+    let maker = f.user2.insecure_clone();
+    mint_pairs_for(&mut f, &maker, &market, 1);
+    let ix = ix_place_order(
+        &f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 700_000, ONE, false, &[],
+    );
+    send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("ask");
+
+    // Taker: limit bid @ $0.60 (< $0.70) → does NOT cross; rests as a bid.
+    let _u = f.user.pubkey();
+    ensure_yes_ata(&mut f, _u, &market);
+    let taker = f.user.insecure_clone();
+    let ix = ix_place_order(
+        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 600_000, ONE, false, &[],
+    );
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&taker]).expect("non-crossing bid");
+
+    let (ob_pda, _) = order_book_pda(&market);
+    let ob = read_order_book(&f.svm, &ob_pda);
+    assert_eq!(ob.asks.len(), 1, "ask still resting");
+    assert_eq!(ob.bids.len(), 1, "bid rests, no fill");
+    let (yes_mint, _) = yes_mint_pda(&market);
+    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), 0, "taker got no Yes");
+}

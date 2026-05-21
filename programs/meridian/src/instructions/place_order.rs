@@ -116,8 +116,8 @@ pub fn handler<'info>(
         require!(args.price <= PRICE_SCALE, MeridianError::PriceOutOfRange);
     }
 
-    // --- 1. Cross the opposite side (Chunk 3 fills this in). ---
-    let fill = matching::cross_incoming(&ctx, &args)?;
+    // --- 1. Cross the opposite side (taker-crosses-on-placement). ---
+    let fill = matching::cross_incoming(&mut ctx, &args)?;
     let remaining = args
         .size
         .checked_sub(fill.filled_size)
