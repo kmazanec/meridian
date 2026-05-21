@@ -1,6 +1,6 @@
 # Feature: Settlement & Oracle
 
-**ID:** F-04 · **Roadmap piece:** F-04 · **Status:** Not started
+**ID:** F-04 · **Roadmap piece:** F-04 · **Status:** In review — [MR !4](https://labs.gauntletai.com/keithmazanec/meridian/-/merge_requests/4)
 
 ## Description
 
