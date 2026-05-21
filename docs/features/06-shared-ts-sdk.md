@@ -1,6 +1,6 @@
 # Feature: Shared TypeScript SDK
 
-**ID:** F-06 · **Roadmap piece:** F-06 · **Status:** Not started
+**ID:** F-06 · **Roadmap piece:** F-06 · **Status:** In progress
 
 ## Description
 
@@ -64,6 +64,47 @@ PDA-derivation surface should be treated as a frozen contract before F-09.
 - An RPC endpoint for the target cluster and (for the Pyth helper integration test) a
   funded keypair to post price updates on devnet.
 
+## Implementation plan (approved)
+
+Locked decisions (confirmed with the user before building):
+
+- **Client lib:** `@anchor-lang/core@1.0.2` — already a declared dep, version-matched to
+  `anchor-cli 1.0.2`, reads the new-format IDL natively, no codegen. Most literally
+  satisfies the "built from the IDL, not hand-rolled serialization" criterion.
+- **Test runtime:** `litesvm` (npm) in-process, loading the built `target/deploy/meridian.so`.
+  Mirrors the program's existing Rust LiteSVM convention; no external validator daemon, so
+  it runs in CI. Satisfies "succeeds against a local validator" hermetically.
+- **Pyth helper:** unit-test the logic + build a `PriceUpdateV2` fixture posted into LiteSVM
+  so `settle_market` consumes it. The live devnet Hermes→Receiver round-trip is deferred to
+  an opt-in/manual test (needs a funded keypair + US market hours — see Manual setup).
+
+Build chunks (test-first; each ends in a tickable item):
+
+- [x] **1. Workspace + IDL plumbing** — yarn workspaces at root, committed `yarn.lock`,
+  `packages/sdk` (`@meridian/sdk`) skeleton, vendored IDL + IDL type, `getProgram()` typed
+  program factory, constants re-exported from the IDL.
+- [ ] **2. PDA derivation** — pure functions for every PDA (config, market, order_book,
+  vault, mint_auth, yes/no mint, usdc/yes escrow) + ATA helpers + `Ticker` codec; verified
+  against the accounts the program actually creates in LiteSVM and by direct seed-byte
+  assertions for the market seed ordering.
+- [ ] **3. Instruction builders (full set) + LiteSVM harness** — one typed builder per
+  program instruction (callers pass domain args, not addresses); each proven by a tx that
+  succeeds against the real program in LiteSVM with the expected state effect; error
+  surfacing tested (duplicate create, unauthorized admin).
+- [ ] **4. Reading helpers (both perspectives)** — typed account fetchers + Yes-view/No-view
+  of the single book (No = `PRICE_SCALE − p` mirror, time priority preserved) + user
+  balances and settled-market payout/PNL summary.
+- [ ] **5. Four-button intent translation** — one `buildTradeIntent(...)` API: BUY_YES→bid,
+  SELL_YES→ask, BUY_NO→`mint_pair + sell Yes`, SELL_NO→`buy Yes`; unit-asserted ix mapping
+  (the anti-drift contract test) + end-to-end BUY_NO/SELL_NO in LiteSVM.
+- [ ] **6. Pyth/Hermes helper** — `fetchPriceUpdate` / `postPriceUpdate` / `settleWithPyth`;
+  unit + fixture-into-LiteSVM proves `settle_market` reads it; live devnet test
+  skipped-by-default (env-gated).
+- [ ] **7. Public surface + consumability** — barrel export, `main`/`types`/`exports` map for
+  Node and browser, declaration emit, `tsc --noEmit` green, import-surface test, README.
+- [ ] **8. Adversarial review + triage** — independent subagent (robustness/efficiency/
+  security); fix high/medium, re-run suite, record lows below.
+
 ## Implementation notes (filled in by the building agent)
 
 > The agent implementing this feature records its implementation decisions and
@@ -73,3 +114,27 @@ PDA-derivation surface should be treated as a frozen contract before F-09.
 > by the builder, not the planner. Cross-cutting discoveries that affect other
 > features must also be propagated to ROADMAP.md or the architecture doc, not just
 > left here.
+
+### Chunk 1 — workspace + IDL plumbing
+
+- **Client library:** `@anchor-lang/core@1.0.2` (the Anchor v1 TS client, version-matched
+  to `anchor-cli 1.0.2`). It consumes the compiled IDL directly and exposes camelCase
+  `program.methods.*` builders and a `program.account.*` coder, so instruction encoding is
+  IDL-derived, never hand-rolled (the feature's first acceptance criterion). No Codama
+  codegen step. Built on `@solana/web3.js` v1 (Anchor's peer); the bundle-size cost lands on
+  the frontend (F-08) and can be revisited there.
+- **IDL is vendored, not imported from `target/`.** `target/` is gitignored, so the package
+  carries its own `src/idl/meridian.json` (runtime IDL) + `meridian-type.ts` (Anchor's
+  generated camelCase type). `src/idl/index.ts` documents the three-line regenerate recipe.
+  `idl.test.ts` asserts the program id and unit constants, so a stale vendored IDL trips a
+  test rather than silently shipping wrong bytes.
+- **Constants come from the IDL `constants` block**, parsed once in `constants.ts`
+  (`PAYOFF_UNIT`/`PRICE_SCALE`/decimals). `ORDERBOOK_N` and `NUM_TICKERS` are not program
+  `#[constant]`s (they size accounts / arg arrays), so they are mirrored as plain TS
+  constants matching `constants.rs`.
+- **Workspace / tooling:** root converted to yarn (Berry 4.10.2) workspaces (`packages/*`);
+  this is the repo's first off-chain package. `.yarnrc.yml` sets `nodeLinker: node-modules`
+  (litesvm ships a native `.node` addon and ts-mocha is most reliable with a real
+  `node_modules`, not PnP). Because the worktree lives *under* the main repo dir, yarn
+  needed a `yarn.lock` present to treat the worktree as its own project root — and the
+  committed lockfile is exactly what CI note #9 asked for at F-06+ anyway.

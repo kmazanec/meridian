@@ -83,7 +83,7 @@ async function main() {
   for (const [ticker, feedId] of Object.entries(MAG7)) {
     if (!feedId) {
       console.log(
-        `  ${ticker.padEnd(6)} ✗ no feed id configured (set FEED_${ticker})`,
+        `  ${ticker.padEnd(6)} ✗ no feed id configured (set FEED_${ticker})`
       );
       allFresh = false;
       continue;
@@ -106,7 +106,7 @@ async function main() {
       allFresh = allFresh && fresh;
       console.log(
         `  ${ticker.padEnd(6)} ${fresh ? "✓" : "✗"} $${price.toFixed(2)} ` +
-          `age=${age}s conf=${confBps.toFixed(1)}bps`,
+          `age=${age}s conf=${confBps.toFixed(1)}bps`
       );
       // Step 2 (on a full live run): post the update via the Pyth Solana Receiver
       //   and read it back on devnet to confirm the receiver carries it. See:
@@ -126,7 +126,7 @@ async function main() {
   console.log("");
   if (allFresh) {
     console.log(
-      "RESULT: all feeds fresh → live-Pyth settlement is viable on devnet.",
+      "RESULT: all feeds fresh → live-Pyth settlement is viable on devnet."
     );
     process.exit(0);
   } else {
@@ -135,7 +135,7 @@ async function main() {
         "Fallback ladder (see docs/features/04-settlement-oracle.md):\n" +
         "  (a) crypto-feed stand-ins (BTC/SOL, 24/7) to prove the pipeline;\n" +
         "  (b) mocked oracle behind the interface for dev;\n" +
-        "  (c) validate equities on mainnet-beta with tiny amounts.",
+        "  (c) validate equities on mainnet-beta with tiny amounts."
     );
     process.exit(1);
   }

@@ -6,6 +6,9 @@ test-ledger
 .surfpool
 **/*.rs.bk
 
+# Compiled TS package output (the off-chain workspace).
+packages/*/dist
+
 # Ignore build output, but keep the canonical program keypair committed so the
 # program ID is reproducible across clones/worktrees. Without this, every fresh
 # build regenerates a new keypair and thus a different program ID.
