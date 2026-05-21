@@ -98,33 +98,65 @@ pub struct CreateStrikeMarket<'info> {
 }
 
 pub fn handler(ctx: Context<CreateStrikeMarket>, args: CreateStrikeMarketArgs) -> Result<()> {
+    populate_market(
+        &mut ctx.accounts.market,
+        &args,
+        ctx.accounts.yes_mint.key(),
+        ctx.accounts.no_mint.key(),
+        ctx.accounts.vault.key(),
+        MarketBumps {
+            market: ctx.bumps.market,
+            vault: ctx.bumps.vault,
+            mint_authority: ctx.bumps.mint_authority,
+        },
+    )
+}
+
+/// PDA bumps captured at provisioning time.
+pub struct MarketBumps {
+    pub market: u8,
+    pub vault: u8,
+    pub mint_authority: u8,
+}
+
+/// Initialize a freshly-`init`ed `Market` account for one ticker-strike-day:
+/// validate the strike, write the opening state, and emit `MarketCreated`. Shared
+/// by every instruction that provisions a market so the on-chain shape of a market
+/// is defined in exactly one place.
+pub fn populate_market(
+    market: &mut Account<Market>,
+    args: &CreateStrikeMarketArgs,
+    yes_mint: Pubkey,
+    no_mint: Pubkey,
+    vault: Pubkey,
+    bumps: MarketBumps,
+) -> Result<()> {
     require!(args.strike > 0, MeridianError::InvalidArgument);
 
-    let market = &mut ctx.accounts.market;
     market.ticker = args.ticker;
     market.strike = args.strike;
     market.trading_day = args.trading_day;
-    market.yes_mint = ctx.accounts.yes_mint.key();
-    market.no_mint = ctx.accounts.no_mint.key();
-    market.vault = ctx.accounts.vault.key();
-    market.order_book = Pubkey::default(); // wired by F-03
+    market.yes_mint = yes_mint;
+    market.no_mint = no_mint;
+    market.vault = vault;
+    market.order_book = Pubkey::default(); // wired when the order book is provisioned
     market.pairs_minted = 0;
     market.winning_redeemed = 0;
     market.state = MarketState::Open;
     market.outcome = Outcome::Unsettled;
     market.settlement_price = None;
     market.settled_at = None;
-    market.bump = ctx.bumps.market;
-    market.vault_bump = ctx.bumps.vault;
-    market.mint_authority_bump = ctx.bumps.mint_authority;
+    market.bump = bumps.market;
+    market.vault_bump = bumps.vault;
+    market.mint_authority_bump = bumps.mint_authority;
 
     emit!(crate::events::MarketCreated {
         market: market.key(),
         ticker: args.ticker,
         strike: args.strike,
         trading_day: args.trading_day,
-        yes_mint: market.yes_mint,
-        no_mint: market.no_mint,
+        yes_mint,
+        no_mint,
     });
 
     Ok(())

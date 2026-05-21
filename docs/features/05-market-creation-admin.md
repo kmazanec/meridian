@@ -1,6 +1,6 @@
 # Feature: Market Creation & Admin
 
-**ID:** F-05 · **Roadmap piece:** F-05 · **Status:** Not started
+**ID:** F-05 · **Roadmap piece:** F-05 · **Status:** In progress
 
 ## Description
 
@@ -57,6 +57,41 @@ instructions, and for integration (F-09).
 ## Manual setup required
 
 None (the admin keypair for tests is generated locally).
+
+## Implementation plan (approved)
+
+**Scope reality check:** F-02 and F-03 have since merged and already cover most of this
+spec's literal text. `create_strike_market` (F-02) is already the admin-gated per-strike
+provisioning path (Market + Yes/No mints + PDA vault, duplicate rejected by `init`); the
+order book is provisioned by F-03's `init_order_book`/`grow_order_book`. The global pause
+guard is **already enforced** — `mint_pair`, `place_order`, and `match_orders` all reject
+when `Config.paused` is true. So F-05's genuine remaining work is just the pieces that
+*flip* the pause flag and a named intraday strike-add.
+
+Decisions: `add_strike` = thin distinct instruction reusing the shared create logic; pause
+= **global only** (matches the existing wiring; no per-market flag).
+
+- [x] **Chunk 1 — refactor**: extract `create_strike_market`'s Market-field population +
+  `MarketCreated` emit into a shared `populate_market(...)` fn it calls. Pure refactor;
+  F-02 tests stay green.
+- [ ] **Chunk 2 — `pause` / `unpause`**: admin-only instructions setting `Config.paused`;
+  `PauseSet` event. Tests: pause blocks `mint_pair` + the real `place_order`/`match_orders`
+  paths (`MarketPaused`); unpause restores; non-admin rejected (`Unauthorized`); idempotent
+  re-pause. *(AC: pause blocks mint+trading, admin-only)*
+- [ ] **Chunk 3 — `add_strike`**: instruction mirroring `CreateStrikeMarket`, delegating to
+  `populate_market`; `StrikeAdded` event. Tests: happy path (accounts provisioned, `Open`,
+  mints/vault PDA-owned with no external authority); duplicate rejected; non-admin rejected;
+  added strike supports `mint_pair`. *(AC: add_strike under admin authority)*
+- [ ] **Chunk 4 — adversarial review + deliver**: review, fix high/medium, re-run suite,
+  rebase onto main, push, open MR.
+
+**Already satisfied by merged F-02/F-03 (not re-implemented, pointers only):**
+- `create_strike_market` provisions Market+mints+vault, `Open` state, duplicate rejected,
+  admin-gated, `strike > 0` — F-02 (`test_create_strike_market.rs`).
+- OrderBook provisioning — F-03 (`init_order_book`/`grow_order_book`, `test_order_book.rs`).
+- Pause *enforcement* on mint/trade — F-02/F-03 guards (this feature adds the *switch*).
+- Strike *algorithm* (±3/6/9%, round, dedupe) lives off-chain in the automation service
+  (F-07); on-chain accepts the admin-provided strike (ARCHITECTURE §9).
 
 ## Implementation notes (filled in by the building agent)
 
