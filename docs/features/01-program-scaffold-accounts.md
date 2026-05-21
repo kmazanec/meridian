@@ -102,11 +102,15 @@ criterion is proven via `anchor build` + a deploy smoke check against the standa
 validator (`[tooling] validator = "solana"`, since `anchor test` would otherwise default
 to surfpool in v1). Rationale: faster, more reliable CI gate; same behavioral coverage.
 
-**Toolchain note:** `avm` (Anchor version manager) is **not** installed — the stale
-crates.io `avm v1.0.1` fails to build against OpenSSL 3.x. We use `anchor-cli 1.0.1`
-directly, which is sufficient. To get `avm` later: install from the anchor git repo, not
-crates.io. Solana CLI lives at `~/.local/share/solana/install/active_release/bin` (add to
-PATH).
+**Toolchain note:** `avm` (Anchor version manager) is installed **from the Anchor git
+repo** (`cargo install --git https://github.com/solana-foundation/anchor avm`) and
+self-updated to **1.0.2**; `avm self-update` works (compiles from git). Do **not** use
+`cargo install avm` from crates.io — that resolves to a stale package whose ancient
+`openssl-sys 0.6.7` fails to build against OpenSSL 3.x. The active **anchor-cli is
+1.0.1** (kept in lockstep with `anchor-lang = "1.0.1"`); `anchor` is an avm-managed
+symlink. A future CLI bump to 1.0.2 should update `anchor-lang` + the CLI together and
+re-run the full build/test as its own change. Solana CLI lives at
+`~/.local/share/solana/install/active_release/bin` (add to PATH).
 
 ### Frozen contract handoff (for F-02–F-06)
 
