@@ -28,7 +28,13 @@ fn pause_blocks_mint_then_unpause_restores() {
     let market = market_pda(Ticker::Meta, STRIKE, DAY).0;
 
     // Pause → mint rejected.
-    send(&mut f.svm, &f.admin.pubkey(), ix_pause(&f.admin.pubkey()), &[&admin]).expect("pause");
+    send(
+        &mut f.svm,
+        &f.admin.pubkey(),
+        ix_pause(&f.admin.pubkey()),
+        &[&admin],
+    )
+    .expect("pause");
     let ix = ix_mint_pair(&f.user.pubkey(), &f.usdc_mint, &market);
     assert!(
         send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).is_err(),
@@ -36,7 +42,13 @@ fn pause_blocks_mint_then_unpause_restores() {
     );
 
     // Unpause → mint works again.
-    send(&mut f.svm, &f.admin.pubkey(), ix_unpause(&f.admin.pubkey()), &[&admin]).expect("unpause");
+    send(
+        &mut f.svm,
+        &f.admin.pubkey(),
+        ix_unpause(&f.admin.pubkey()),
+        &[&admin],
+    )
+    .expect("unpause");
     let ix = ix_mint_pair(&f.user.pubkey(), &f.usdc_mint, &market);
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("mint after unpause");
     assert_eq!(read_market(&f.svm, &market).pairs_minted, 1);
@@ -53,23 +65,68 @@ fn pause_blocks_trading() {
 
     // A Bid may receive Yes, so the user needs a (possibly empty) Yes ATA first.
     let (yes_mint, _) = yes_mint_pda(&market);
-    seed_token_account(&mut f.svm, &ata(&f.user.pubkey(), &yes_mint), &yes_mint, &f.user.pubkey(), 0);
+    seed_token_account(
+        &mut f.svm,
+        &ata(&f.user.pubkey(), &yes_mint),
+        &yes_mint,
+        &f.user.pubkey(),
+        0,
+    );
 
     // Sanity: a bid rests fine while open.
-    let ix = ix_place_order(&f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 600_000, ONE, false, &[]);
+    let ix = ix_place_order(
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        600_000,
+        ONE,
+        false,
+        &[],
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("place while open");
 
     // Pause → place_order rejected.
-    send(&mut f.svm, &f.admin.pubkey(), ix_pause(&f.admin.pubkey()), &[&admin]).expect("pause");
-    let ix = ix_place_order(&f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 600_000, ONE, false, &[]);
+    send(
+        &mut f.svm,
+        &f.admin.pubkey(),
+        ix_pause(&f.admin.pubkey()),
+        &[&admin],
+    )
+    .expect("pause");
+    let ix = ix_place_order(
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        600_000,
+        ONE,
+        false,
+        &[],
+    );
     assert!(
         send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).is_err(),
         "trading must be blocked while paused"
     );
 
     // Unpause → place_order works again.
-    send(&mut f.svm, &f.admin.pubkey(), ix_unpause(&f.admin.pubkey()), &[&admin]).expect("unpause");
-    let ix = ix_place_order(&f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 600_000, ONE, false, &[]);
+    send(
+        &mut f.svm,
+        &f.admin.pubkey(),
+        ix_unpause(&f.admin.pubkey()),
+        &[&admin],
+    )
+    .expect("unpause");
+    let ix = ix_place_order(
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        600_000,
+        ONE,
+        false,
+        &[],
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("place after unpause");
 }
 
@@ -80,15 +137,30 @@ fn non_admin_cannot_pause_or_unpause() {
     f.svm.airdrop(&attacker.pubkey(), 100_000_000_000).unwrap();
 
     assert!(
-        send(&mut f.svm, &attacker.pubkey(), ix_pause(&attacker.pubkey()), &[&attacker]).is_err(),
+        send(
+            &mut f.svm,
+            &attacker.pubkey(),
+            ix_pause(&attacker.pubkey()),
+            &[&attacker]
+        )
+        .is_err(),
         "non-admin pause must be rejected"
     );
     // The rejection must not have mutated the flag (defense against an auth bypass
     // that writes before failing).
-    assert!(!read_config(&f.svm).paused, "paused must remain false after rejected pause");
+    assert!(
+        !read_config(&f.svm).paused,
+        "paused must remain false after rejected pause"
+    );
 
     assert!(
-        send(&mut f.svm, &attacker.pubkey(), ix_unpause(&attacker.pubkey()), &[&attacker]).is_err(),
+        send(
+            &mut f.svm,
+            &attacker.pubkey(),
+            ix_unpause(&attacker.pubkey()),
+            &[&attacker]
+        )
+        .is_err(),
         "non-admin unpause must be rejected"
     );
 }
@@ -98,11 +170,35 @@ fn pause_is_idempotent() {
     let mut f = setup(5 * ONE);
     let admin = f.admin.insecure_clone();
     // Pausing twice is a harmless no-op (no error).
-    send(&mut f.svm, &f.admin.pubkey(), ix_pause(&f.admin.pubkey()), &[&admin]).expect("pause 1");
-    send(&mut f.svm, &f.admin.pubkey(), ix_pause(&f.admin.pubkey()), &[&admin]).expect("pause 2 (no-op)");
+    send(
+        &mut f.svm,
+        &f.admin.pubkey(),
+        ix_pause(&f.admin.pubkey()),
+        &[&admin],
+    )
+    .expect("pause 1");
+    send(
+        &mut f.svm,
+        &f.admin.pubkey(),
+        ix_pause(&f.admin.pubkey()),
+        &[&admin],
+    )
+    .expect("pause 2 (no-op)");
     // Unpausing twice likewise.
-    send(&mut f.svm, &f.admin.pubkey(), ix_unpause(&f.admin.pubkey()), &[&admin]).expect("unpause 1");
-    send(&mut f.svm, &f.admin.pubkey(), ix_unpause(&f.admin.pubkey()), &[&admin]).expect("unpause 2 (no-op)");
+    send(
+        &mut f.svm,
+        &f.admin.pubkey(),
+        ix_unpause(&f.admin.pubkey()),
+        &[&admin],
+    )
+    .expect("unpause 1");
+    send(
+        &mut f.svm,
+        &f.admin.pubkey(),
+        ix_unpause(&f.admin.pubkey()),
+        &[&admin],
+    )
+    .expect("unpause 2 (no-op)");
 }
 
 // ----------------------------------------------------------------------------

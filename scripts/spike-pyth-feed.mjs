@@ -58,10 +58,9 @@ const MAG7 = {
 const STALENESS_SECONDS = 120; // mirror DEFAULT_MAX_STALENESS in constants.rs
 const RPC_URL = process.env.RPC_URL ?? "https://api.devnet.solana.com";
 const HERMES_URL = process.env.HERMES_URL ?? "https://hermes.pyth.network";
-const KEYPAIR_PATH = (process.env.SOLANA_KEYPAIR ?? "~/.config/solana/id.json").replace(
-  /^~/,
-  homedir(),
-);
+const KEYPAIR_PATH = (
+  process.env.SOLANA_KEYPAIR ?? "~/.config/solana/id.json"
+).replace(/^~/, homedir());
 
 // ── Spike ───────────────────────────────────────────────────────────────────
 
@@ -83,7 +82,9 @@ async function main() {
 
   for (const [ticker, feedId] of Object.entries(MAG7)) {
     if (!feedId) {
-      console.log(`  ${ticker.padEnd(6)} ✗ no feed id configured (set FEED_${ticker})`);
+      console.log(
+        `  ${ticker.padEnd(6)} ✗ no feed id configured (set FEED_${ticker})`,
+      );
       allFresh = false;
       continue;
     }
@@ -99,7 +100,8 @@ async function main() {
       const publishTime = Number(parsed.price.publish_time);
       const age = now - publishTime;
       const price = Number(parsed.price.price) * 10 ** parsed.price.expo;
-      const confBps = (Number(parsed.price.conf) / Number(parsed.price.price)) * 10_000;
+      const confBps =
+        (Number(parsed.price.conf) / Number(parsed.price.price)) * 10_000;
       const fresh = age >= 0 && age <= STALENESS_SECONDS;
       allFresh = allFresh && fresh;
       console.log(
@@ -123,7 +125,9 @@ async function main() {
 
   console.log("");
   if (allFresh) {
-    console.log("RESULT: all feeds fresh → live-Pyth settlement is viable on devnet.");
+    console.log(
+      "RESULT: all feeds fresh → live-Pyth settlement is viable on devnet.",
+    );
     process.exit(0);
   } else {
     console.log(

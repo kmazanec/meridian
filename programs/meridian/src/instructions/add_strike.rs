@@ -12,7 +12,9 @@ use crate::constants::{
     MARKET_SEED, MINT_AUTH_SEED, NO_MINT_SEED, TOKEN_DECIMALS, VAULT_SEED, YES_MINT_SEED,
 };
 use crate::error::MeridianError;
-use crate::instructions::create_strike_market::{populate_market, CreateStrikeMarketArgs, MarketBumps};
+use crate::instructions::create_strike_market::{
+    populate_market, CreateStrikeMarketArgs, MarketBumps,
+};
 use crate::state::{Config, Market};
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
