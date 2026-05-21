@@ -31,7 +31,6 @@
 stages:
   - build
   - check
-  - test
   - review
 
 # Automated code + security review on merge requests, via the shared
@@ -74,12 +73,16 @@ default:
       # For the Anchor image: its Rust/Solana toolchain is installed under /root
       # (cargo at /root/.cargo/bin) and the image runs as root, so a non-root `-u`
       # mapping can't traverse /root → `cargo: command not found`. Run as root
-      # (default HOME=/root, so the toolchain resolves), then chown the build
-      # outputs back to the runner UID/GID so GitLab can archive artifacts/cache.
+      # (default HOME=/root, so the toolchain resolves) BUT point CARGO_HOME at the
+      # project-dir cache so crate downloads persist across runs (the image's
+      # default /root/.cargo lives inside the --rm container and is discarded).
+      # Then chown the cached dirs back to the runner UID/GID so GitLab can
+      # archive them. Preserves the job's exit code.
       run_in_docker_root() {
         image="$1"; shift
         docker run --rm \
           -v "$CI_PROJECT_DIR":/build -w /build \
+          -e CARGO_HOME=/build/.cargo \
           -e CARGO_TERM_COLOR=always \
           "$image" bash -c "$* ; rc=\$? ; chown -R $(id -u):$(id -g) target .cargo 2>/dev/null || true ; exit \$rc"
       }
@@ -87,15 +90,21 @@ default:
 variables:
   CARGO_TERM_COLOR: always
 
-# Cache the Cargo registry and build output across runs. The key is tied to
-# Cargo.lock so a dependency change invalidates the cache cleanly.
+# Cache the Cargo registry and build output across runs so we don't recompile
+# the whole workspace (and re-download every crate) every pipeline. One shared
+# cache for the heavy Rust jobs (build-program + verify), keyed on Cargo.lock so
+# a dependency change rotates it. The SBF build and the host-target build write
+# different subdirs of target/ (sbf-solana-solana/ vs debug/), so they coexist.
+# CARGO_HOME is /build/.cargo in-container (see run_in_docker*), so the registry
+# lives here and is cached too.
 cache:
   key:
     files:
       - Cargo.lock
   paths:
-    - .cargo/registry/index
-    - .cargo/registry/cache
+    - .cargo/registry/index/
+    - .cargo/registry/cache/
+    - .cargo/git/db/
     - target/
 
 # Run on merge requests and on the default branch; skip duplicate "branch"
@@ -125,19 +134,19 @@ fmt:
   script:
     - run_in_docker rust:1.89 'cargo fmt --all -- --check'
 
-# clippy --all-targets compiles the integration tests, which include_bytes! the
-# .so, so it needs the build artifact and the Anchor image's matching toolchain.
-clippy:
+# clippy + test in ONE job so the host-target workspace compiles a single time
+# (test reuses clippy's target/ instead of recompiling from scratch in a second
+# job). Both need the build-program .so artifact (the tests include_bytes! it) and
+# the Anchor image's toolchain. `&&` so a clippy failure short-circuits before the
+# slower test run. This replaces the former separate clippy + test jobs, halving
+# the host-target compiles per pipeline.
+verify:
   stage: check
   needs: ["build-program"]
   script:
-    - run_in_docker_root solanafoundation/anchor:v1.0.2 'cargo clippy --workspace --all-targets -- -D warnings'
-
-test:
-  stage: test
-  needs: ["build-program"]
-  script:
-    - run_in_docker_root solanafoundation/anchor:v1.0.2 'cargo test --workspace'
+    - >-
+      run_in_docker_root solanafoundation/anchor:v1.0.2
+      'cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace'
 
 # TypeScript is linted with prettier (the only JS tooling the repo declares).
 # We run prettier via `npx` rather than `yarn install`: it needs no global
