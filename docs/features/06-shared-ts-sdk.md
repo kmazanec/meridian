@@ -1,6 +1,6 @@
 # Feature: Shared TypeScript SDK
 
-**ID:** F-06 · **Roadmap piece:** F-06 · **Status:** In progress
+**ID:** F-06 · **Roadmap piece:** F-06 · **Status:** In review — [MR !6](https://labs.gauntletai.com/keithmazanec/meridian/-/merge_requests/6)
 
 ## Description
 
