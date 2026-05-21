@@ -80,6 +80,88 @@ fn dollar_conservation_user_breaks_even_when_right() {
 }
 
 #[test]
+fn double_redeem_rejected() {
+    // Redeem all winning tokens, then attempt to redeem again — the second call
+    // must fail (no tokens left to burn). Proves burn-before-pay defeats double-spend.
+    let mut f = setup(5 * ONE);
+    let admin = f.admin.insecure_clone();
+    let user = f.user.insecure_clone();
+    let ix = ix_create_strike_market(&f.admin.pubkey(), &f.usdc_mint, Ticker::Meta, STRIKE, DAY);
+    send(&mut f.svm, &f.admin.pubkey(), ix, &[&admin]).expect("create");
+    let market = market_pda(Ticker::Meta, STRIKE, DAY).0;
+    let ix = ix_mint_pair(&f.user.pubkey(), &f.usdc_mint, &market);
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("mint");
+    force_settle(&mut f.svm, &market, Outcome::YesWins);
+
+    let (yes_mint, _) = yes_mint_pda(&market);
+    let user_yes = ata(&f.user.pubkey(), &yes_mint);
+    let user_usdc = ata(&f.user.pubkey(), &f.usdc_mint);
+    let (vault, _) = vault_pda(&market);
+
+    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::Yes, ONE, &user_yes, &user_usdc);
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("first redeem ok");
+    assert_eq!(token_balance(&f.svm, &vault), 0, "vault drained exactly once");
+
+    // Second redeem of the same (now-zero) position must fail.
+    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::Yes, ONE, &user_yes, &user_usdc);
+    let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
+    assert!(res.is_err(), "double-redeem must be rejected");
+}
+
+#[test]
+fn cross_market_vault_substitution_rejected() {
+    // Mint+settle in market A; try to redeem A's winning tokens but pass market B's
+    // vault. The `has_one = vault` binding on market A must reject the foreign vault.
+    let mut f = setup(10 * ONE);
+    let admin = f.admin.insecure_clone();
+    let user = f.user.insecure_clone();
+
+    // Market A (META @ $680) and Market B (META @ $700) share the USDC mint.
+    let ixa = ix_create_strike_market(&f.admin.pubkey(), &f.usdc_mint, Ticker::Meta, STRIKE, DAY);
+    send(&mut f.svm, &f.admin.pubkey(), ixa, &[&admin]).expect("create A");
+    let ixb = ix_create_strike_market(&f.admin.pubkey(), &f.usdc_mint, Ticker::Meta, 700_000_000, DAY);
+    send(&mut f.svm, &f.admin.pubkey(), ixb, &[&admin]).expect("create B");
+    let market_a = market_pda(Ticker::Meta, STRIKE, DAY).0;
+    let market_b = market_pda(Ticker::Meta, 700_000_000, DAY).0;
+
+    // Fund vault B by minting there too (so it has collateral to steal).
+    let ix = ix_mint_pair(&f.user.pubkey(), &f.usdc_mint, &market_b);
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("mint B");
+    // Mint + settle A (Yes wins).
+    let ix = ix_mint_pair(&f.user.pubkey(), &f.usdc_mint, &market_a);
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("mint A");
+    force_settle(&mut f.svm, &market_a, Outcome::YesWins);
+
+    // Hand-build a redeem against market A but with market B's vault substituted.
+    use anchor_lang::{solana_program::instruction::Instruction, InstructionData, ToAccountMetas};
+    let (yes_mint_a, _) = yes_mint_pda(&market_a);
+    let (no_mint_a, _) = no_mint_pda(&market_a);
+    let (mint_auth_a, _) = mint_authority_pda(&market_a);
+    let (vault_b, _) = vault_pda(&market_b); // FOREIGN vault
+    let user_yes_a = ata(&f.user.pubkey(), &yes_mint_a);
+    let user_usdc = ata(&f.user.pubkey(), &f.usdc_mint);
+
+    let ix = Instruction::new_with_bytes(
+        meridian::id(),
+        &meridian::instruction::Redeem { side: RedeemSide::Yes, amount: ONE }.data(),
+        meridian::accounts::Redeem {
+            user: f.user.pubkey(),
+            market: market_a,
+            mint_authority: mint_auth_a,
+            yes_mint: yes_mint_a,
+            no_mint: no_mint_a,
+            vault: vault_b, // substituted!
+            user_tokens: user_yes_a,
+            user_usdc,
+            token_program: token_program_id(),
+        }
+        .to_account_metas(None),
+    );
+    let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
+    assert!(res.is_err(), "redeeming against a foreign vault must be rejected");
+}
+
+#[test]
 fn redeem_wrong_side_account_rejected() {
     // Passing a No-token account while claiming RedeemSide::Yes must fail
     // (the handler checks the token account's mint matches the chosen side).

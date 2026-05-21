@@ -109,6 +109,7 @@ pub fn handler(ctx: Context<CreateStrikeMarket>, args: CreateStrikeMarketArgs) -
     market.vault = ctx.accounts.vault.key();
     market.order_book = Pubkey::default(); // wired by F-03
     market.pairs_minted = 0;
+    market.winning_redeemed = 0;
     market.state = MarketState::Open;
     market.outcome = Outcome::Unsettled;
     market.settlement_price = None;

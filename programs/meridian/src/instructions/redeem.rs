@@ -57,15 +57,21 @@ pub struct Redeem<'info> {
     #[account(mut, constraint = user_tokens.owner == user.key() @ MeridianError::NotOrderOwner)]
     pub user_tokens: Box<Account<'info, TokenAccount>>,
 
-    /// The user's USDC account that receives the payout.
-    #[account(mut, constraint = user_usdc.mint == vault.mint @ MeridianError::InvalidArgument)]
+    /// The user's USDC account that receives the payout. Bound to the vault's
+    /// mint and owned by the caller (defense-in-depth: payouts can't be
+    /// redirected to a third party).
+    #[account(
+        mut,
+        constraint = user_usdc.mint == vault.mint @ MeridianError::InvalidArgument,
+        constraint = user_usdc.owner == user.key() @ MeridianError::InvalidArgument,
+    )]
     pub user_usdc: Box<Account<'info, TokenAccount>>,
 
     pub token_program: Program<'info, Token>,
 }
 
 pub fn handler(ctx: Context<Redeem>, side: RedeemSide, amount: u64) -> Result<()> {
-    require!(amount > 0, MeridianError::InvalidOrderSize);
+    require!(amount > 0, MeridianError::InvalidArgument);
 
     // The token account being burned must be the mint for the chosen side.
     let (side_mint, mint_ai) = match side {
@@ -99,6 +105,15 @@ pub fn handler(ctx: Context<Redeem>, side: RedeemSide, amount: u64) -> Result<()
 
     // Winning side: pay `amount` USDC base units (1:1) from the vault, PDA-signed.
     if side_wins {
+        // Defense-in-depth for the collateralization invariant (ARCH §7.1):
+        // the vault must actually hold the collateral we're about to pay. SPL
+        // would fail an over-transfer anyway, but this gives a clear program
+        // error and guards the invariant explicitly.
+        require!(
+            ctx.accounts.vault.amount >= amount,
+            MeridianError::InsufficientBalance
+        );
+
         let market_key = ctx.accounts.market.key();
         let signer_seeds: &[&[&[u8]]] = &[&[
             MINT_AUTH_SEED,
@@ -117,6 +132,14 @@ pub fn handler(ctx: Context<Redeem>, side: RedeemSide, amount: u64) -> Result<()
             ),
             amount,
         )?;
+
+        // Track payouts so the collateralization invariant has on-chain
+        // representation: vault == PAYOFF_UNIT * pairs_minted - winning_redeemed.
+        let market = &mut ctx.accounts.market;
+        market.winning_redeemed = market
+            .winning_redeemed
+            .checked_add(amount)
+            .ok_or(MeridianError::MathOverflow)?;
     }
 
     emit!(crate::events::Redeemed {

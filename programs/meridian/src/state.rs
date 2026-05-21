@@ -115,9 +115,13 @@ pub struct Market {
     pub vault: Pubkey,
     /// The order book account for this market.
     pub order_book: Pubkey,
-    /// Count of Yes/No pairs ever minted; drives the vault invariant
-    /// (`vault_balance == PAYOFF_UNIT * pairs_minted` net of redemptions).
+    /// Count of Yes/No pairs ever minted (monotonic). With `winning_redeemed`,
+    /// drives the on-chain collateralization invariant
+    /// (`vault_balance == PAYOFF_UNIT * pairs_minted - winning_redeemed`).
     pub pairs_minted: u64,
+    /// Total winning-token base units paid out of the vault via `redeem`.
+    /// Equals the USDC base units that have left the vault as payouts.
+    pub winning_redeemed: u64,
     /// Lifecycle state.
     pub state: MarketState,
     /// Settlement outcome (immutable once written).

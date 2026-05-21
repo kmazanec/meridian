@@ -89,10 +89,10 @@ depend on the settled outcome and the vault it manages.
 - [x] **Chunk 5 — Invariant & multi-op sweep.** 3 tests: vault==1e6×pairs through full
   cycle, dollar conservation (Yes+No break-even), mismatched side/account rejected.
 - [x] **Chunk 6 — IDL + handoff notes.** IDL regenerated (4 instructions). Notes below.
-- [ ] **Adversarial review** + triage-fix (high/med), then rebased MR.
+- [x] **Adversarial review** + triage-fix (high/med) done; MR next.
 
-**Test result:** 30/30 pass (`cargo test -p meridian`): F-01 (12) + F-02 create (5) + mint (5)
-+ redeem (5) + invariants (3).
+**Test result:** 32/32 pass (`cargo test -p meridian`): F-01 (12) + F-02 create (5) + mint (5)
++ redeem (5) + invariants (5, incl. double-redeem & cross-market substitution).
 
 ## Implementation notes (filled in by the building agent)
 
@@ -103,3 +103,46 @@ depend on the settled outcome and the vault it manages.
 > by the builder, not the planner. Cross-cutting discoveries that affect other
 > features must also be propagated to ROADMAP.md or the architecture doc, not just
 > left here.
+
+### Toolchain fix (project-wide — supersedes F-01's "avoid anchor-spl" note)
+
+The real blocker was **not** anchor-spl per se. Anchor 1.0.2's `init` constraint
+codegen for mints/token-accounts references `anchor_spl::token_interface`, which needs
+`spl-token-2022-interface` — broken on this toolchain by **`solana-zero-copy 1.1.0`**
+(adds `From`/`PartialOrd` impls making `PodU64::into()` ambiguous → E0283). **Fix:
+pin `solana-zero-copy = "=1.0.0"`** in the program crate. Full anchor-spl then compiles
+and we use Anchor's idiomatic `init` constraints. This unblocks F-03/F-04/F-05 too.
+Also: **`Box<Account<…>>`** the heavy accounts to stay under the 4KB SBF stack frame.
+
+### Frozen-contract change (propagate to F-01 account model / ARCHITECTURE §4.2)
+
+Added **`Market.winning_redeemed: u64`** (after `pairs_minted`). This gives the
+collateralization invariant on-chain representation:
+`vault == PAYOFF_UNIT * pairs_minted − winning_redeemed`. `pairs_minted` stays a
+monotonic mint counter (it is NOT decremented on redeem — correct, since the vault's
+correctness during the Open phase is `vault == PAYOFF_UNIT * pairs_minted`). F-03/F-04/F-05
+builders must account for the new field in `Market` (size grew by 8 bytes).
+
+### Key decisions
+- **`create_strike_market` moved F-05 → F-02** (single creation path). ROADMAP updated.
+- **PDA = mint + freeze authority** for both mints; vault owner. No freeze instruction
+  exposed in F-02 (capability held for a future emergency instruction).
+- **redeem** burns the presented side's tokens (burn-before-pay → double-redeem safe),
+  pays 1:1 only if that side won; losing side burns for $0. Partial redemption supported.
+- **anchor-spl token CPIs hardcode the canonical SPL Token program id** (verified in
+  1.0.2 source) and ignore the `program_id` arg to `CpiContext::new`; the
+  `Program<'info, Token>` type is what binds the token program. No fake-token-program
+  vector. (So `CpiContext::new(token_program.key(), …)` is correct.)
+
+### Adversarial review outcome (high + medium fixed, re-tested)
+- **HIGH** — §7.1 invariant was enforced only in tests → fixed: added `winning_redeemed`
+  counter + a `require!(vault.amount >= amount)` guard before payout.
+- **MEDIUM** — `user_usdc.owner` unchecked → fixed: constrain `user_usdc.owner == user`.
+- **MEDIUM** — missing adversarial tests → added `double_redeem_rejected` and
+  `cross_market_vault_substitution_rejected` (both pass; `has_one = vault` rejects foreign vault).
+- **LOW** — `amount==0` used `InvalidOrderSize` → changed to `InvalidArgument`.
+
+**Deferred LOW (user's call, non-blocking):**
+- `redeem` requires both `yes_mint` and `no_mint` as `mut` though only one is burned —
+  could drop one account/writable-lock by passing a single side-selected mint (efficiency).
+- Style: `vault` uses `address =` while mints use `seeds =` (both bind correctly).

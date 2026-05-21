@@ -145,8 +145,9 @@ Solana programs are stateless; all state lives in **accounts** the program owns.
 | `no_mint` | `Pubkey` | SPL mint for No tokens |
 | `vault` | `Pubkey` | PDA-owned USDC token account |
 | `vault_bump` / `mint_authority_bump` | `u8` | PDA bumps |
-| `pairs_minted` | `u64` | Count of Yes/No pairs ever minted (drives the vault invariant) |
-| `order_book` | `Pubkey` | The `OrderBook` account for this market |
+| `pairs_minted` | `u64` | Count of Yes/No pairs ever minted, monotonic (drives the vault invariant) |
+| `winning_redeemed` | `u64` | USDC base units paid out via `redeem` (added in F-02; gives the invariant on-chain form: `vault == PAYOFF_UNIT × pairs_minted − winning_redeemed`) |
+| `order_book` | `Pubkey` | The `OrderBook` account for this market (wired by F-03) |
 | `state` | `enum` | `Open` → `Settled` |
 | `outcome` | `enum` | `Unsettled` / `YesWins` / `NoWins` |
 | `settlement_price` | `Option<u64>` | The closing price written at settlement (immutable) |
