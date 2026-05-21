@@ -32,6 +32,19 @@ stages:
   - build
   - check
   - test
+  - review
+
+# Automated code + security review on merge requests, via the shared
+# gitlab-cursor-review template (Cursor CLI). It runs on the dedicated
+# `cursor-review` runner — the job's own tags/image/before_script override our
+# `default:` block, so it does NOT use the gauntlet-droplet docker-wrapper above.
+# Requires repo CI/CD variables CURSOR_API_KEY and GITLAB_REVIEW_BOT_TOKEN
+# (masked, Protected off for unprotected feature branches). Manual by default;
+# set CURSOR_REVIEW_MANUAL=false to auto-run on every MR pipeline.
+include:
+  - project: 'keithmazanec/gitlab-cursor-review'
+    ref: main
+    file: '/templates/cursor-review.yml'
 
 default:
   # Pin every job to the project's dedicated runner. A job that sets its own
@@ -146,3 +159,11 @@ lint-ts:
       - .npm/
   script:
     - run_in_docker node:20 'npx --yes prettier@2 "*/**/*{.js,.ts}" --check'
+
+# Cursor code + security review (see the `include:` near the top). Inherits the
+# template's cursor-review runner tag, cursor-ci image, rules (manual on MRs),
+# and before_script — none of our default docker-wrapper applies here.
+cursor_code_review:
+  extends: .cursor_review
+  stage: review
+  needs: []   # independent of build/check/test; runs only on MR pipelines
