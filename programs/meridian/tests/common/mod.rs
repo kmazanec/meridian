@@ -481,6 +481,59 @@ pub fn ix_grow_order_book(payer: &Pubkey, market: &Pubkey) -> Instruction {
     )
 }
 
+/// Build a `place_order` instruction. `maker_accounts` are appended as
+/// `remaining_accounts` (the maker counterparty token accounts touched by any fills);
+/// pass an empty slice for a purely-resting (non-crossing) order.
+#[allow(clippy::too_many_arguments)]
+pub fn ix_place_order(
+    user: &Pubkey,
+    usdc_mint: &Pubkey,
+    market: &Pubkey,
+    side: OrderSide,
+    price: u64,
+    size: u64,
+    is_market: bool,
+    maker_accounts: &[Pubkey],
+) -> Instruction {
+    let (config, _) = config_pda();
+    let (order_book, _) = order_book_pda(market);
+    let (mint_authority, _) = mint_authority_pda(market);
+    let (yes_mint, _) = yes_mint_pda(market);
+    let (usdc_escrow, _) = usdc_escrow_pda(market);
+    let (yes_escrow, _) = yes_escrow_pda(market);
+
+    let mut metas = meridian::accounts::PlaceOrder {
+        user: *user,
+        config,
+        market: *market,
+        order_book,
+        mint_authority,
+        yes_mint,
+        usdc_escrow,
+        yes_escrow,
+        user_usdc: ata(user, usdc_mint),
+        user_yes: ata(user, &yes_mint),
+        token_program: token_program_id(),
+    }
+    .to_account_metas(None);
+    for acct in maker_accounts {
+        metas.push(anchor_lang::solana_program::instruction::AccountMeta::new(*acct, false));
+    }
+    Instruction::new_with_bytes(
+        meridian::id(),
+        &meridian::instruction::PlaceOrder {
+            args: meridian::instructions::PlaceOrderArgs {
+                side,
+                price,
+                size,
+                is_market,
+            },
+        }
+        .data(),
+        metas,
+    )
+}
+
 /// Create a market AND a fully-grown, wired order book. The common path for the
 /// place/cancel/match tests. Returns the market pubkey.
 pub fn create_market_and_book(

@@ -64,4 +64,13 @@ pub mod meridian {
     pub fn grow_order_book(ctx: Context<GrowOrderBook>) -> Result<()> {
         instructions::grow_order_book::handler(ctx)
     }
+
+    /// Post a limit or market order: cross the resting opposite side at price-time
+    /// priority (settling atomically), then rest the limit remainder. (F-03)
+    pub fn place_order<'info>(
+        ctx: Context<'info, PlaceOrder<'info>>,
+        args: PlaceOrderArgs,
+    ) -> Result<()> {
+        instructions::place_order::handler(ctx, args)
+    }
 }

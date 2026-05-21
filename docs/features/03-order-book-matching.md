@@ -92,10 +92,11 @@ Chunks:
   `OrderBookInitialized` event. **Two-instruction creation** (see notes — Solana realloc
   cap). Tests pass: init+grow wires market & escrows; second init rejected; second grow
   rejected; init against unknown market rejected.
-- [ ] **Chunk 2 — `place_order` resting (limit, no cross).** Validate
-  size/price/paused/settled; escrow (bid USDC `ceil(price*size/PRICE_SCALE)`; ask Yes
-  `size`); push `Order` with `next_seq`; sorted insert. `OrderPlaced`. Tests: bid/ask rest
-  + escrow; `InvalidOrderSize`, `PriceOutOfRange`, paused/settled rejection; `BookFull`.
+- [x] **Chunk 2 — `place_order` resting (limit, no cross).** Validation + escrow (bid USDC
+  `ceil`; ask Yes exact) + sorted insert with `next_seq`; `OrderPlaced`. Shared `matching`
+  module added (`bid_cost_ceil`, `fill_cost_floor`, `insert_sorted`, `cross_incoming` stub).
+  Tests pass: bid/ask rest + escrow exact; price-time priority incl. seq tiebreak;
+  zero-size, price-out-of-range, paused, settled all rejected; `BookFull` at capacity.
 - [ ] **Chunk 3 — `place_order` crossing + market + partial fills.** Cross resting opposite
   side at maker price-time priority; full/partial fills across levels; market fill-or-cancel
   + refund; limit remainder rests. Atomic settlement via `remaining_accounts`.
@@ -141,6 +142,20 @@ trading is impossible until `grow_order_book` has run. Clients (test harness, la
 SDK) must call init then grow. Considered and rejected: `#[account(zero)]` + top-level
 `createAccount` (impossible for a PDA — breaks the frozen seed); shrinking `ORDERBOOK_N`
 (breaks the frozen size contract).
+
+### Book ordering & escrow rounding
+
+`bids` are kept sorted price-descending then seq-ascending; `asks` price-ascending then
+seq-ascending — so the best order on each side is index 0 and price-time priority is a
+front-to-back scan (`matching::insert_sorted`). `Order.active` is the slot-occupancy flag
+(F-01 contract); orders are removed by `Vec::remove` rather than left as tombstones, which
+keeps the index-0-is-best invariant simple. Escrow rounding: a bid escrows
+`ceil(price*size/PRICE_SCALE)` USDC (round up, so escrow always covers the worst case); a
+fill costs `floor(maker_price*fill_size/PRICE_SCALE)` (round down). The ceil−floor
+remainder is refunded to the bidder when the order leaves the book (fill-complete or
+cancel), so no dust is stranded. Required-account note: `place_order` needs the caller's
+Yes ATA *and* USDC ATA to exist (a pure resting bid still names `user_yes` because a
+crossing bid receives Yes); the SDK/frontend must create these ATAs first.
 
 ### Escrow accounts (invariant #1 safety)
 
