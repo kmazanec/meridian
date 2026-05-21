@@ -1,6 +1,6 @@
 # Feature: Market Creation & Admin
 
-**ID:** F-05 · **Roadmap piece:** F-05 · **Status:** In progress
+**ID:** F-05 · **Roadmap piece:** F-05 · **Status:** In review — [MR !5](https://labs.gauntletai.com/keithmazanec/meridian/-/merge_requests/5)
 
 ## Description
 
