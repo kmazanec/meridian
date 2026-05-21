@@ -23,7 +23,7 @@
     "src"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.cjs.json && tsc -p tsconfig.build.esm.json",
+    "build": "tsc -p tsconfig.build.cjs.json && tsc -p tsconfig.build.esm.json && node scripts/finalize-dist.mjs",
     "typecheck": "tsc --noEmit",
     "test": "ts-mocha -p tsconfig.json --timeout 120000 'tests/**/*.test.ts'"
   },

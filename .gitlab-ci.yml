@@ -148,26 +148,41 @@ verify:
       run_in_docker_root solanafoundation/anchor:v1.0.2
       'cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace'
 
-# TypeScript is linted with prettier (the only JS tooling the repo declares).
-# We run prettier via `npx` rather than `yarn install`: it needs no global
-# install (corepack/yarn shims would write to root-owned /usr/local/bin and fail
-# under the non-root `-u` mapping), and prettier is the only thing `yarn lint`
-# actually invokes. The version is pinned to match package.json (prettier ^2).
-# Cache is the project-local npm cache so repeat runs skip the download.
-#
-# NOTE: when the off-chain workspace lands (F-06+) with a committed yarn.lock,
-# switch this to a real `yarn install --frozen-lockfile && yarn lint`.
+# TypeScript: a real workspace install (a yarn.lock is now committed — the off-chain
+# workspace landed), then prettier + the SDK typecheck. We invoke yarn via
+# `corepack yarn@<ver>` so there is no global shim to write (corepack's shims target a
+# root-owned path the non-root `-u` mapping can't write). HOME and the yarn cache live
+# inside the project dir (HOME set by run_in_docker; cache pinned below), so the install
+# is self-contained and archivable.
 lint-ts:
   stage: check
-  needs: []   # prettier is independent of the program build
+  needs: []   # prettier + types are independent of the program build
   cache:
     key:
       files:
-        - package.json
+        - yarn.lock
     paths:
-      - .npm/
+      - .yarn-cache/
   script:
-    - run_in_docker node:20 'npx --yes prettier@2 "*/**/*{.js,.ts}" --check'
+    - run_in_docker node:20 'export YARN_ENABLE_GLOBAL_CACHE=false YARN_CACHE_FOLDER=/build/.yarn-cache && corepack yarn@4.10.2 install --immutable && corepack yarn@4.10.2 lint && corepack yarn@4.10.2 workspace @meridian/sdk typecheck'
+
+# The SDK's unit/contract tests run the real program in-process via LiteSVM (the npm
+# `litesvm` loads target/deploy/meridian.so). They consume the same build-program
+# artifact `verify` uses, so they need no Solana toolchain of their own — just Node.
+# Lives in `check` (the `test` stage was folded away when clippy+test merged into
+# `verify`); ordering after build-program is enforced by `needs`, not the stage.
+sdk-test:
+  stage: check
+  needs: ["build-program"]
+  cache:
+    key:
+      files:
+        - yarn.lock
+    paths:
+      - .yarn-cache/
+  script:
+    - test -f target/deploy/meridian.so   # provided by build-program
+    - run_in_docker node:20 'export YARN_ENABLE_GLOBAL_CACHE=false YARN_CACHE_FOLDER=/build/.yarn-cache && corepack yarn@4.10.2 install --immutable && corepack yarn@4.10.2 workspace @meridian/sdk test'
 
 # Cursor code + security review (see the `include:` near the top). Inherits the
 # template's cursor-review runner tag, cursor-ci image, rules (manual on MRs),
