@@ -73,4 +73,9 @@ pub mod meridian {
     ) -> Result<()> {
         instructions::place_order::handler(ctx, args)
     }
+
+    /// Cancel a caller's own resting order and return its escrow. (F-03)
+    pub fn cancel_order(ctx: Context<CancelOrder>, args: CancelOrderArgs) -> Result<()> {
+        instructions::cancel_order::handler(ctx, args)
+    }
 }

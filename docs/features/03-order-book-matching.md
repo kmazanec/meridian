@@ -103,8 +103,12 @@ Chunks:
   `OrderMatched` per fill. Tests pass: taker buy full-fill; taker sell full-fill; partial
   fill across two price levels; crossing limit fills then rests remainder; market remainder
   cancelled (not rested); non-crossing limit doesn't fill.
-- [ ] **Chunk 4 — `cancel_order`.** Owner-only; refund full remaining escrow; remove slot.
-  `OrderCancelled`. Tests: owner cancels + escrow returned; `NotOrderOwner`; `OrderNotFound`.
+- [x] **Chunk 4 — `cancel_order`.** Owner-only (`NotOrderOwner`); finds order by
+  `(side, seq)` (`OrderNotFound`); refunds exact remaining escrow (`ceil(price*remaining)`
+  USDC for a bid, `remaining` Yes for an ask) PDA-signed from the escrow accounts; removes
+  the slot. `OrderCancelled`. Allowed even when paused/settled (users must always reclaim
+  escrow). Tests: cancel bid/ask returns escrow; **partially-filled bid refunds exactly the
+  remaining** (validates telescoping escrow); non-owner rejected; missing order rejected.
 - [ ] **Chunk 5 — `match_orders` crank + trustlessness.** Permissionless sweep of crossed
   resting pairs; bounded per call. Tests: third party cranks crossed orders correctly;
   cranker cannot alter price/size; no trading when paused/settled.

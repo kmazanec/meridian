@@ -576,3 +576,129 @@ fn non_crossing_limit_does_not_fill() {
     let (yes_mint, _) = yes_mint_pda(&market);
     assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), 0, "taker got no Yes");
 }
+
+// ---------------------------------------------------------------------------
+// Chunk 4 — cancel_order
+// ---------------------------------------------------------------------------
+
+#[test]
+fn cancel_bid_returns_usdc_escrow() {
+    let mut f = setup(5 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+    let _u = f.user.pubkey();
+    ensure_yes_ata(&mut f, _u, &market);
+    let user = f.user.insecure_clone();
+
+    // Bid 2.0 Yes @ $0.60 → escrow $1.20.
+    let usdc_before = token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey()));
+    let ix = ix_place_order(
+        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 600_000, 2 * ONE, false, &[],
+    );
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("bid");
+    assert_eq!(token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey())), usdc_before - 1_200_000);
+
+    // Cancel seq 0 → full $1.20 returned, book empty, escrow drained.
+    let refund_to = usdc_ata(&f, &f.user.pubkey());
+    let ix = ix_cancel_order(&f.user.pubkey(), &market, OrderSide::Bid, 0, &refund_to);
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("cancel");
+
+    assert_eq!(token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey())), usdc_before, "fully refunded");
+    let (usdc_escrow, _) = usdc_escrow_pda(&market);
+    assert_eq!(token_balance(&f.svm, &usdc_escrow), 0, "escrow drained");
+    let (ob_pda, _) = order_book_pda(&market);
+    assert!(read_order_book(&f.svm, &ob_pda).bids.is_empty(), "bid removed");
+}
+
+#[test]
+fn cancel_ask_returns_yes_escrow() {
+    let mut f = setup(5 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+    let user = f.user.insecure_clone();
+    mint_pairs_for(&mut f, &user, &market, 2);
+    let (yes_mint, _) = yes_mint_pda(&market);
+
+    let ix = ix_place_order(
+        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 700_000, 2 * ONE, false, &[],
+    );
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("ask");
+    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), 0, "Yes escrowed");
+
+    let refund_to = ata(&f.user.pubkey(), &yes_mint);
+    let ix = ix_cancel_order(&f.user.pubkey(), &market, OrderSide::Ask, 0, &refund_to);
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("cancel ask");
+
+    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), 2 * ONE, "Yes returned");
+    let (yes_escrow, _) = yes_escrow_pda(&market);
+    assert_eq!(token_balance(&f.svm, &yes_escrow), 0, "yes escrow drained");
+}
+
+#[test]
+fn cancel_partially_filled_bid_refunds_remaining() {
+    // Bid 3.0 @ $0.50 (escrow $1.50), taker buys... wait, taker hits the bid by selling.
+    let mut f = setup(10 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+    let _u2 = f.user2.pubkey();
+    ensure_yes_ata(&mut f, _u2, &market);
+    let maker = f.user2.insecure_clone();
+
+    // Maker bid 3.0 Yes @ $0.50 → escrow ceil(0.5*3.0) = $1.50.
+    let ix = ix_place_order(
+        &f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 500_000, 3 * ONE, false, &[],
+    );
+    send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("bid");
+    let (usdc_escrow, _) = usdc_escrow_pda(&market);
+    assert_eq!(token_balance(&f.svm, &usdc_escrow), 1_500_000);
+
+    // Taker sells 1.0 Yes into the bid → fills 1.0 @ $0.50 = $0.50 leaves escrow.
+    let taker = f.user.insecure_clone();
+    mint_pairs_for(&mut f, &taker, &market, 1);
+    let maker_yes = yes_ata(&market, &f.user2.pubkey());
+    let ix = ix_place_order(
+        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 0, ONE, true, &[maker_yes],
+    );
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&taker]).expect("partial hit");
+    assert_eq!(token_balance(&f.svm, &usdc_escrow), 1_000_000, "escrow now $1.00 for 2.0 remaining");
+
+    // Maker cancels remaining 2.0 @ $0.50 → refund exactly $1.00.
+    let maker_usdc = usdc_ata(&f, &f.user2.pubkey());
+    let maker_usdc_before = token_balance(&f.svm, &maker_usdc);
+    let ix = ix_cancel_order(&f.user2.pubkey(), &market, OrderSide::Bid, 0, &maker_usdc);
+    send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("cancel remainder");
+    assert_eq!(token_balance(&f.svm, &maker_usdc), maker_usdc_before + 1_000_000, "refund $1.00");
+    assert_eq!(token_balance(&f.svm, &usdc_escrow), 0, "escrow fully drained");
+}
+
+#[test]
+fn cancel_rejects_non_owner() {
+    let mut f = setup(5 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+    let _u = f.user.pubkey();
+    ensure_yes_ata(&mut f, _u, &market);
+    let user = f.user.insecure_clone();
+    let ix = ix_place_order(
+        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 600_000, ONE, false, &[],
+    );
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("bid");
+
+    // user2 tries to cancel user's order, refunding to user2 — must fail.
+    let attacker = f.user2.insecure_clone();
+    let attacker_usdc = usdc_ata(&f, &f.user2.pubkey());
+    let ix = ix_cancel_order(&f.user2.pubkey(), &market, OrderSide::Bid, 0, &attacker_usdc);
+    let res = send(&mut f.svm, &f.user2.pubkey(), ix, &[&attacker]);
+    assert!(res.is_err(), "non-owner cancel must be rejected");
+    // Order still resting.
+    let (ob_pda, _) = order_book_pda(&market);
+    assert_eq!(read_order_book(&f.svm, &ob_pda).bids.len(), 1, "order untouched");
+}
+
+#[test]
+fn cancel_rejects_missing_order() {
+    let mut f = setup(5 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+    let user = f.user.insecure_clone();
+    // No order placed; seq 7 doesn't exist.
+    let refund_to = usdc_ata(&f, &f.user.pubkey());
+    let ix = ix_cancel_order(&f.user.pubkey(), &market, OrderSide::Bid, 7, &refund_to);
+    let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
+    assert!(res.is_err(), "cancelling a nonexistent order must be rejected");
+}

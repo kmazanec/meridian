@@ -534,6 +534,38 @@ pub fn ix_place_order(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn ix_cancel_order(
+    user: &Pubkey,
+    market: &Pubkey,
+    side: OrderSide,
+    seq: u64,
+    refund_to: &Pubkey,
+) -> Instruction {
+    let (order_book, _) = order_book_pda(market);
+    let (mint_authority, _) = mint_authority_pda(market);
+    let (usdc_escrow, _) = usdc_escrow_pda(market);
+    let (yes_escrow, _) = yes_escrow_pda(market);
+    Instruction::new_with_bytes(
+        meridian::id(),
+        &meridian::instruction::CancelOrder {
+            args: meridian::instructions::CancelOrderArgs { side, seq },
+        }
+        .data(),
+        meridian::accounts::CancelOrder {
+            user: *user,
+            market: *market,
+            order_book,
+            mint_authority,
+            usdc_escrow,
+            yes_escrow,
+            refund_to: *refund_to,
+            token_program: token_program_id(),
+        }
+        .to_account_metas(None),
+    )
+}
+
 /// Create a market AND a fully-grown, wired order book. The common path for the
 /// place/cancel/match tests. Returns the market pubkey.
 pub fn create_market_and_book(

@@ -1,3 +1,4 @@
+pub mod cancel_order;
 pub mod create_strike_market;
 pub mod grow_order_book;
 pub mod init_order_book;
@@ -7,6 +8,7 @@ pub mod mint_pair;
 pub mod place_order;
 pub mod redeem;
 
+pub use cancel_order::*;
 pub use create_strike_market::*;
 pub use grow_order_book::*;
 pub use init_order_book::*;
