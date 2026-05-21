@@ -171,7 +171,18 @@ not duplicate the rule into each feature — reference it.
 
 9. **Testing strategy.** Source: ARCHITECTURE.md §12. Each program feature ships unit
    tests for its instructions and the invariants it owns; F-09 owns cross-feature
-   integration/E2E and the multi-user scenario.
+   integration/E2E and the multi-user scenario. **Toolchain (set by F-01):**
+   anchor-cli 1.0.1, solana 3.1.x, Rust pinned via `rust-toolchain.toml`. Unit tests
+   use **LiteSVM in-process** (Rust); `Anchor.toml` opts out of the surfpool default
+   (`[tooling] validator = "solana"`).
+
+10. **Token dependency (discovered in F-01 — affects F-02).** F-01 needs no token
+    CPIs and deliberately omits `anchor-spl`. When F-02 adds `anchor-spl`/SPL token
+    deps, note that `anchor-spl 1.0.1` currently pulls `spl-token-2022-interface`,
+    which **fails to compile** against this solana 3.x toolchain (a transitive
+    `spl-pod`/`Into` ambiguity). F-02 must resolve this — pin compatible versions or
+    use the slim `spl-token-interface` crate directly. Until resolved, the program
+    validates mints with a lightweight owner check (see F-01).
 
 ## High-Level Acceptance Criteria
 

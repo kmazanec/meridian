@@ -10,7 +10,7 @@ use {
             ORDER_BOOK_SEED, PAYOFF_UNIT, PRICE_SCALE, TOKEN_DECIMALS, USDC_DECIMALS, VAULT_SEED,
             YES_MINT_SEED,
         },
-        state::{Config, Market, Order, OrderBook},
+        state::{Config, Market, MarketState, Order, OrderBook, OrderSide, Outcome, Ticker},
     },
     solana_pubkey::Pubkey,
 };
@@ -34,6 +34,30 @@ fn money_scale_is_frozen() {
 fn orderbook_capacity_is_frozen() {
     assert_eq!(ORDERBOOK_N, 128, "N = 128 per side");
     assert_eq!(NUM_TICKERS, 7, "MAG7");
+}
+
+#[test]
+fn enum_discriminants_are_frozen() {
+    // These ordinals ARE the on-chain wire encoding (borsh 1.x). Downstream
+    // features and the SDK depend on them. Reordering any variant is a breaking
+    // change — this test converts the "do not reorder" comment into a guardrail.
+    assert_eq!(Ticker::Aapl as u8, 0);
+    assert_eq!(Ticker::Msft as u8, 1);
+    assert_eq!(Ticker::Googl as u8, 2);
+    assert_eq!(Ticker::Amzn as u8, 3);
+    assert_eq!(Ticker::Nvda as u8, 4);
+    assert_eq!(Ticker::Meta as u8, 5);
+    assert_eq!(Ticker::Tsla as u8, 6);
+
+    assert_eq!(MarketState::Open as u8, 0);
+    assert_eq!(MarketState::Settled as u8, 1);
+
+    assert_eq!(Outcome::Unsettled as u8, 0);
+    assert_eq!(Outcome::YesWins as u8, 1);
+    assert_eq!(Outcome::NoWins as u8, 2);
+
+    assert_eq!(OrderSide::Bid as u8, 0);
+    assert_eq!(OrderSide::Ask as u8, 1);
 }
 
 #[test]
