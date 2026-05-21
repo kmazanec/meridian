@@ -16,3 +16,4 @@ test-ledger
 /target/deploy/*
 !/target/deploy/meridian-keypair.json
 /.vscode/*
+/.claude/*
