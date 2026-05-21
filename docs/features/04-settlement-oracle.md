@@ -90,7 +90,7 @@ crates; confirmed by a local lockfile probe and another team's LESSONS.md). Trea
 - [x] **Chunk 3 — `admin_settle`** (admin-only): `Config.admin` check; reject before
   `ADMIN_OVERRIDE_DELAY` after close; admin-supplied price; same immutable outcome;
   idempotent. Tests: admin-only, delay enforced/elapsed, outcome parity. *(AC: admin_settle)*
-- [ ] **Chunk 4 — immutability + payout-completeness**: second settle is no-op
+- [x] **Chunk 4 — immutability + payout-completeness**: second settle is no-op
   (outcome/price unchanged); extend `test_invariants.rs` to settle via the real instruction
   then redeem both sides, asserting `Yes_payout + No_payout == PAYOFF_UNIT` across prices
   incl. the at-strike boundary. *(AC: immutability; payout-completeness invariant)*

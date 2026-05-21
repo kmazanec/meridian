@@ -1,8 +1,10 @@
-//! F-02 invariant sweep (LiteSVM) — ARCHITECTURE.md §7.
+//! Invariant sweep (LiteSVM) — ARCHITECTURE.md §7.
 //!
 //! Proves the collateralization invariant holds across interleaved mint/redeem,
 //! the full mint → settle → redeem cycle conserves value, and the payout side
-//! is correct. Settlement is shimmed (`force_settle`) since settle is F-04.
+//! is correct. The original F-02 cases shim settlement (`force_settle`); the
+//! payout-completeness sweep (F-04, invariant 2) settles via the *real*
+//! `settle_market` instruction so the invariant is proven end-to-end.
 
 mod common;
 
@@ -15,6 +17,10 @@ use {
 const DAY: i64 = 1_747_000_000;
 const STRIKE: u64 = 680_000_000;
 const ONE: u64 = 1_000_000;
+
+/// $1.00 in base units — a winning token pays exactly this; loser pays $0; so
+/// `Yes_payout + No_payout` per pair must equal `PAYOFF_UNIT` (invariant 2).
+const PAYOFF_UNIT: u64 = 1_000_000;
 
 #[test]
 fn vault_tracks_collateral_through_full_cycle() {
@@ -159,6 +165,89 @@ fn cross_market_vault_substitution_rejected() {
     );
     let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
     assert!(res.is_err(), "redeeming against a foreign vault must be rejected");
+}
+
+/// Payout-completeness invariant (ARCHITECTURE §7.2, owned by F-04): for a
+/// settled market, `Yes_payout + No_payout == $1.00` per pair, for every price —
+/// including the at-strike boundary. Settles via the **real** `settle_market`
+/// (exponent -8 Pyth fixture), then redeems both sides and checks the sum.
+fn payout_completeness_at(price_usdc_6dp: u64, expect: Outcome) {
+    const CLOSE: i64 = 1_747_000_000;
+    let mut f = setup(5 * ONE);
+    let admin = f.admin.insecure_clone();
+    let user = f.user.insecure_clone();
+
+    let ix = ix_create_strike_market(&f.admin.pubkey(), &f.usdc_mint, Ticker::Meta, STRIKE, CLOSE);
+    send(&mut f.svm, &f.admin.pubkey(), ix, &[&admin]).expect("create");
+    let market = market_pda(Ticker::Meta, STRIKE, CLOSE).0;
+
+    // Mint 1 pair: user holds 1.0 Yes + 1.0 No, vault holds $1.
+    let ix = ix_mint_pair(&f.user.pubkey(), &f.usdc_mint, &market);
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("mint");
+
+    // Settle for real at the given price (native = base-units × 100 at expo -8).
+    set_clock(&mut f.svm, CLOSE + 10);
+    let pu = seed_price_update(
+        &mut f.svm,
+        test_feed_id(Ticker::Meta),
+        (price_usdc_6dp as i64) * 100,
+        1_000,
+        -8,
+        CLOSE + 5,
+    );
+    let cranker = f.user.insecure_clone();
+    let ix = ix_settle_market(&f.user.pubkey(), &market, &pu);
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&cranker]).expect("settle");
+    assert_eq!(read_market(&f.svm, &market).outcome, expect, "outcome at price");
+
+    // Redeem both sides; measure USDC paid for each.
+    let (yes_mint, _) = yes_mint_pda(&market);
+    let (no_mint, _) = no_mint_pda(&market);
+    let user_usdc = ata(&f.user.pubkey(), &f.usdc_mint);
+
+    let before = token_balance(&f.svm, &user_usdc);
+    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::Yes, ONE, &ata(&f.user.pubkey(), &yes_mint), &user_usdc);
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("redeem yes");
+    let yes_payout = token_balance(&f.svm, &user_usdc) - before;
+
+    let before = token_balance(&f.svm, &user_usdc);
+    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::No, ONE, &ata(&f.user.pubkey(), &no_mint), &user_usdc);
+    send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("redeem no");
+    let no_payout = token_balance(&f.svm, &user_usdc) - before;
+
+    assert_eq!(
+        yes_payout + no_payout,
+        PAYOFF_UNIT,
+        "Yes_payout({yes_payout}) + No_payout({no_payout}) must equal $1.00 at price {price_usdc_6dp}"
+    );
+    // The winner takes the whole dollar; the loser gets nothing.
+    match expect {
+        Outcome::YesWins => assert_eq!((yes_payout, no_payout), (PAYOFF_UNIT, 0)),
+        Outcome::NoWins => assert_eq!((yes_payout, no_payout), (0, PAYOFF_UNIT)),
+        Outcome::Unsettled => unreachable!(),
+    }
+}
+
+#[test]
+fn payout_completeness_above_strike() {
+    payout_completeness_at(700_000_000, Outcome::YesWins);
+}
+
+#[test]
+fn payout_completeness_below_strike() {
+    payout_completeness_at(660_000_000, Outcome::NoWins);
+}
+
+#[test]
+fn payout_completeness_at_strike_boundary() {
+    // The genuinely tricky case: price exactly == strike. At-or-above → Yes.
+    payout_completeness_at(STRIKE, Outcome::YesWins);
+}
+
+#[test]
+fn payout_completeness_one_unit_each_side_of_strike() {
+    payout_completeness_at(STRIKE + 1, Outcome::YesWins);
+    payout_completeness_at(STRIKE - 1, Outcome::NoWins);
 }
 
 #[test]
