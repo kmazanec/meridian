@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Meridian · Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Space+Mono:wght@400;700&family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink:        #070b14;
+    --ink-2:      #0c121f;
+    --panel:      #0f1726;
+    --panel-2:    #131d30;
+    --line:       #243349;
+    --line-soft:  #18243a;
+    --fg:         #e8edf5;
+    --fg-dim:     #93a3bd;
+    --fg-faint:   #5e6f8c;
+    --accent:     #4ff0a8;   /* ticker green */
+    --accent-dim: #2bbd80;
+    --amber:      #ffb454;   /* the "no"/warning hue */
+    --amber-dim:  #c9893b;
+    --yes:        #4ff0a8;
+    --no:         #ff7a8a;
+    --usdc:       #5aa6ff;
+    --maxw:       1180px;
+    --serif: "Fraunces", Georgia, serif;
+    --sans:  "Archivo", "Helvetica Neue", sans-serif;
+    --mono:  "Space Mono", ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--ink);
+    color: var(--fg);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* ---------- atmosphere ---------- */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(900px 600px at 78% -10%, rgba(79,240,168,0.07), transparent 60%),
+      radial-gradient(800px 700px at 8% 110%, rgba(90,166,255,0.06), transparent 55%);
+    pointer-events: none; z-index: 0;
+  }
+  body::after {
+    content: "";
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 0; opacity: 0.6;
+  }
+
+  /* ---------- slide layout ---------- */
+  .slide {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 90px clamp(28px, 6vw, 110px) 110px;
+    border-bottom: 1px solid var(--line-soft);
+    scroll-snap-align: start;
+  }
+  .slide-inner { width: 100%; max-width: var(--maxw); margin: 0 auto; }
+
+  html { scroll-snap-type: y proximity; }
+
+  /* ---------- meridian line motif ---------- */
+  .meridian-tag {
+    display: inline-flex; align-items: center; gap: 12px;
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.28em;
+    text-transform: uppercase; color: var(--accent);
+    margin-bottom: 26px;
+  }
+  .meridian-tag::before {
+    content: ""; width: 46px; height: 1px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+  }
+  .slide-no {
+    position: absolute; top: 34px; right: clamp(28px, 6vw, 110px);
+    font-family: var(--mono); font-size: 12px; color: var(--fg-faint);
+    letter-spacing: 0.1em;
+  }
+  .slide-kicker {
+    position: absolute; top: 34px; left: clamp(28px, 6vw, 110px);
+    font-family: var(--mono); font-size: 12px; color: var(--fg-faint);
+    letter-spacing: 0.22em; text-transform: uppercase;
+  }
+
+  /* ---------- typography ---------- */
+  h1 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: clamp(48px, 8vw, 118px);
+    line-height: 0.92;
+    letter-spacing: -0.02em;
+  }
+  h2 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: clamp(30px, 4.6vw, 60px);
+    line-height: 1.02;
+    letter-spacing: -0.015em;
+    margin-bottom: 10px;
+  }
+  h3 { font-family: var(--sans); font-weight: 700; font-size: 19px; letter-spacing: -0.01em; }
+  .lede {
+    font-family: var(--serif);
+    font-size: clamp(18px, 2.3vw, 26px);
+    line-height: 1.45;
+    color: var(--fg-dim);
+    max-width: 760px;
+    font-weight: 400;
+  }
+  p { line-height: 1.6; color: var(--fg-dim); }
+  .em-yes  { color: var(--yes); }
+  .em-no   { color: var(--no); }
+  .em-usdc { color: var(--usdc); }
+  .em-acc  { color: var(--accent); }
+  .em-amber{ color: var(--amber); }
+  strong { color: var(--fg); font-weight: 600; }
+  code, .mono { font-family: var(--mono); }
+
+  /* ---------- title slide ---------- */
+  #cover { justify-content: center; }
+  .cover-eq {
+    font-family: var(--mono);
+    font-size: clamp(15px, 1.7vw, 20px);
+    color: var(--fg-dim);
+    margin-top: 34px;
+    letter-spacing: 0.02em;
+  }
+  .cover-eq b { color: var(--accent); font-weight: 700; }
+  .cover-meta {
+    margin-top: 56px;
+    display: flex; flex-wrap: wrap; gap: 14px 40px;
+    font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.06em;
+    color: var(--fg-faint); text-transform: uppercase;
+  }
+  .cover-meta span b { color: var(--fg); font-weight: 700; }
+  .cover-horizon {
+    margin: 44px 0 8px;
+    height: 1px; width: 100%;
+    background: linear-gradient(90deg, transparent, var(--accent) 12%, var(--accent) 88%, transparent);
+    position: relative;
+  }
+  .cover-horizon::after {
+    content: ""; position: absolute; left: 50%; top: 50%;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--accent); transform: translate(-50%,-50%);
+    box-shadow: 0 0 16px 3px rgba(79,240,168,0.5);
+  }
+  .gradient-word {
+    background: linear-gradient(100deg, var(--fg) 30%, var(--accent));
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* ---------- grids & panels ---------- */
+  .grid { display: grid; gap: 18px; }
+  .g2 { grid-template-columns: repeat(2, 1fr); }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 860px) { .g2,.g3,.g4 { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: linear-gradient(180deg, var(--panel), var(--ink-2));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 24px 24px 22px;
+    position: relative;
+    transition: border-color .25s, transform .25s;
+  }
+  .panel:hover { border-color: var(--accent-dim); transform: translateY(-3px); }
+  .panel .idx {
+    font-family: var(--mono); font-size: 11px; color: var(--accent);
+    letter-spacing: 0.18em; display: block; margin-bottom: 12px;
+  }
+  .panel h3 { margin-bottom: 8px; }
+  .panel p { font-size: 14.5px; }
+  .panel .role {
+    font-family: var(--mono); font-size: 11.5px; color: var(--fg-faint);
+    margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line);
+  }
+
+  ul.clean { list-style: none; }
+  ul.clean li {
+    position: relative; padding-left: 22px; margin-bottom: 14px;
+    color: var(--fg-dim); line-height: 1.5; font-size: 15.5px;
+  }
+  ul.clean li::before {
+    content: ""; position: absolute; left: 0; top: 9px;
+    width: 7px; height: 7px; border: 1px solid var(--accent); transform: rotate(45deg);
+  }
+  ul.clean li b { color: var(--fg); }
+
+  /* ---------- north star / callout ---------- */
+  .callout {
+    border-left: 2px solid var(--accent);
+    padding: 6px 0 6px 26px;
+    margin-top: 28px;
+    max-width: 820px;
+  }
+  .callout .label {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 8px;
+  }
+  .callout p { font-family: var(--serif); font-size: 22px; color: var(--fg); line-height: 1.4; }
+
+  /* ---------- stat strip ---------- */
+  .stats { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 30px; }
+  .stat {
+    flex: 1; min-width: 150px;
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; background: var(--ink-2);
+  }
+  .stat .n { font-family: var(--serif); font-size: 38px; color: var(--accent); line-height: 1; }
+  .stat .l { font-family: var(--mono); font-size: 11.5px; color: var(--fg-faint); margin-top: 8px; letter-spacing: 0.06em; }
+
+  /* ---------- ADR table ---------- */
+  .adr-table { width: 100%; border-collapse: collapse; margin-top: 24px; }
+  .adr-table th {
+    text-align: left; font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--fg-faint); padding: 0 16px 14px; font-weight: 400;
+    border-bottom: 1px solid var(--line);
+  }
+  .adr-table td { padding: 16px; border-bottom: 1px solid var(--line-soft); vertical-align: top; font-size: 14.5px; color: var(--fg-dim); }
+  .adr-table tr:hover td { background: rgba(79,240,168,0.03); }
+  .adr-table td b { color: var(--fg); }
+  .adr-table .pick { color: var(--accent); font-family: var(--mono); font-size: 13px; font-weight: 700; }
+  .adr-table .num { font-family: var(--mono); color: var(--fg-faint); font-size: 13px; }
+
+  /* ---------- tradeoff cards ---------- */
+  .trade {
+    border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+    background: var(--ink-2);
+  }
+  .trade .head {
+    padding: 16px 20px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  }
+  .trade .head h3 { font-size: 16px; }
+  .trade .head .tag {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em;
+    color: var(--ink); background: var(--accent); padding: 3px 9px; border-radius: 20px;
+    text-transform: uppercase; font-weight: 700; white-space: nowrap;
+  }
+  .trade .body { padding: 16px 20px; }
+  .trade .row { display: flex; gap: 10px; margin-bottom: 12px; font-size: 14px; line-height: 1.45; }
+  .trade .row:last-child { margin-bottom: 0; }
+  .trade .row .k {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    width: 64px; flex-shrink: 0; padding-top: 2px;
+  }
+  .trade .row.win .k  { color: var(--accent); }
+  .trade .row.cost .k { color: var(--amber); }
+  .trade .row .v { color: var(--fg-dim); }
+
+  /* ---------- diagram shell ---------- */
+  .diagram-wrap {
+    margin-top: 30px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background:
+      linear-gradient(180deg, rgba(15,23,38,0.7), rgba(7,11,20,0.7));
+    padding: 14px;
+    overflow: hidden;
+  }
+  .diagram-wrap svg { width: 100%; height: auto; display: block; }
+  .legend { display: flex; flex-wrap: wrap; gap: 18px 26px; margin-top: 18px; }
+  .legend .item { display: flex; align-items: center; gap: 9px; font-family: var(--mono); font-size: 12px; color: var(--fg-dim); }
+  .legend .sw { width: 22px; height: 0; border-top: 2px solid; }
+  .legend .sw.solid {}
+  .legend .sw.dash { border-top-style: dashed; }
+  .legend .box { width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid; }
+
+  /* svg shared text */
+  text { font-family: "Space Mono", monospace; fill: var(--fg); }
+  .svg-title { font-family: "Archivo", sans-serif; font-weight: 700; }
+  .svg-sub { fill: #93a3bd; }
+  .svg-mono-dim { fill: #5e6f8c; }
+
+  /* ---------- "one book" perspectives ---------- */
+  .book-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 28px; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  @media (max-width: 860px){ .book-grid { grid-template-columns: 1fr; } }
+  .book-side { padding: 26px 28px; }
+  .book-side.yes { background: linear-gradient(180deg, rgba(79,240,168,0.06), transparent); }
+  .book-side.no  { background: linear-gradient(180deg, rgba(255,122,138,0.06), transparent); border-left: 1px solid var(--line); }
+  @media (max-width:860px){ .book-side.no { border-left: none; border-top: 1px solid var(--line); } }
+  .book-side .ttl { font-family: var(--mono); font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 16px; }
+  .book-side.yes .ttl { color: var(--yes); }
+  .book-side.no  .ttl { color: var(--no); }
+  .book-act { display: flex; align-items: baseline; gap: 12px; padding: 11px 0; border-bottom: 1px dashed var(--line); font-size: 14.5px; }
+  .book-act:last-child { border-bottom: none; }
+  .book-act .name { font-weight: 700; color: var(--fg); width: 78px; flex-shrink: 0; }
+  .book-act .desc { color: var(--fg-dim); font-size: 13.5px; line-height: 1.4; }
+  .book-center {
+    grid-column: 1 / -1; text-align: center; padding: 16px;
+    border-top: 1px solid var(--line); background: var(--ink-2);
+    font-family: var(--mono); font-size: 13px; color: var(--fg-dim); letter-spacing: 0.04em;
+  }
+  .book-center b { color: var(--accent); }
+
+  /* ---------- invariants ---------- */
+  .inv-row {
+    display: flex; align-items: center; gap: 18px; padding: 16px 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .inv-row .n { font-family: var(--mono); font-size: 13px; color: var(--accent); width: 28px; flex-shrink: 0; }
+  .inv-row .body { flex: 1; }
+  .inv-row .body b { color: var(--fg); }
+  .inv-row .formula { font-family: var(--mono); font-size: 13px; color: var(--fg-dim); margin-top: 3px; }
+  .inv-row .formula .hl { color: var(--accent); }
+
+  /* ---------- risk ---------- */
+  .risk { border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; background: var(--ink-2); }
+  .risk.hot { border-color: var(--amber-dim); background: linear-gradient(180deg, rgba(255,180,84,0.06), var(--ink-2)); }
+  .risk .sev { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .risk.hot .sev { color: var(--amber); }
+  .risk:not(.hot) .sev { color: var(--fg-faint); }
+  .risk h3 { margin: 8px 0 6px; font-size: 16px; }
+  .risk p { font-size: 13.5px; }
+  .risk .mit { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); font-size: 13px; }
+  .risk .mit b { color: var(--accent); }
+
+  /* ---------- closing ---------- */
+  #close { justify-content: center; text-align: left; }
+
+  /* ---------- progress + nav ---------- */
+  #progress {
+    position: fixed; top: 0; left: 0; height: 2px; width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--usdc));
+    z-index: 50; transition: width .15s;
+  }
+  #dots {
+    position: fixed; right: 22px; top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 11px; z-index: 50;
+  }
+  #dots a {
+    width: 9px; height: 9px; border-radius: 50%;
+    border: 1px solid var(--line); background: transparent;
+    transition: all .2s; display: block;
+  }
+  #dots a:hover { border-color: var(--accent); }
+  #dots a.active { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 10px rgba(79,240,168,0.6); }
+  @media (max-width: 760px){ #dots { display: none; } }
+
+  .hint {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 11px; color: var(--fg-faint);
+    letter-spacing: 0.12em; z-index: 40; opacity: 0.7;
+    background: rgba(7,11,20,0.7); padding: 6px 14px; border-radius: 20px; border: 1px solid var(--line-soft);
+  }
+
+  /* ---------- reveal animation ---------- */
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
+  .reveal.in { opacity: 1; transform: none; }
+  .reveal.d1 { transition-delay: .08s; }
+  .reveal.d2 { transition-delay: .16s; }
+  .reveal.d3 { transition-delay: .24s; }
+  .reveal.d4 { transition-delay: .32s; }
+  @media (prefers-reduced-motion: reduce){ .reveal { opacity:1; transform:none; transition:none; } }
+
+  .footnote { font-family: var(--mono); font-size: 11.5px; color: var(--fg-faint); margin-top: 22px; letter-spacing: 0.02em; }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<nav id="dots"></nav>
+<div class="hint">↓ scroll &nbsp;·&nbsp; ← → arrows &nbsp;·&nbsp; F fullscreen</div>
+
+<!-- ============ 01 · COVER ============ -->
+<section class="slide" id="cover" data-title="Cover">
+  <span class="slide-no">01 / 12</span>
+  <div class="slide-inner">
+    <div class="meridian-tag reveal in">Binary stock-outcome markets · Solana</div>
+    <h1 class="reveal in d1">Meri<span class="gradient-word">dian</span></h1>
+    <p class="cover-eq reveal in d2">A non-custodial dApp for trading <b>Yes</b> / <b>No</b> tokens on whether a MAG7 stock closes at or above a strike — today.</p>
+    <div class="cover-horizon reveal in d2"></div>
+    <p class="cover-eq reveal in d3" style="margin-top:18px">Each contract pays <b>$1.00 USDC</b> to the winning side. &nbsp; <b>Yes&nbsp;+&nbsp;No&nbsp;=&nbsp;$1.00</b>, always.</p>
+    <div class="cover-meta reveal in d4">
+      <span>Architecture review · <b>PEAK6</b></span>
+      <span>Stack · <b>Rust / Anchor · Next.js · Pyth</b></span>
+      <span>Target · <b>Solana devnet</b></span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 · THE PRODUCT ============ -->
+<section class="slide" data-title="The Product">
+  <span class="slide-kicker">The Product</span>
+  <span class="slide-no">02 / 12</span>
+  <div class="slide-inner">
+    <div class="meridian-tag reveal">One question, settled daily</div>
+    <h2 class="reveal d1">“Will <span class="em-acc">[STOCK]</span> close at or above <span class="em-acc">[STRIKE]</span> today?”</h2>
+    <p class="lede reveal d2" style="margin-top:18px">A same-day (0DTE) binary options market. Deposit $1.00 to mint a Yes+No pair, trade either leg on an on-chain order book, and redeem the winning side after the 4:00&nbsp;PM&nbsp;ET close.</p>
+
+    <div class="grid g3" style="margin-top:34px">
+      <div class="panel reveal d1">
+        <span class="idx">01 · MINT</span>
+        <h3>Deposit collateral</h3>
+        <p>Lock <span class="em-usdc">$1.00 USDC</span> into a program vault → receive <span class="em-yes">1 Yes</span> + <span class="em-no">1 No</span> token.</p>
+        <div class="role">$1 in ⇒ one complete pair out</div>
+      </div>
+      <div class="panel reveal d2">
+        <span class="idx">02 · TRADE</span>
+        <h3>One book, four actions</h3>
+        <p>Buy/Sell Yes or No on a single on-chain CLOB. Yes price = market-implied probability.</p>
+        <div class="role">Yes @ $0.65 ⇒ No is implicitly $0.35</div>
+      </div>
+      <div class="panel reveal d3">
+        <span class="idx">03 · SETTLE</span>
+        <h3>Oracle decides</h3>
+        <p>At close, an on-chain price oracle writes the outcome. Winners <span class="em-acc">redeem $1.00</span> each; losers, $0.</p>
+        <div class="role">close ≥ strike ⇒ Yes wins, else No</div>
+      </div>
+    </div>
+
+    <div class="callout reveal d2">
+      <div class="label">Design north star</div>
+      <p>Non-custodial <em>by construction</em>. No human or service ever holds user funds — correctness is enforced by code and math, not by trusting an operator.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 · SYSTEM ARCHITECTURE (DIAGRAM) ============ -->
+<section class="slide" data-title="System Architecture">
+  <span class="slide-kicker">System Architecture</span>
+  <span class="slide-no">03 / 12</span>
+  <div class="slide-inner">
+    <div class="meridian-tag reveal">Four moving parts · one source of truth</div>
+    <h2 class="reveal d1">The program is the only thing that can move funds.</h2>
+    <p class="lede reveal d2" style="margin-top:14px;font-size:19px">Everything else merely <em>requests</em> actions. The program validates and either executes or rejects.</p>
+
+    <div class="diagram-wrap reveal d2">
+      <svg viewBox="0 0 1140 620" role="img" aria-label="Meridian system architecture diagram">
+        <defs>
+          <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+            <path d="M0,0 L9,4.5 L0,9 z" fill="#4ff0a8"/>
+          </marker>
+          <marker id="arrB" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+            <path d="M0,0 L9,4.5 L0,9 z" fill="#5aa6ff"/>
+          </marker>
+          <marker id="arrD" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+            <path d="M0,0 L9,4.5 L0,9 z" fill="#5e6f8c"/>
+          </marker>
+          <linearGradient id="prog" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#102a20"/><stop offset="1" stop-color="#0b1a15"/>
+          </linearGradient>
+        </defs>
+
+        <!-- FRONTEND -->
+        <g>
+          <rect x="330" y="24" width="480" height="92" rx="12" fill="#0f1726" stroke="#243349"/>
+          <text x="354" y="54" class="svg-title" font-size="17" fill="#e8edf5">FRONTEND · Next.js</text>
+          <text x="354" y="78" font-size="12.5" class="svg-sub">Landing · Markets · Trade · Portfolio · History</text>
+          <text x="354" y="98" font-size="12.5" class="svg-mono-dim">Wallet adapter · the four-button UX · holds nothing</text>
+        </g>
+
+        <!-- arrows from frontend -->
+        <line x1="470" y1="116" x2="470" y2="196" stroke="#5aa6ff" stroke-width="1.6" marker-end="url(#arrB)"/>
+        <text x="372" y="160" font-size="11" fill="#5aa6ff">read prices</text>
+        <text x="372" y="176" font-size="11" class="svg-mono-dim">(off-chain)</text>
+        <line x1="670" y1="116" x2="670" y2="196" stroke="#4ff0a8" stroke-width="1.6" marker-end="url(#arr)"/>
+        <text x="690" y="160" font-size="11" fill="#4ff0a8">sign &amp; send txns</text>
+        <text x="690" y="176" font-size="11" class="svg-mono-dim">(user wallet)</text>
+
+        <!-- AUTOMATION -->
+        <g>
+          <rect x="40" y="200" width="300" height="150" rx="12" fill="#0f1726" stroke="#243349"/>
+          <text x="62" y="230" class="svg-title" font-size="16" fill="#e8edf5">AUTOMATION SERVICE</text>
+          <text x="62" y="252" font-size="12" class="svg-sub">Node.js · scheduled · trust-minimized</text>
+          <line x1="62" y1="266" x2="320" y2="266" stroke="#18243a" stroke-width="1"/>
+          <text x="62" y="290" font-size="12.5" fill="#ffb454">AM · create the day's strikes</text>
+          <text x="62" y="312" font-size="12.5" fill="#ffb454">PM · settle markets</text>
+          <text x="62" y="334" font-size="11.5" class="svg-mono-dim">retry · backoff · alert</text>
+        </g>
+
+        <!-- PROGRAM -->
+        <g>
+          <rect x="400" y="200" width="700" height="200" rx="12" fill="url(#prog)" stroke="#2bbd80" stroke-width="1.4"/>
+          <text x="424" y="232" class="svg-title" font-size="18" fill="#4ff0a8">SOLANA PROGRAM · Anchor</text>
+          <text x="424" y="254" font-size="12" class="svg-sub">The source of truth — mints, vault, order book, settlement</text>
+
+          <!-- inner state boxes -->
+          <rect x="424" y="272" width="150" height="46" rx="8" fill="#0c121f" stroke="#243349"/>
+          <text x="499" y="293" font-size="12" text-anchor="middle" fill="#e8edf5">Config</text>
+          <text x="499" y="309" font-size="10" text-anchor="middle" class="svg-mono-dim">singleton</text>
+
+          <rect x="588" y="272" width="150" height="46" rx="8" fill="#0c121f" stroke="#243349"/>
+          <text x="663" y="293" font-size="12" text-anchor="middle" fill="#e8edf5">Market</text>
+          <text x="663" y="309" font-size="10" text-anchor="middle" class="svg-mono-dim">per strike·day</text>
+
+          <rect x="752" y="272" width="150" height="46" rx="8" fill="#0c121f" stroke="#243349"/>
+          <text x="827" y="289" font-size="11.5" text-anchor="middle" fill="#4ff0a8">Yes / No mints</text>
+          <text x="827" y="306" font-size="10" text-anchor="middle" fill="#5aa6ff">Vault PDA</text>
+
+          <rect x="916" y="272" width="160" height="46" rx="8" fill="#0c121f" stroke="#243349"/>
+          <text x="996" y="293" font-size="12" text-anchor="middle" fill="#e8edf5">OrderBook</text>
+          <text x="996" y="309" font-size="10" text-anchor="middle" class="svg-mono-dim">bounded array</text>
+
+          <text x="424" y="350" font-size="11.5" class="svg-mono-dim">instructions:</text>
+          <text x="424" y="372" font-size="11.5" fill="#93a3bd">init · create_market · mint_pair · place_order · cancel · match_orders</text>
+          <text x="424" y="390" font-size="11.5" fill="#93a3bd">settle · admin_settle · redeem · pause</text>
+        </g>
+
+        <!-- automation -> program -->
+        <line x1="340" y1="262" x2="398" y2="262" stroke="#ffb454" stroke-width="1.6" marker-end="url(#arrB)" style="stroke:#ffb454"/>
+        <path d="M340 262 L398 262" stroke="#ffb454" stroke-width="1.6" marker-end="url(#arrD)"/>
+
+        <!-- price sources -->
+        <line x1="190" y1="350" x2="190" y2="470" stroke="#5e6f8c" stroke-width="1.4" marker-end="url(#arrD)"/>
+        <text x="206" y="416" font-size="11" class="svg-mono-dim">reads prev close</text>
+
+        <line x1="750" y1="400" x2="750" y2="470" stroke="#5e6f8c" stroke-width="1.4" marker-end="url(#arrD)"/>
+        <text x="766" y="440" font-size="11" class="svg-mono-dim">reads price @ settlement</text>
+
+        <g>
+          <rect x="40" y="474" width="300" height="86" rx="12" fill="#0c121f" stroke="#243349"/>
+          <text x="62" y="504" class="svg-title" font-size="14" fill="#e8edf5">PRICE SOURCE · AM</text>
+          <text x="62" y="526" font-size="11.5" class="svg-sub">off-chain price API / oracle read</text>
+          <text x="62" y="546" font-size="11" class="svg-mono-dim">computes strikes (±3/6/9%)</text>
+        </g>
+
+        <g>
+          <rect x="600" y="474" width="380" height="86" rx="12" fill="#0c121f" stroke="#243349"/>
+          <text x="622" y="504" class="svg-title" font-size="14" fill="#e8edf5">PRICE ORACLE ON-CHAIN · PM</text>
+          <text x="622" y="526" font-size="11.5" class="svg-sub">Pyth price-update account (PriceUpdateV2)</text>
+          <text x="622" y="546" font-size="11" class="svg-mono-dim">+ time-delayed admin-override fallback</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="legend reveal d3">
+      <span class="item"><span class="sw solid" style="border-color:#4ff0a8"></span> user-signed / on-chain action</span>
+      <span class="item"><span class="sw solid" style="border-color:#5aa6ff"></span> off-chain read</span>
+      <span class="item"><span class="sw dash" style="border-color:#ffb454"></span> permissioned admin call</span>
+      <span class="item"><span class="sw dash" style="border-color:#5e6f8c"></span> oracle / price read</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 · TRUST BOUNDARIES ============ -->
+<section class="slide" data-title="Trust Boundaries">
+  <span class="slide-kicker">Trust Boundaries</span>
+  <span class="slide-no">04 / 12</span>
+  <div class="slide-inner">
+    <div class="meridian-tag reveal">Where trust lives — and where it doesn't</div>
+    <h2 class="reveal d1">Trust is concentrated on-chain, by design.</h2>
+
+    <div class="grid g3" style="margin-top:30px">
+      <div class="panel reveal d1" style="border-color:var(--accent-dim)">
+        <span class="idx">TRUST ROOT</span>
+        <h3 class="em-acc">The Program</h3>
+        <p>The only thing that can move funds. Mints, vault, matching and settlement all validated here. PDAs mean <strong>no private key</strong> controls the vault or the mint authority.</p>
+        <div class="role">enforces all six invariants</div>
+      </div>
+      <div class="panel reveal d2">
+        <span class="idx">CONVENIENCE</span>
+        <h3 class="em-amber">Automation Service</h3>
+        <p>Holds a keypair that can call <em>permissioned</em> create/settle instructions. It <strong>cannot</strong> violate invariants or drain the vault.</p>
+        <div class="role">a liveness convenience — not a trust root</div>
+      </div>
+      <div class="panel reveal d3">
+        <span class="idx">ZERO TRUST</span>
+        <h3>The Frontend</h3>
+        <p>Holds <strong>nothing</strong>. The user's wallet signs every state-changing action. It only translates intent and renders state.</p>
+        <div class="role">custody = 0</div>
+      </div>
+    </div>
+
+    <div class="callout reveal d3">
+      <div class="label">The mechanism</div>
+      <p>The vault &amp; mint authority are <span class="em-acc">PDAs</span> — addresses derived from the program with no private key. Funds and token issuance are controlled <em>only</em> by program logic. This is what makes “non-custodial” true rather than marketing.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 · ONE BOOK, TWO PERSPECTIVES ============ -->
+<section class="slide" data-title="One Book, Four Actions">
+  <span class="slide-kicker">The Order Book</span>
+  <span class="slide-no">05 / 12</span>
+  <div class="slide-inner">
+    <div class="meridian-tag reveal">The single most important design concept</div>
+    <h2 class="reveal d1">One book. Four actions. Two perspectives.</h2>
+    <p class="lede reveal d2" style="margin-top:14px;font-size:19px">Each strike has <strong>exactly one</strong> order book: <span class="em-yes">Yes</span> traded against <span class="em-usdc">USDC</span>. Because <span class="em-acc">Yes + No = $1.00</span>, selling a Yes is economically identical to buying a No.</p>
+
+    <div class="book-grid reveal d2">
+      <div class="book-side yes">
+        <div class="ttl">Buying Yes · same side</div>
+        <div class="book-act"><span class="name em-yes">Buy Yes</span><span class="desc">Lift the ask side directly.</span></div>
+        <div class="book-act"><span class="name em-no">Sell No</span><span class="desc">Buy a Yes → now hold Yes+No = redeemable $1.00, closing the No exposure.</span></div>
+      </div>
+      <div class="book-side no">
+        <div class="ttl">Selling Yes · same side</div>
+        <div class="book-act"><span class="name em-no">Buy No</span><span class="desc">Mint a pair, sell the Yes on the bid, keep the No. Cost = $1.00 − Yes sale.</span></div>
+        <div class="book-act"><span class="name em-yes">Sell Yes</span><span class="desc">Post on the ask / hit a bid.</span></div>
+      </div>
+      <div class="book-center">price of Yes (0.00 – 1.00) <b>=</b> market-implied probability the stock closes at/above the strike</div>
+    </div>
+
+    <p class="footnote reveal d3">→ The frontend flips perspective; under the hood it is always a single Yes/USDC book. This collapses four UI buttons into one matching engine — and keeps trade, mint and redeem state cohesive in one program.</p>
+  </div>
+</section>
+
+<!-- ============ 06 · TRANSACTION FLOW (DIAGRAM) ============ -->
+<section class="slide" data-title="Transaction Flow">
+  <span class="slide-kicker">Transaction Flow</span>
+  <span class="slide-no">06 / 12</span>
+  <div class="slide-inner">
+    <div class="meridian-tag reveal">A contract's life · mint → trade → settle → redeem</div>
+    <h2 class="reveal d1">How a transaction processes, end to end.</h2>
+
+    <div class="diagram-wrap reveal d2">
+      <svg viewBox="0 0 1140 660" role="img" aria-label="Transaction flow diagram">
+        <defs>
+          <marker id="f-acc" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#4ff0a8"/></marker>
+          <marker id="f-usdc" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#5aa6ff"/></marker>
+          <marker id="f-amber" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#ffb454"/></marker>
+        </defs>
+
+        <!-- swimlane headers -->
+        <text x="110" y="34" font-size="12" class="svg-mono-dim" text-anchor="middle">USER WALLET</text>
+        <text x="110" y="50" font-size="10" class="svg-mono-dim" text-anchor="middle">(signs)</text>
+        <text x="490" y="34" font-size="12" fill="#4ff0a8" text-anchor="middle">SOLANA PROGRAM</text>
+        <text x="490" y="50" font-size="10" class="svg-mono-dim" text-anchor="middle">(validates &amp; enforces)</text>
+        <text x="880" y="34" font-size="12" class="svg-mono-dim" text-anchor="middle">VAULT · MINTS · ORACLE</text>
+
+        <!-- lane separators -->
+        <line x1="220" y1="64" x2="220" y2="640" stroke="#18243a" stroke-width="1" stroke-dasharray="3 5"/>
+        <line x1="760" y1="64" x2="760" y2="640" stroke="#18243a" stroke-width="1" stroke-dasharray="3 5"/>
+
+        <!-- STAGE 1: MINT -->
+        <g>
+          <rect x="20" y="78" width="1100" height="118" rx="10" fill="rgba(79,240,168,0.035)" stroke="#18243a"/>
+          <text x="40" y="100" class="svg-title" font-size="13" fill="#4ff0a8">① MINT PAIR</text>
+
+          <rect x="40" y="112" width="150" height="40" rx="8" fill="#0f1726" stroke="#243349"/>
+          <text x="115" y="137" font-size="11.5" text-anchor="middle" fill="#e8edf5">mint_pair()</text>
+
+          <line x1="190" y1="132" x2="350" y2="132" stroke="#4ff0a8" stroke-width="1.5" marker-end="url(#f-acc)"/>
+
+          <rect x="350" y="108" width="280" height="76" rx="8" fill="#0f1726" stroke="#2bbd80"/>
+          <text x="490" y="132" font-size="11.5" text-anchor="middle" fill="#e8edf5">transfer $1.00 USDC → vault</text>
+          <text x="490" y="150" font-size="11.5" text-anchor="middle" fill="#e8edf5">mint 1 Yes + 1 No → user</text>
+          <text x="490" y="168" font-size="11" text-anchor="middle" class="svg-mono-dim">pairs_minted += 1</text>
+
+          <line x1="630" y1="146" x2="800" y2="146" stroke="#5aa6ff" stroke-width="1.5" marker-end="url(#f-usdc)"/>
+          <rect x="800" y="120" width="300" height="52" rx="8" fill="#0c121f" stroke="#243349"/>
+          <text x="950" y="143" font-size="11.5" text-anchor="middle" fill="#5aa6ff">Vault holds $1.00 · supply +1/+1</text>
+          <text x="950" y="161" font-size="10.5" text-anchor="middle" class="svg-mono-dim">collateralization invariant holds</text>
+
+          <line x1="350" y1="170" x2="192" y2="170" stroke="#4ff0a8" stroke-width="1.2" stroke-dasharray="4 4" marker-end="url(#f-acc)"/>
+          <text x="270" y="164" font-size="10" text-anchor="middle" fill="#4ff0a8">1 Yes + 1 No</text>
+        </g>
+
+        <!-- STAGE 2: TRADE -->
+        <g>
+          <rect x="20" y="208" width="1100" height="96" rx="10" fill="rgba(90,166,255,0.035)" stroke="#18243a"/>
+          <text x="40" y="230" class="svg-title" font-size="13" fill="#5aa6ff">② TRADE · one Yes/USDC book</text>
+
+          <rect x="40" y="242" width="150" height="40" rx="8" fill="#0f1726" stroke="#243349"/>
+          <text x="115" y="267" font-size="11.5" text-anchor="middle" fill="#e8edf5">place_order()</text>
+
+          <line x1="190" y1="262" x2="350" y2="262" stroke="#4ff0a8" stroke-width="1.5" marker-end="url(#f-acc)"/>
+
+          <rect x="350" y="238" width="280" height="50" rx="8" fill="#0f1726" stroke="#2bbd80"/>
+          <text x="490" y="259" font-size="11.5" text-anchor="middle" fill="#e8edf5">rest on book / match_orders()</text>
+          <text x="490" y="277" font-size="10.5" text-anchor="middle" class="svg-mono-dim">price-time priority · partial fills</text>
+
+          <line x1="630" y1="262" x2="800" y2="262" stroke="#5aa6ff" stroke-width="1.5" marker-end="url(#f-usdc)"/>
+          <rect x="800" y="238" width="300" height="50" rx="8" fill="#0c121f" stroke="#243349"/>
+          <text x="950" y="259" font-size="11.5" text-anchor="middle" fill="#5aa6ff">atomic Yes ↔ USDC transfer</text>
+          <text x="950" y="277" font-size="10.5" text-anchor="middle" class="svg-mono-dim">maker ⇄ taker settle on-chain</text>
+        </g>
+
+        <!-- STAGE 3: SETTLE -->
+        <g>
+          <rect x="20" y="316" width="1100" height="150" rx="10" fill="rgba(255,180,84,0.04)" stroke="#18243a"/>
+          <text x="40" y="338" class="svg-title" font-size="13" fill="#ffb454">③ SETTLE · after 4:00 PM ET</text>
+
+          <rect x="40" y="352" width="150" height="48" rx="8" fill="#0f1726" stroke="#243349"/>
+          <text x="115" y="372" font-size="11" text-anchor="middle" fill="#ffb454">automation /</text>
+          <text x="115" y="388" font-size="11" text-anchor="middle" fill="#ffb454">anyone, post-close</text>
+
+          <line x1="190" y1="376" x2="350" y2="376" stroke="#ffb454" stroke-width="1.5" marker-end="url(#f-amber)"/>
+          <text x="270" y="368" font-size="10" text-anchor="middle" fill="#ffb454">settle_market()</text>
+
+          <line x1="800" y1="392" x2="632" y2="392" stroke="#5e6f8c" stroke-width="1.4" stroke-dasharray="4 4" marker-end="url(#f-usdc)"/>
+          <text x="715" y="386" font-size="10" text-anchor="middle" class="svg-mono-dim">read price</text>
+
+          <rect x="350" y="352" width="280" height="98" rx="8" fill="#0f1726" stroke="#2bbd80"/>
+          <text x="490" y="374" font-size="11" text-anchor="middle" fill="#e8edf5">check staleness + confidence</text>
+          <text x="490" y="394" font-size="11" text-anchor="middle" fill="#e8edf5">outcome = price ≥ strike ?</text>
+          <text x="490" y="412" font-size="11.5" text-anchor="middle" fill="#4ff0a8">YesWins</text>
+          <text x="525" y="412" font-size="11.5" text-anchor="middle" fill="#93a3bd">:</text>
+          <text x="560" y="412" font-size="11.5" text-anchor="middle" fill="#ff7a8a">NoWins</text>
+          <text x="490" y="436" font-size="10.5" text-anchor="middle" class="svg-mono-dim">write outcome · immutable · idempotent</text>
+
+          <rect x="800" y="352" width="300" height="60" rx="8" fill="#0c121f" stroke="#c9893b"/>
+          <text x="950" y="376" font-size="11.5" text-anchor="middle" fill="#ffb454">Pyth price-update account</text>
+          <text x="950" y="396" font-size="10.5" text-anchor="middle" class="svg-mono-dim">get_price_no_older_than()</text>
+        </g>
+
+        <!-- STAGE 4: REDEEM -->
+        <g>
+          <rect x="20" y="478" width="1100" height="150" rx="10" fill="rgba(79,240,168,0.035)" stroke="#18243a"/>
+          <text x="40" y="500" class="svg-title" font-size="13" fill="#4ff0a8">④ REDEEM · winners claim</text>
+
+          <rect x="40" y="514" width="150" height="40" rx="8" fill="#0f1726" stroke="#243349"/>
+          <text x="115" y="539" font-size="11.5" text-anchor="middle" fill="#e8edf5">redeem()</text>
+
+          <line x1="190" y1="534" x2="350" y2="534" stroke="#4ff0a8" stroke-width="1.5" marker-end="url(#f-acc)"/>
+
+          <rect x="350" y="510" width="280" height="76" rx="8" fill="#0f1726" stroke="#2bbd80"/>
+          <text x="490" y="534" font-size="11.5" text-anchor="middle" fill="#e8edf5">burn winning tokens</text>
+          <text x="490" y="554" font-size="11.5" text-anchor="middle" fill="#e8edf5">transfer $1.00 × tokens</text>
+          <text x="490" y="574" font-size="10.5" text-anchor="middle" class="svg-mono-dim">losing tokens → $0</text>
+
+          <line x1="630" y1="548" x2="800" y2="548" stroke="#5aa6ff" stroke-width="1.5" marker-end="url(#f-usdc)"/>
+          <rect x="800" y="522" width="300" height="52" rx="8" fill="#0c121f" stroke="#243349"/>
+          <text x="950" y="545" font-size="11.5" text-anchor="middle" fill="#5aa6ff">USDC out of vault</text>
+          <text x="950" y="563" font-size="10.5" text-anchor="middle" class="svg-mono-dim">payout completeness: Yes+No = $1.00</text>
+
+          <line x1="800" y1="566" x2="192" y2="566" stroke="#5aa6ff" stroke-width="1.2" stroke-dasharray="4 4" marker-end="url(#f-usdc)"/>
+          <text x="400" y="560" font-size="10" text-anchor="middle" fill="#5aa6ff">$1.00 USDC → winner</text>
+        </g>
+      </svg>
+    </div>
+
+    <p class="footnote reveal d3">Every value-moving step is either a user-signed transaction or a program-enforced rule. The settlement crank is <span class="em-acc">idempotent</span> and, where possible, <span class="em-acc">permissionless</span> — so markets can settle even if our service is down.</p>
+  </div>
+</section>
+
+<!-- ============ 07 · DECISION RECORDS ============ -->
+<section class="slide" data-title="Decisions">
+  <span class="slide-kicker">Decision Records</span>
+  <span class="slide-no">07 / 12</span>
+  <div class="slide-inner">
+    <div class="meridian-tag reveal">Every choice, written to be defended</div>
+    <h2 class="reveal d1">The decisions that shaped Meridian.</h2>
+
+    <table class="adr-table reveal d2">
+      <thead>
+        <tr><th style="width:42px">#</th><th style="width:140px">Decision</th><th style="width:230px">Choice</th><th>One-line why</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="num">001</td><td><b>Chain</b></td><td class="pick">Solana + Anchor · devnet</td><td>Sub-second finality + mature CLOB/oracle infra for a real-time book.</td></tr>
+        <tr><td class="num">002</td><td><b>Order book</b></td><td class="pick">Build minimal on-chain CLOB</td><td>Brief rewards it; existing CLOBs are mainnet-risky; cohesive state.</td></tr>
+        <tr><td class="num">002b</td><td><b>Book storage</b></td><td class="pick">Bounded on-chain array</td><td>Trustless + auditable without slab-structure complexity.</td></tr>
+        <tr><td class="num">003</td><td><b>Tokens / vault</b></td><td class="pick">SPL mints + PDA vault</td><td>Non-custodial by construction; enforces $1.00 invariant mechanically.</td></tr>
+        <tr><td class="num">004</td><td><b>Oracle</b></td><td class="pick">Pyth + admin-override fallback</td><td>Confidence bands fit the brief; fallback guarantees the devnet demo.</td></tr>
+        <tr><td class="num">005</td><td><b>Automation</b></td><td class="pick">Plain Node.js cron service</td><td>Chains can't self-trigger; minimal deps; trust-minimized.</td></tr>
+        <tr><td class="num">006</td><td><b>Position rules</b></td><td class="pick">Frontend-enforced</td><td>UX guardrail, not a fund-safety invariant.</td></tr>
+      </tbody>
+    </table>
+    <p class="footnote reveal d3">→ The next slides unpack the two highest-stakes calls: <span class="em-acc">building the order book</span> and <span class="em-acc">choosing the oracle</span>.</p>
+  </div>
+</section>
+
+<!-- ============ 08 · TRADEOFF — ORDER BOOK ============ -->
+<section class="slide" data-title="Tradeoff · Order Book">
+  <span class="slide-kicker">Tradeoff · ADR-002</span>
+  <span class="slide-no">08 / 12</span>
+  <div class="slide-inner">
+    <div class="meridian-tag reveal">Build vs integrate the matching engine</div>
+    <h2 class="reveal d1">We built a minimal on-chain CLOB.</h2>
+    <p class="lede reveal d2" style="margin-top:12px;font-size:18px">Meridian needs <strong>many short-lived markets created and retired daily</strong> — a poor fit for Phoenix's long-lived-spot model. Our instruments are also simpler: price is bounded $0–$1, one book per strike.</p>
+
+    <div class="grid g3" style="margin-top:28px">
+      <div class="trade reveal d1">
+        <div class="head"><h3>Build minimal CLOB</h3><span class="tag">Chosen</span></div>
+        <div class="body">
+          <div class="row win"><span class="k">Win</span><span class="v">Trustless + fully on-chain; mint/redeem invariants wired directly into trading; no cross-program glue.</span></div>
+          <div class="row cost"><span class="k">Cost</span><span class="v">Matching is perf-sensitive &amp; edge-case heavy. Mitigated by scoping to “minimal” + a cap N per side.</span></div>
+        </div>
+      </div>
+      <div class="trade reveal d2">
+        <div class="head"><h3>Integrate Phoenix</h3><span class="tag" style="background:var(--line);color:var(--fg-dim)">Rejected</span></div>
+        <div class="body">
+          <div class="row win"><span class="k">Win</span><span class="v">Battle-tested engine, no matching code to audit.</span></div>
+          <div class="row cost"><span class="k">Cost</span><span class="v">Built for long-lived spot pairs; uncertain per-market setup cost on devnet; external dependency that can dead-end.</span></div>
+        </div>
+      </div>
+      <div class="trade reveal d3">
+        <div class="head"><h3>Per-order accounts<br>+ off-chain matcher</h3><span class="tag" style="background:var(--line);color:var(--fg-dim)">Rejected</span></div>
+        <div class="body">
+          <div class="row win"><span class="k">Win</span><span class="v">Simplest on-chain footprint.</span></div>
+          <div class="row cost"><span class="k">Cost</span><span class="v">Reintroduces a trusted matcher — breaks the “transparent &amp; auditable” pitch.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout reveal d3">
+      <div class="label">The accepted trade-off</div>
+      <p>A cap <span class="mono em-acc">N</span> on resting orders per side. A documented demo limitation; the production path is a Serum/Phoenix-style slab.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 · TRADEOFF — ORACLE ============ -->
+<section class="slide" data-title="Tradeoff · Oracle">
+  <span class="slide-kicker">Tradeoff · ADR-004</span>
+  <span class="slide-no">09 / 12</span>
+  <div class="slide-inner">
+    <div class="meridian-tag reveal">The highest-risk dependency in the system</div>
+    <h2 class="reveal d1">Pyth — behind an interface, with a fallback.</h2>
+    <p class="lede reveal d2" style="margin-top:12px;font-size:18px">Settlement is purely numeric (“is AAPL ≥ $215?”), so a deterministic price oracle beats a human/optimistic one — <strong>no dispute window</strong>. Pyth publishes native confidence intervals and is the main on-chain source of real-time US equities.</p>
+
+    <div class="grid g2" style="margin-top:26px">
+      <div class="trade reveal d1">
+        <div class="head"><h3>Why Pyth</h3><span class="tag">Chosen</span></div>
+        <div class="body">
+          <div class="row win"><span class="k">Fit</span><span class="v">Native confidence bands map directly onto the brief's confidence check.</span></div>
+          <div class="row win"><span class="k">Proof</span><span class="v">Powers Polymarket's equity markets — production validation.</span></div>
+          <div class="row win"><span class="k">Devnet</span><span class="v"><b>Pull oracle:</b> we post the Hermes update via the Receiver (same program ID on devnet &amp; mainnet) — so we can likely get equity prices onto devnet ourselves.</span></div>
+        </div>
+      </div>
+      <div class="trade reveal d2">
+        <div class="head"><h3>The risks we accept</h3><span class="tag" style="background:var(--amber);color:var(--ink)">Watch</span></div>
+        <div class="body">
+          <div class="row cost"><span class="k">Hours</span><span class="v">Equity feeds only update during US market hours; 4:00 PM ET sits at the session boundary — automation must encode the market calendar.</span></div>
+          <div class="row cost"><span class="k">Cluster</span><span class="v">Feed IDs differ per cluster — must use the devnet ID, looked up live.</span></div>
+          <div class="row cost"><span class="k">Override</span><span class="v"><code>admin_settle</code> is a centralization point — bounded by enforced time delay, admin-only, fallback-only.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout reveal d3" style="border-color:var(--amber)">
+      <div class="label" style="color:var(--amber)">Open question · resolve first</div>
+      <p>Do all 7 MAG7 feeds return a fresh price on <em>devnet</em> during market hours? Verified live before settlement code ships — fallbacks ready: crypto-feed stand-ins, a mocked oracle, or mainnet-beta with tiny amounts.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 · INVARIANTS ============ -->
+<section class="slide" data-title="Invariants">
+  <span class="slide-kicker">Correctness</span>
+  <span class="slide-no">10 / 12</span>
+  <div class="slide-inner">
+    <div class="meridian-tag reveal">Guarantees enforced on-chain · proven for all prices</div>
+    <h2 class="reveal d1">Six invariants. The whole safety case.</h2>
+
+    <div class="reveal d2" style="margin-top:24px">
+      <div class="inv-row">
+        <span class="n">01</span>
+        <div class="body"><b>Collateralization</b> — the vault always backs every outstanding pair, exactly.
+          <div class="formula"><span class="hl">vault_USDC == $1.00 × pairs_minted</span> · any fee goes to a separate account, never the vault</div></div>
+      </div>
+      <div class="inv-row">
+        <span class="n">02</span>
+        <div class="body"><b>Payout completeness</b> — the two sides always sum to a dollar.
+          <div class="formula"><span class="hl">Yes_payout + No_payout == $1.00</span> at settlement, always</div></div>
+      </div>
+      <div class="inv-row">
+        <span class="n">03</span>
+        <div class="body"><b>Token provenance</b> — tokens are created <em>only</em> by <code>mint_pair</code> and destroyed <em>only</em> by <code>redeem</code>.
+          <div class="formula">program holds mint + freeze authority via PDA</div></div>
+      </div>
+      <div class="inv-row">
+        <span class="n">04</span>
+        <div class="body"><b>Settlement immutability</b> — once outcome &amp; price are written, they cannot change.</div>
+      </div>
+      <div class="inv-row">
+        <span class="n">05</span>
+        <div class="body"><b>Settlement timing</b> — <code>settle_market</code> rejects before 4:00 PM ET; <code>admin_settle</code> rejects before its enforced delay.</div>
+      </div>
+      <div class="inv-row" style="border-bottom:none">
+        <span class="n">06</span>
+        <div class="body"><b>Oracle quality</b> — settlement rejects stale prices and prices whose confidence band exceeds the configured threshold.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 · RISKS & ROADMAP ============ -->
+<section class="slide" data-title="Risks & Delivery">
+  <span class="slide-kicker">Risks &amp; Delivery</span>
+  <span class="slide-no">11 / 12</span>
+  <div class="slide-inner">
+    <div class="meridian-tag reveal">Honest about limitations · sequenced to de-risk</div>
+    <h2 class="reveal d1">What could break — and how we build around it.</h2>
+
+    <div class="grid g4" style="margin-top:28px">
+      <div class="risk hot reveal d1">
+        <div class="sev">⚠ Highest risk</div>
+        <h3>Equity feeds on devnet</h3>
+        <p>Pyth equity feeds update only during US market hours; feed IDs differ per cluster.</p>
+        <div class="mit"><b>Mitigation:</b> live devnet spike <em>first</em>; crypto stand-ins / mock / mainnet fallback.</div>
+      </div>
+      <div class="risk reveal d2">
+        <div class="sev">Demo-grade</div>
+        <h3>Order book scope</h3>
+        <p>Bounded-array book caps resting orders per side; not high-throughput.</p>
+        <div class="mit"><b>Mitigation:</b> production path is the slab model.</div>
+      </div>
+      <div class="risk reveal d3">
+        <div class="sev">Liveness</div>
+        <h3>Automation SPOF</h3>
+        <p>A single scheduler is a single point of failure — for <em>timing</em>, not funds.</p>
+        <div class="mit"><b>Mitigation:</b> idempotent + permissionless settle; retries + alerts.</div>
+      </div>
+      <div class="risk reveal d4">
+        <div class="sev">Centralization</div>
+        <h3>Admin override</h3>
+        <p><code>admin_settle</code> is a trusted fallback path.</p>
+        <div class="mit"><b>Mitigation:</b> time delay + admin-only + use-on-failure only.</div>
+      </div>
+    </div>
+
+    <div class="reveal d3" style="margin-top:30px">
+      <div class="callout" style="margin-top:0">
+        <div class="label">Delivery strategy · critical-path-first</div>
+        <p style="font-family:var(--mono);font-size:15px;line-height:1.7;color:var(--fg-dim)">scaffold <span style="color:var(--fg-faint)">→</span> <span class="em-acc">mint/redeem</span> <span style="color:var(--fg-faint)">→</span> <span class="em-amber">settlement + oracle spike</span> <span style="color:var(--fg-faint)">→</span> shared TS SDK <span style="color:var(--fg-faint)">→</span> frontend <span style="color:var(--fg-faint)">→</span> integration <span style="color:var(--fg-faint)">→</span> one-command devnet deploy</p>
+      </div>
+    </div>
+    <p class="footnote reveal d4">Order-book &amp; market-creation tracks run in parallel after scaffold; automation + frontend fan out after the SDK. The #1 risk is de-risked <em>inside</em> the settlement feature before any settlement logic is committed.</p>
+  </div>
+</section>
+
+<!-- ============ 12 · CLOSE ============ -->
+<section class="slide" id="close" data-title="Close">
+  <span class="slide-kicker">In one breath</span>
+  <span class="slide-no">12 / 12</span>
+  <div class="slide-inner">
+    <div class="meridian-tag reveal">Why this architecture holds up</div>
+    <h2 class="reveal d1" style="font-size:clamp(32px,5vw,68px);max-width:14ch">Correctness by math, not by trust.</h2>
+
+    <div class="stats reveal d2">
+      <div class="stat"><div class="n">~400ms</div><div class="l">Solana slot · sub-second finality for a live book</div></div>
+      <div class="stat"><div class="n">$1.00</div><div class="l">Yes + No, always · the load-bearing invariant</div></div>
+      <div class="stat"><div class="n">0</div><div class="l">Funds the frontend or service can ever hold</div></div>
+      <div class="stat"><div class="n">1</div><div class="l">Order book per strike · four actions, two views</div></div>
+    </div>
+
+    <ul class="clean reveal d3" style="margin-top:36px;max-width:820px">
+      <li><b>Solana + Anchor + SPL</b> — the only realistic home for a fully on-chain binary-equity order book.</li>
+      <li><b>PDAs make non-custodial real</b> — the vault and mint authority are key-less, program-controlled accounts.</li>
+      <li><b>Pyth pull model, behind an interface</b> — deterministic settlement with no dispute window, plus a guaranteed fallback.</li>
+      <li><b>One book, four views</b> — a purpose-built CLOB that keeps mint, trade, and redeem invariants in a single program.</li>
+    </ul>
+
+    <div class="cover-horizon reveal d3" style="margin-top:46px;max-width:560px"></div>
+    <p class="cover-eq reveal d4" style="margin-top:18px">Meridian · architecture review for <b>PEAK6</b></p>
+  </div>
+</section>
+
+<script>
+  // progress bar
+  const progress = document.getElementById('progress');
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const dotsNav = document.getElementById('dots');
+
+  // build dots
+  slides.forEach((s, i) => {
+    const a = document.createElement('a');
+    a.href = '#'; a.title = s.dataset.title || ('Slide ' + (i+1));
+    a.addEventListener('click', (e) => { e.preventDefault(); s.scrollIntoView({behavior:'smooth'}); });
+    dotsNav.appendChild(a);
+  });
+  const dots = Array.from(dotsNav.children);
+
+  function onScroll() {
+    const h = document.documentElement.scrollHeight - window.innerHeight;
+    progress.style.width = (window.scrollY / h * 100) + '%';
+    // active dot = slide nearest viewport center
+    const mid = window.scrollY + window.innerHeight / 2;
+    let active = 0;
+    slides.forEach((s, i) => { if (s.offsetTop <= mid) active = i; });
+    dots.forEach((d, i) => d.classList.toggle('active', i === active));
+  }
+  window.addEventListener('scroll', onScroll, {passive:true});
+  window.addEventListener('resize', onScroll);
+  onScroll();
+
+  // reveal on intersection
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(en => { if (en.isIntersecting) en.target.classList.add('in'); });
+  }, {threshold: 0.12});
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  // keyboard nav
+  function currentIndex() {
+    const mid = window.scrollY + window.innerHeight / 2;
+    let idx = 0; slides.forEach((s,i)=>{ if (s.offsetTop <= mid) idx = i; });
+    return idx;
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
+      e.preventDefault();
+      const n = Math.min(currentIndex()+1, slides.length-1);
+      slides[n].scrollIntoView({behavior:'smooth'});
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') {
+      e.preventDefault();
+      const n = Math.max(currentIndex()-1, 0);
+      slides[n].scrollIntoView({behavior:'smooth'});
+    } else if (e.key === 'Home') {
+      e.preventDefault(); slides[0].scrollIntoView({behavior:'smooth'});
+    } else if (e.key === 'End') {
+      e.preventDefault(); slides[slides.length-1].scrollIntoView({behavior:'smooth'});
+    } else if (e.key === 'f' || e.key === 'F') {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+      else document.exitFullscreen?.();
+    }
+  });
+</script>
+</body>
+</html>
