@@ -1,6 +1,6 @@
 # Feature: Order Book & Matching
 
-**ID:** F-03 · **Roadmap piece:** F-03 · **Status:** In progress
+**ID:** F-03 · **Roadmap piece:** F-03 · **Status:** In review — [MR !3](https://labs.gauntletai.com/keithmazanec/meridian/-/merge_requests/3)
 
 ## Description
 
@@ -123,7 +123,7 @@ Chunks:
   odd-price rounding); (c) all four trade paths execute at book level (Buy Yes, Sell Yes,
   Buy No = mint+sell-Yes with effective $0.30 cost, Sell No = buy-Yes), vault still invariant.
 - [x] **Adversarial review** — 1 high + 4 medium fixed (see below); lows recorded for the user.
-- [ ] **Rebase + MR** — rebased onto local main, pushed, MR opened.
+- [x] **Rebase + MR** — rebased onto local main, pushed to `feat/F-03-order-book`, MR !3 opened.
 
 ## Implementation notes (filled in by the building agent)
 
