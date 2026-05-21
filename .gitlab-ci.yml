@@ -1,0 +1,77 @@
+# Meridian CI — Phase 1: Rust on-chain program.
+#
+# Scope (deliberately): format, lint, and test the Anchor/Rust program plus a
+# prettier check on the TypeScript. The day-to-day dev loop runs entirely
+# in-process via LiteSVM, so this pipeline needs no Solana validator and no
+# Anchor toolchain. The Rust version is pinned by rust-toolchain.toml (1.89.0),
+# which rustup honors automatically inside the repo.
+#
+# Later phases will add `anchor build` (BPF artifact) and a devnet deploy stage;
+# those are intentionally NOT here yet (see docs/ROADMAP.md, F-10).
+
+stages:
+  - check
+  - test
+
+default:
+  image: rust:1.89
+
+# Cache the Cargo registry and build output across jobs/runs. The key is tied to
+# Cargo.lock so a dependency change invalidates the cache cleanly.
+variables:
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  CARGO_TERM_COLOR: always
+
+cache:
+  key:
+    files:
+      - Cargo.lock
+  paths:
+    - .cargo/registry/index
+    - .cargo/registry/cache
+    - target/
+
+# Run on merge requests and on the default branch; skip duplicate "branch"
+# pipelines when an MR is open for that branch.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS == null
+
+fmt:
+  stage: check
+  script:
+    - rustup component add rustfmt
+    - cargo fmt --all -- --check
+
+clippy:
+  stage: check
+  script:
+    - rustup component add clippy
+    - cargo clippy --workspace --all-targets -- -D warnings
+
+test:
+  stage: test
+  script:
+    - cargo test --workspace
+
+# TypeScript is linted with prettier (the only JS tooling the repo declares).
+# Separate Node image so the Rust jobs stay lean.
+#
+# NOTE: no yarn.lock is committed yet, so installs are not reproducible. When the
+# off-chain workspace lands (F-06+), commit a lockfile and switch the install to
+# `yarn install --frozen-lockfile` to pin dependencies in CI.
+lint-ts:
+  stage: check
+  image: node:20
+  cache:
+    key:
+      files:
+        - package.json
+    paths:
+      - node_modules/
+  script:
+    - corepack enable
+    - yarn install
+    - yarn lint
