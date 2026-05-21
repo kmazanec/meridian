@@ -62,4 +62,10 @@ pub enum MeridianError {
     // --- Generic validation ---
     #[msg("Invalid argument")]
     InvalidArgument,
+
+    // --- Settlement / oracle (F-04, appended post-review for ordinal stability) ---
+    #[msg("Oracle price update is not the expected PriceUpdateV2 account")]
+    InvalidPriceUpdateAccount,
+    #[msg("Oracle price update is not fully verified (Full verification required)")]
+    InsufficientVerification,
 }

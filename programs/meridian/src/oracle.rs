@@ -61,12 +61,20 @@ const VERIFICATION_PARTIAL_TAG: u8 = 0;
 /// borsh variant tag for `VerificationLevel::Full`.
 const VERIFICATION_FULL_TAG: u8 = 1;
 
+/// The Anchor account discriminator for `PriceUpdateV2`: the first 8 bytes of
+/// `sha256("account:PriceUpdateV2")`. A genuine price-update account always
+/// starts with these bytes; checking them confirms the receiver-owned account is
+/// actually a `PriceUpdateV2` and not some other account type the receiver owns
+/// (its `Config`, a `GuardianSet`, or a future type). Computed and pinned here so
+/// we don't depend on the Pyth SDK.
+const PRICE_UPDATE_V2_DISCRIMINATOR: [u8; 8] = [34, 241, 35, 99, 157, 126, 244, 205];
+
 /// A validated, oracle-implementation-agnostic price reading, normalized for the
 /// settlement decision. Produced by [`parse_price_update`]; consumed by
 /// `settle_market`. Keeping this type free of any SDK detail is what lets the
 /// oracle source change (live Pyth, crypto stand-in, mock) without touching the
 /// settlement instruction (ADR-004's oracle interface).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct OraclePrice {
     /// The 32-byte Pyth feed id this update is for (matched against `Config`).
     pub feed_id: [u8; 32],
@@ -78,6 +86,11 @@ pub struct OraclePrice {
     pub exponent: i32,
     /// Unix timestamp (seconds) the price was published.
     pub publish_time: i64,
+    /// True iff the update was posted with `VerificationLevel::Full` (the full
+    /// Wormhole guardian quorum verified the price). `Partial` updates require
+    /// fewer guardians and Pyth documents them as unsafe for settlement
+    /// consumers, so the settlement handler requires this to be true.
+    pub fully_verified: bool,
 }
 
 impl OraclePrice {
@@ -116,11 +129,9 @@ impl OraclePrice {
     pub fn conf_in_usdc_base_units(&self) -> Result<u64> {
         // Reuse the price path by treating conf as a non-negative price.
         let as_price = OraclePrice {
-            feed_id: self.feed_id,
             price: i64::try_from(self.conf).map_err(|_| error!(MeridianError::MathOverflow))?,
             conf: 0,
-            exponent: self.exponent,
-            publish_time: self.publish_time,
+            ..*self
         };
         as_price.to_usdc_base_units()
     }
@@ -181,6 +192,17 @@ macro_rules! read_le {
 /// [`PYTH_RECEIVER_PROGRAM_ID`] and that the returned `feed_id` matches the
 /// market's configured feed; this function only decodes bytes.
 pub fn parse_price_update(data: &[u8]) -> Result<OraclePrice> {
+    // Discriminator: confirm this is actually a `PriceUpdateV2`, not some other
+    // account type the Pyth receiver owns (defense-in-depth alongside the caller's
+    // owner check). A wrong/short discriminator → reject.
+    let disc = data
+        .get(0..DISCRIMINATOR_LEN)
+        .ok_or(error!(MeridianError::InvalidPriceUpdateAccount))?;
+    require!(
+        disc == PRICE_UPDATE_V2_DISCRIMINATOR,
+        MeridianError::InvalidPriceUpdateAccount
+    );
+
     // discriminant (8) + write_authority (32) → start of verification_level
     let vl_off = DISCRIMINATOR_LEN + WRITE_AUTHORITY_LEN;
     let tag = *data
@@ -188,9 +210,9 @@ pub fn parse_price_update(data: &[u8]) -> Result<OraclePrice> {
         .ok_or(error!(MeridianError::InvalidArgument))?;
 
     // price_message begins right after the (variable-length) verification_level.
-    let pm_off = match tag {
-        VERIFICATION_PARTIAL_TAG => vl_off + 1 + 1, // tag byte + num_signatures: u8
-        VERIFICATION_FULL_TAG => vl_off + 1,        // tag byte only
+    let (pm_off, fully_verified) = match tag {
+        VERIFICATION_PARTIAL_TAG => (vl_off + 1 + 1, false), // tag + num_signatures: u8
+        VERIFICATION_FULL_TAG => (vl_off + 1, true),         // tag only
         _ => return err!(MeridianError::InvalidArgument),
     };
 
@@ -212,6 +234,7 @@ pub fn parse_price_update(data: &[u8]) -> Result<OraclePrice> {
         conf,
         exponent,
         publish_time,
+        fully_verified,
     })
 }
 
@@ -233,7 +256,7 @@ mod tests {
         publish_time: i64,
     ) -> Vec<u8> {
         let mut v = Vec::new();
-        v.extend_from_slice(&[0u8; DISCRIMINATOR_LEN]); // discriminant
+        v.extend_from_slice(&PRICE_UPDATE_V2_DISCRIMINATOR); // valid discriminator
         v.extend_from_slice(&[7u8; WRITE_AUTHORITY_LEN]); // write_authority (arbitrary)
         if verification_full {
             v.push(VERIFICATION_FULL_TAG);
@@ -264,6 +287,7 @@ mod tests {
         assert_eq!(p.conf, 5_000000);
         assert_eq!(p.exponent, -8);
         assert_eq!(p.publish_time, 1_700_000_000);
+        assert!(p.fully_verified, "Full variant → fully_verified");
     }
 
     #[test]
@@ -276,11 +300,20 @@ mod tests {
         assert_eq!(p.feed_id, feed);
         assert_eq!(p.price, 100_00000000);
         assert_eq!(p.publish_time, 42);
+        assert!(!p.fully_verified, "Partial variant → not fully_verified");
     }
 
     #[test]
     fn rejects_truncated_account() {
         let data = vec![0u8; 20]; // far too short
+        assert!(parse_price_update(&data).is_err());
+    }
+
+    #[test]
+    fn rejects_bad_discriminator() {
+        // A receiver-owned account that is NOT a PriceUpdateV2 (wrong first 8 bytes).
+        let mut data = make_account(true, [1u8; 32], 1, 1, -8, 1);
+        data[0] ^= 0xFF; // corrupt the discriminator
         assert!(parse_price_update(&data).is_err());
     }
 
@@ -295,6 +328,7 @@ mod tests {
     fn scales_equity_exponent_minus_8_to_6dp() {
         // $214.30 at exponent -8 → 214_30000000 native → 214_300000 base units (6dp).
         let p = OraclePrice {
+            fully_verified: true,
             feed_id: [0; 32],
             price: 214_30000000,
             conf: 0,
@@ -308,6 +342,7 @@ mod tests {
     fn scales_exponent_minus_5_to_6dp() {
         // exponent -5, shift = +1 → multiply by 10. $7.00 = 700000 native → 7_000000.
         let p = OraclePrice {
+            fully_verified: true,
             feed_id: [0; 32],
             price: 700_000,
             conf: 0,
@@ -321,6 +356,7 @@ mod tests {
     fn scales_positive_exponent() {
         // exponent +2, shift = +8. price 3 → 3 × 10^8 = 300_000_000 base units ($300).
         let p = OraclePrice {
+            fully_verified: true,
             feed_id: [0; 32],
             price: 3,
             conf: 0,
@@ -333,6 +369,7 @@ mod tests {
     #[test]
     fn rejects_negative_price() {
         let p = OraclePrice {
+            fully_verified: true,
             feed_id: [0; 32],
             price: -1,
             conf: 0,
@@ -345,6 +382,7 @@ mod tests {
     #[test]
     fn staleness_window() {
         let p = OraclePrice {
+            fully_verified: true,
             feed_id: [0; 32],
             price: 1,
             conf: 0,
@@ -361,6 +399,7 @@ mod tests {
     fn confidence_threshold() {
         // price 100_00000000, conf 1_00000000 → 1% = 100 bps.
         let p = OraclePrice {
+            fully_verified: true,
             feed_id: [0; 32],
             price: 100_00000000,
             conf: 1_00000000,
@@ -375,6 +414,7 @@ mod tests {
     #[test]
     fn confidence_rejects_nonpositive_price() {
         let p = OraclePrice {
+            fully_verified: true,
             feed_id: [0; 32],
             price: 0,
             conf: 0,

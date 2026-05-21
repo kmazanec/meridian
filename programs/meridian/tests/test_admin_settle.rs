@@ -85,6 +85,23 @@ fn admin_settle_outcome_matches_settle_market_at_boundary() {
 }
 
 #[test]
+fn admin_settle_rejects_zero_price() {
+    // A stock close is never $0; reject it (guards a fat-finger / compromised-key
+    // all-NoWins settlement).
+    let mut f = setup(5 * ONE);
+    let market = open_market(&mut f);
+    set_clock(&mut f.svm, CLOSE + ONE_HOUR + 10);
+
+    let admin = f.admin.insecure_clone();
+    let ix = ix_admin_settle(&f.admin.pubkey(), &market, 0);
+    assert!(
+        send(&mut f.svm, &f.admin.pubkey(), ix, &[&admin]).is_err(),
+        "zero settlement price must be rejected"
+    );
+    assert_eq!(read_market(&f.svm, &market).state, MarketState::Open);
+}
+
+#[test]
 fn admin_settle_idempotent_after_oracle_settle() {
     // Oracle path settles first; a later admin_settle with a flipping price is a no-op.
     let mut f = setup(5 * ONE);

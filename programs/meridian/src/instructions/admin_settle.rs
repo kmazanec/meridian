@@ -45,10 +45,16 @@ pub struct AdminSettle<'info> {
 }
 
 pub fn handler(ctx: Context<AdminSettle>, settlement_price: u64) -> Result<()> {
-    // Idempotent: already settled (by either path) → safe no-op.
+    // Idempotent: already settled (by either path) → safe no-op. This cannot
+    // overwrite an oracle-written outcome, bounding the admin's power.
     if ctx.accounts.market.state == MarketState::Settled {
         return Ok(());
     }
+
+    // Reject a zero price: a stock's close is never $0, so this guards against a
+    // fat-fingered (or hostile-if-key-compromised) all-NoWins settlement and
+    // keeps the override honest. Real prices are always > 0 in USDC base units.
+    require!(settlement_price > 0, MeridianError::InvalidArgument);
 
     let now = Clock::get()?.unix_timestamp;
     let market = &ctx.accounts.market;

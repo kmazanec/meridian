@@ -58,7 +58,12 @@ pub struct SettleMarket<'info> {
 }
 
 pub fn handler(ctx: Context<SettleMarket>) -> Result<()> {
-    // Idempotent: already settled → safe no-op (never rewrite the immutable outcome).
+    // Idempotent: already settled → safe no-op (never rewrite the immutable
+    // outcome). Note: on this path the `price_update` account is intentionally NOT
+    // validated — a retry after a successful settle should succeed regardless of
+    // what (possibly stale) update the caller passes. Off-chain monitors must not
+    // infer oracle validity from a successful settle on an already-settled market;
+    // the absence of a second `MarketSettled` event distinguishes the no-op.
     if ctx.accounts.market.state == MarketState::Settled {
         return Ok(());
     }
@@ -77,12 +82,22 @@ pub fn handler(ctx: Context<SettleMarket>) -> Result<()> {
         MeridianError::WrongFeed
     );
 
-    // Parse the price update from raw bytes (defensive, bounds-checked).
+    // Parse the price update from raw bytes (defensive, bounds-checked). The
+    // discriminator is verified inside the parser, so this confirms the account
+    // is genuinely a PriceUpdateV2 (not another receiver-owned account type).
     let data = ctx.accounts.price_update.try_borrow_data()?;
     let price = oracle::parse_price_update(&data)?;
 
-    // Feed match: the update must be for *this* market's configured feed.
+    // Require *full* guardian verification. `Partial` updates clear a lower
+    // guardian-collusion bar and Pyth documents them as unsafe for settlement;
+    // an attacker who could post a Partial update must not be able to settle.
+    require!(price.fully_verified, MeridianError::InsufficientVerification);
+
+    // Feed match: the update must be for *this* market's configured feed. Reject a
+    // zero feed id outright so an unconfigured ticker (all-zero Config slot) can
+    // never be settled by an all-zero update that happens to align.
     let expected_feed = config_feed_for(&ctx.accounts.config, market)?;
+    require!(expected_feed != [0u8; 32], MeridianError::WrongFeed);
     require!(price.feed_id == expected_feed, MeridianError::WrongFeed);
 
     // Freshness (invariant 6a).

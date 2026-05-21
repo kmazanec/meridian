@@ -218,6 +218,62 @@ fn rejects_non_receiver_owned_account() {
 }
 
 #[test]
+fn rejects_partial_verification() {
+    // A Partial{num_signatures:1} update is a real receiver-owned account but
+    // clears a far lower guardian-collusion bar; settlement must reject it.
+    let mut f = setup(5 * ONE);
+    let market = open_market(&mut f);
+    set_clock(&mut f.svm, CLOSE + 10);
+
+    let pu = seed_price_update_verified(
+        &mut f.svm,
+        test_feed_id(Ticker::Meta),
+        native_at_expo(700_000_000),
+        1_000,
+        EXPO,
+        CLOSE + 5,
+        false, // Partial verification
+    );
+    let cranker = f.user.insecure_clone();
+    let ix = ix_settle_market(&f.user.pubkey(), &market, &pu);
+    assert!(
+        send(&mut f.svm, &f.user.pubkey(), ix, &[&cranker]).is_err(),
+        "partially-verified price update must be rejected"
+    );
+    assert_eq!(read_market(&f.svm, &market).state, MarketState::Open);
+}
+
+#[test]
+fn rejects_wrong_discriminator() {
+    // An account owned by the receiver but whose first 8 bytes are not the
+    // PriceUpdateV2 discriminator (e.g. some other receiver account type).
+    let mut f = setup(5 * ONE);
+    let market = open_market(&mut f);
+    set_clock(&mut f.svm, CLOSE + 10);
+
+    let pu = seed_price_update(
+        &mut f.svm,
+        test_feed_id(Ticker::Meta),
+        native_at_expo(700_000_000),
+        1_000,
+        EXPO,
+        CLOSE + 5,
+    );
+    // Corrupt the discriminator in-place.
+    let mut acct = f.svm.get_account(&pu).unwrap();
+    acct.data[0] ^= 0xFF;
+    f.svm.set_account(pu, acct).unwrap();
+
+    let cranker = f.user.insecure_clone();
+    let ix = ix_settle_market(&f.user.pubkey(), &market, &pu);
+    assert!(
+        send(&mut f.svm, &f.user.pubkey(), ix, &[&cranker]).is_err(),
+        "non-PriceUpdateV2 account must be rejected"
+    );
+    assert_eq!(read_market(&f.svm, &market).state, MarketState::Open);
+}
+
+#[test]
 fn idempotent_resettle_is_noop() {
     let mut f = setup(5 * ONE);
     let market = open_market(&mut f);

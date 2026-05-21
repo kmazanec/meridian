@@ -99,7 +99,7 @@ crates; confirmed by a local lockfile probe and another team's LESSONS.md). Trea
   (Hermes → Receiver → read; runnable, **not executed** here — needs market hours + funded
   devnet keypair); document procedure + fallback ladder; retire `force_settle` shim where
   the real settle is now cheaper. *(AC: spike — deferred-live, see note below)*
-- [ ] **Chunk 6 — adversarial review + deliver**: independent review (robustness/efficiency/
+- [x] **Chunk 6 — adversarial review + deliver**: independent review (robustness/efficiency/
   security), fix high/medium, re-run suite, rebase onto main, push, open MR.
 
 ## Implementation notes (filled in by the building agent)
@@ -168,6 +168,44 @@ question) is sketched inline and needs the funded keypair.
 **Spike checkbox stays unchecked until run live.** Fallback ladder if a feed is flaky:
 (a) crypto-feed stand-ins (BTC/SOL, 24/7) to prove the pipeline; (b) mocked oracle behind
 the interface for dev; (c) mainnet-beta tiny-amount validation.
+
+### Adversarial review outcome
+
+An independent adversarial review attacked the parser, the trust boundary on the
+price-update account, the timing/permissionless paths, and `admin_settle`. Findings and
+disposition:
+
+**Fixed (high/medium):**
+- **Require Full guardian verification.** The parser accepted `Partial{num_signatures}`
+  updates — which clear a much lower guardian-collusion bar and Pyth documents as unsafe
+  for settlement. `settle_market` now requires `fully_verified` (`InsufficientVerification`
+  error); the parser captures the variant. *This was the most important fix — a Partial
+  update is a real receiver-owned account, so the owner check alone was insufficient.*
+- **Verify the `PriceUpdateV2` discriminator.** The parser now checks the 8-byte Anchor
+  discriminator (`sha256("account:PriceUpdateV2")[..8]` = `[34,241,35,99,157,126,244,205]`,
+  computed/pinned locally, not via the SDK) so another receiver-owned account type can't be
+  passed off as a price update. New error `InvalidPriceUpdateAccount`.
+- **`admin_settle` rejects `settlement_price == 0`** (a stock close is never $0; guards a
+  fat-finger / compromised-key all-NoWins settlement).
+- **Reject all-zero configured feed id** in `settle_market` so an unconfigured ticker slot
+  can't be settled by an aligning all-zero update.
+
+**Documented (intended behavior, not changed):**
+- The idempotent re-settle path intentionally skips oracle validation (ADR-005 retry
+  safety); documented inline that off-chain monitors must not infer oracle validity from a
+  successful settle on an already-settled market (the absent second `MarketSettled` event
+  distinguishes the no-op).
+
+**Low / nits (recorded, not actioned):**
+- `oracle.rs` `pow10_u128((-shift) as u32)` is overflow-safe for all valid `i32` exponents
+  but relies on that type bound; fragile only under a future refactor to a wider exponent type.
+- No explicit `price_update.data_len()` lower-bound constraint on the account (the parser is
+  fully bounds-checked, so a short account already yields a clean error).
+
+New review-driven tests: parser discriminator reject + verification-flag assertions
+(unit); `settle_market` rejects Partial verification and a corrupted discriminator;
+`admin_settle` rejects zero price. Full suite: **66 tests green**, `anchor build` clean
+with **zero** stack-offset warnings.
 
 ### `force_settle` test shim retained (deliberate)
 

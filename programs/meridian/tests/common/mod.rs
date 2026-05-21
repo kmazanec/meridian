@@ -734,10 +734,33 @@ pub fn seed_price_update(
     exponent: i32,
     publish_time: i64,
 ) -> Pubkey {
+    seed_price_update_verified(svm, feed_id, price, conf, exponent, publish_time, true)
+}
+
+/// The Anchor discriminator for `PriceUpdateV2` (sha256("account:PriceUpdateV2")[..8]).
+/// Must match `oracle::PRICE_UPDATE_V2_DISCRIMINATOR`.
+pub const PRICE_UPDATE_V2_DISCRIMINATOR: [u8; 8] = [34, 241, 35, 99, 157, 126, 244, 205];
+
+/// Like [`seed_price_update`] but lets a test choose the verification level
+/// (`full = false` → a `Partial{num_signatures}` update, which settlement rejects).
+pub fn seed_price_update_verified(
+    svm: &mut LiteSVM,
+    feed_id: [u8; 32],
+    price: i64,
+    conf: u64,
+    exponent: i32,
+    publish_time: i64,
+    full: bool,
+) -> Pubkey {
     let mut data = Vec::new();
-    data.extend_from_slice(&[0u8; 8]); // discriminant
+    data.extend_from_slice(&PRICE_UPDATE_V2_DISCRIMINATOR); // valid discriminator
     data.extend_from_slice(&[0u8; 32]); // write_authority
-    data.push(1u8); // verification_level = Full
+    if full {
+        data.push(1u8); // verification_level = Full
+    } else {
+        data.push(0u8); // verification_level = Partial
+        data.push(1u8); // num_signatures = 1 (a single guardian — unsafe)
+    }
     data.extend_from_slice(&feed_id);
     data.extend_from_slice(&price.to_le_bytes());
     data.extend_from_slice(&conf.to_le_bytes());
