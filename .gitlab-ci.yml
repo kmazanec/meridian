@@ -1,13 +1,17 @@
 # Meridian CI — Phase 1: Rust on-chain program.
 #
-# Scope (deliberately): format, lint, and test the Anchor/Rust program plus a
-# prettier check on the TypeScript. The day-to-day dev loop runs entirely
-# in-process via LiteSVM, so this pipeline needs no Solana validator and no
-# Anchor toolchain. The Rust version is pinned by rust-toolchain.toml (1.89.0),
-# bundled in the rust:1.89 image (which also ships rustfmt + clippy).
+# Scope (deliberately): build the program, then format, lint, and test the
+# Anchor/Rust program plus a prettier check on the TypeScript. A devnet deploy
+# stage comes later (see docs/ROADMAP.md, F-10).
 #
-# Later phases will add `anchor build` (BPF artifact) and a devnet deploy stage;
-# those are intentionally NOT here yet (see docs/ROADMAP.md, F-10).
+# Why a build stage: the LiteSVM tests `include_bytes!(target/deploy/meridian.so)`
+# — they load the *compiled BPF program*. That .so is gitignored and only exists
+# locally after a build, so a clean CI checkout has nothing to include, and both
+# `clippy --all-targets` (compiles the test targets) and `cargo test` fail without
+# it. The `build-program` job produces meridian.so once (cargo build-sbf in the
+# official Anchor image, which matches our anchor-cli 1.0.2) and passes it forward
+# as an artifact; clippy and test consume it. fmt and lint-ts need no .so and stay
+# on lean rust:1.89 / node:20 images.
 #
 # EXECUTOR NOTE: the `gauntlet-droplet` runner is a *shell* executor, so the
 # GitLab `image:` keyword is ignored — jobs run directly on the host shell, which
@@ -25,6 +29,7 @@
 #                                           project dir so `cache:` can archive it
 
 stages:
+  - build
   - check
   - test
 
@@ -41,10 +46,11 @@ default:
         docker run --rm \
           -v "$CI_PROJECT_DIR":/build -w /build \
           -u "$(id -u):$(id -g)" \
+          -e HOME=/build/.home \
           -e CARGO_HOME=/build/.cargo \
           -e CARGO_TERM_COLOR=always \
           -e npm_config_cache=/build/.npm \
-          "$image" bash -c "$*"
+          "$image" bash -c "mkdir -p /build/.home && $*"
       }
       # NB: `bash -c`, NOT `bash -lc`. A login shell sources /etc/profile, which
       # resets PATH to a default that drops the rust image's /usr/local/cargo/bin
@@ -74,20 +80,38 @@ workflow:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS == null
 
+# Build the BPF program once. The official Anchor image (tag matches our
+# anchor-cli 1.0.2) carries the Solana platform-tools, so `cargo build-sbf`
+# produces target/deploy/meridian.so. Pass it forward so clippy/test can load it.
+build-program:
+  stage: build
+  script:
+    - run_in_docker solanafoundation/anchor:v1.0.2 'cargo build-sbf'
+    - test -f target/deploy/meridian.so   # fail loudly if the artifact is missing
+  artifacts:
+    paths:
+      - target/deploy/meridian.so
+    expire_in: 1 day
+
 fmt:
   stage: check
+  needs: []   # formatting is independent of the program build
   script:
     - run_in_docker rust:1.89 'cargo fmt --all -- --check'
 
+# clippy --all-targets compiles the integration tests, which include_bytes! the
+# .so, so it needs the build artifact and the Anchor image's matching toolchain.
 clippy:
   stage: check
+  needs: ["build-program"]
   script:
-    - run_in_docker rust:1.89 'cargo clippy --workspace --all-targets -- -D warnings'
+    - run_in_docker solanafoundation/anchor:v1.0.2 'cargo clippy --workspace --all-targets -- -D warnings'
 
 test:
   stage: test
+  needs: ["build-program"]
   script:
-    - run_in_docker rust:1.89 'cargo test --workspace'
+    - run_in_docker solanafoundation/anchor:v1.0.2 'cargo test --workspace'
 
 # TypeScript is linted with prettier (the only JS tooling the repo declares).
 # We run prettier via `npx` rather than `yarn install`: it needs no global
@@ -100,6 +124,7 @@ test:
 # switch this to a real `yarn install --frozen-lockfile && yarn lint`.
 lint-ts:
   stage: check
+  needs: []   # prettier is independent of the program build
   cache:
     key:
       files:
