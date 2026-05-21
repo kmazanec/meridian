@@ -116,9 +116,12 @@ Chunks:
   **cranker cannot misdirect funds** (wrong-owner account rejected); **settlement uses
   on-chain price/size, not caller input**; rejected when paused/settled. Crossed-book test
   shim documented (the public API never leaves the book crossed).
-- [ ] **Chunk 6 — Escrow/invariant sweep + four-path smoke.** Vault never touched by
-  trading (invariant #1); escrow reconciles to resting orders; four trade paths smoke at
-  book level.
+- [x] **Chunk 6 — Escrow/invariant sweep + four-path smoke.** New `test_order_book_invariants.rs`:
+  (a) the collateralization vault is invariant through a place/cross/cancel flurry — trading
+  is escrow-only and never touches it; (b) escrow reconciles exactly to the resting book
+  (`usdc_escrow == Σ ceil(price*size)` over bids, `yes_escrow == Σ size` over asks, incl.
+  odd-price rounding); (c) all four trade paths execute at book level (Buy Yes, Sell Yes,
+  Buy No = mint+sell-Yes with effective $0.30 cost, Sell No = buy-Yes), vault still invariant.
 - [ ] **Adversarial review** — high/medium fixed, lows recorded below.
 - [ ] **Rebase + MR** — rebased onto local main, pushed, MR opened.
 
