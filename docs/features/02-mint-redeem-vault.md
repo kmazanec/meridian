@@ -1,6 +1,6 @@
 # Feature: Mint & Redeem (Vault)
 
-**ID:** F-02 · **Roadmap piece:** F-02 · **Status:** In progress
+**ID:** F-02 · **Roadmap piece:** F-02 · **Status:** In review — [MR !2](https://labs.gauntletai.com/keithmazanec/meridian/-/merge_requests/2)
 
 ## Description
 
