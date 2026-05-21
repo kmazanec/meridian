@@ -1,6 +1,6 @@
 # Feature: Mint & Redeem (Vault)
 
-**ID:** F-02 · **Roadmap piece:** F-02 · **Status:** Not started
+**ID:** F-02 · **Roadmap piece:** F-02 · **Status:** In progress
 
 ## Description
 
@@ -61,6 +61,37 @@ depend on the settled outcome and the vault it manages.
 
 - A USDC mint/faucet on the test cluster (devnet USDC or a locally created test
   mint with a funded user account).
+
+## Approved implementation plan (build checklist)
+
+**Decisions (user-approved):**
+- **F-02 owns market+collateral creation** via `create_strike_market` (Market + Yes/No
+  mints + USDC vault). This moves provisioning from F-05 → F-02 (single creation path);
+  F-05 narrows to `add_strike` + `pause`/`unpause` + admin. **Propagated to ROADMAP.md.**
+  The OrderBook account is left to F-03 (Market.order_book is a placeholder until then).
+- **PDA holds mint AND freeze authority** (ARCHITECTURE §7.3); no freeze instruction is
+  exposed in F-02 (capability held for a future emergency instruction).
+- **LiteSVM local test mint** for USDC (6 decimals); no devnet dependency.
+- **anchor-spl token-only**: `default-features = false, features = ["token","mint","associated_token"]`
+  to avoid the broken `spl-token-2022-interface` on this toolchain (verified compiles).
+- **Redeem test shim:** since `settle_market` is F-04, redeem tests set
+  `market.state=Settled`/`outcome` directly via a LiteSVM account write.
+
+- [ ] **Chunk 1 — Dependency + module wiring.** Add anchor-spl (token features); add
+  create_strike_market / mint_pair / redeem modules; wire lib.rs. Proves: clean build.
+- [ ] **Chunk 2 — `create_strike_market`.** Admin-gated; creates Market + Yes/No mints
+  (6dp, mint+freeze authority = PDA) + USDC vault PDA. Validates ticker/strike/usdc_mint.
+  Tests: happy path, non-admin rejected, bad ticker/strike rejected, duplicate rejected.
+- [ ] **Chunk 3 — `mint_pair`.** Deposit 1e6 USDC user→vault; mint 1e6 Yes + 1e6 No;
+  pairs_minted += 1 (checked). Reject paused/settled. Tests: happy, paused, settled,
+  collateralization invariant, multi-mint.
+- [ ] **Chunk 4 — `redeem`.** Burn winning tokens, pay 1e6 each from vault; losing → $0;
+  partial redemption. Reject before settlement. Tests: Yes-wins, No-wins, losing→$0,
+  partial, redeem-before-settle rejected, invariant across mint→settle→redeem.
+- [ ] **Chunk 5 — Invariant & multi-op sweep.** vault == 1e6×(minted−redeemed) under
+  interleaving; tokens only via mint_pair/redeem; freeze authority = PDA.
+- [ ] **Chunk 6 — IDL + handoff notes.** Regenerate IDL; fill notes below.
+- [ ] **Adversarial review** + triage-fix (high/med), then rebased MR.
 
 ## Implementation notes (filled in by the building agent)
 

@@ -23,10 +23,10 @@ before any settlement logic is committed.
 | ID | Piece | Purpose | Depends on | Unblocks | Parallel with |
 |----|-------|---------|-----------|----------|---------------|
 | F-01 | Program scaffold & accounts | Anchor program shell, `Config`/`Market`/`OrderBook` account types, PDAs, `initialize_config`, error/event scaffolding | — | F-02, F-03, F-05 | — |
-| F-02 | Mint & redeem (vault) | `mint_pair`, `redeem`, PDA vault + mint authority, collateralization invariant | F-01 | F-04, F-09 | F-03, F-05 |
-| F-03 | Order book & matching | `place_order`, `cancel_order`, `match_orders`; bounded on-chain book, price-time priority, partial fills | F-01 | F-09 | F-02, F-05 |
+| F-02 | Mint & redeem (vault) | **`create_strike_market` (Market + Yes/No mints + vault)**, `mint_pair`, `redeem`, PDA vault + mint/freeze authority, collateralization invariant | F-01 | F-03, F-04, F-05, F-09 | F-03, F-05 |
+| F-03 | Order book & matching | `place_order`, `cancel_order`, `match_orders`; bounded on-chain book, price-time priority, partial fills; **creates/wires the OrderBook account into Market** | F-01, F-02 | F-09 | F-05 |
 | F-04 | Settlement & oracle | `settle_market`, `admin_settle`, Pyth read (staleness/confidence), **devnet feed spike**, payout-completeness invariant | F-02 | F-06, F-09 | F-03, F-05 |
-| F-05 | Market creation & admin | `create_strike_market`, `add_strike`, `pause`/`unpause`, strike algorithm on-chain bits | F-01 | F-06, F-09 | F-02, F-03, F-04 |
+| F-05 | Admin & extra strikes | `add_strike` (reuses F-02's `create_strike_market`), `pause`/`unpause`, strike-algorithm on-chain bits | F-01, F-02 | F-06, F-09 | F-03, F-04 |
 | F-06 | Shared TypeScript SDK | IDL-typed client, instruction builders, PDA derivation, Pyth/Hermes price-update helpers, "four buttons → one book" intent translation | F-04, F-05 | F-07, F-08, F-09 | — |
 | F-07 | Automation service | Node.js AM job (create strikes) + PM job (settle), scheduler, market calendar, retry/backoff/alert | F-06 | F-09 | F-08 |
 | F-08 | Frontend | Next.js: Landing/Markets/Trade/Portfolio/History, wallet adapter, order-book views, position-aware trade panel | F-06 | F-09 | F-07 |

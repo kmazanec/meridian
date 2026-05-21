@@ -1,7 +1,7 @@
 [package]
 name = "meridian"
 version = "0.1.0"
-description = "Meridian — binary stock-outcome markets on Solana (F-01 scaffold & accounts)"
+description = "Meridian — binary stock-outcome markets on Solana"
 edition = "2021"
 
 [lib]
@@ -14,14 +14,21 @@ cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
-idl-build = ["anchor-lang/idl-build"]
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 anchor-debug = []
 custom-heap = []
 custom-panic = []
 
 
 [dependencies]
-anchor-lang = "1.0.2"
+anchor-lang = { version = "1.0.2", features = ["init-if-needed"] }
+anchor-spl = "1.0.2"
+# Pin solana-zero-copy to 1.0.0: version 1.1.0 adds extra From/PartialOrd impls
+# that make `PodU64::into()` ambiguous (E0283), breaking spl-token-2022-interface
+# — which anchor-spl's `init` (mint::/token::) constraint codegen references via
+# token_interface. Pinning 1.0.0 lets the full anchor-spl compile so we can use
+# Anchor's idiomatic init constraints. (Meridian uses standard SPL Token USDC.)
+solana-zero-copy = "=1.0.0"
 
 [dev-dependencies]
 litesvm = "0.10.0"

@@ -33,4 +33,23 @@ pub mod meridian {
     ) -> Result<()> {
         instructions::initialize_config::handler(ctx, args)
     }
+
+    /// Provision one stock-strike-day market: Market PDA, Yes/No mints, and the
+    /// USDC vault. Admin-gated. (F-02)
+    pub fn create_strike_market(
+        ctx: Context<CreateStrikeMarket>,
+        args: CreateStrikeMarketArgs,
+    ) -> Result<()> {
+        instructions::create_strike_market::handler(ctx, args)
+    }
+
+    /// Deposit $1.00 USDC, receive 1 Yes + 1 No token. (F-02)
+    pub fn mint_pair(ctx: Context<MintPair>) -> Result<()> {
+        instructions::mint_pair::handler(ctx)
+    }
+
+    /// Burn settled tokens for their payout (winning side pays $1.00 each). (F-02)
+    pub fn redeem(ctx: Context<Redeem>, side: RedeemSide, amount: u64) -> Result<()> {
+        instructions::redeem::handler(ctx, side, amount)
+    }
 }
