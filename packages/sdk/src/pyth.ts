@@ -78,13 +78,24 @@ export async function fetchPriceUpdate(
   const id = feedId.startsWith("0x") ? feedId.slice(2) : feedId;
   const res = await client.getLatestPriceUpdates([id]);
   const parsed = res?.parsed?.[0];
-  if (!parsed) {
+  if (!parsed || !res?.binary) {
     throw new Error(`Hermes returned no price for feed ${id}`);
   }
+  // Hermes encodes price/conf as integer strings; guard against an unexpected decimal
+  // or non-numeric value so the failure is a clear error, not a raw BigInt SyntaxError.
+  const toBigInt = (v: string | number, field: string): bigint => {
+    try {
+      return BigInt(v);
+    } catch {
+      throw new Error(
+        `Hermes returned a non-integer ${field} for feed ${id}: ${String(v)}`
+      );
+    }
+  };
   return {
     feedId: parsed.id,
-    price: BigInt(parsed.price.price),
-    conf: BigInt(parsed.price.conf),
+    price: toBigInt(parsed.price.price, "price"),
+    conf: toBigInt(parsed.price.conf, "conf"),
     exponent: parsed.price.expo,
     publishTime: Number(parsed.price.publish_time),
     binary: res.binary,
@@ -104,7 +115,8 @@ export async function fetchPriceUpdate(
 export async function postPriceUpdate(
   connection: Connection,
   payer: Keypair,
-  update: HermesPriceUpdate
+  update: HermesPriceUpdate,
+  opts: { skipPreflight?: boolean } = {}
 ): Promise<{ priceUpdateAccount: PublicKey; signatures: string[] }> {
   const mod = await import("@pythnetwork/pyth-solana-receiver").catch(() => {
     throw new Error(
@@ -144,17 +156,24 @@ export async function postPriceUpdate(
     return [];
   });
 
+  // Resolve the consumer account before sending, so a feed-id/format problem surfaces as
+  // a clear error here rather than as an opaque on-chain WrongFeed from settle later.
+  if (!priceUpdateAccount) {
+    throw new Error(
+      `Receiver did not yield a price-update account for feed ${update.feedId}. ` +
+        "Check the feed id format matches what the Receiver expects, and that the " +
+        "Hermes update actually carried this feed."
+    );
+  }
+
   const txs = await builder.buildVersionedTransactions({
     computeUnitPriceMicroLamports: 0,
   });
+  // Preflight is ON by default: a settlement post that would fail simulation should be
+  // caught here, not silently submitted. Callers may opt out for known-flaky RPCs.
   const signatures = await receiver.provider.sendAll(txs, {
-    skipPreflight: true,
+    skipPreflight: opts.skipPreflight ?? false,
   });
-  if (!priceUpdateAccount) {
-    throw new Error(
-      "Receiver did not yield a price-update account for the feed"
-    );
-  }
   return { priceUpdateAccount, signatures };
 }
 
@@ -178,6 +197,12 @@ export function buildPriceUpdateV2(params: {
   publishTime: bigint;
   /** Full verification (required by `settle_market`); default true. */
   fullVerification?: boolean;
+  /**
+   * For a Partial update (`fullVerification: false`), the `num_signatures` byte. A real
+   * Receiver-posted Partial update always carries at least one guardian signature;
+   * defaults to 5 (matching the program's own test fixtures) so the fixture is faithful.
+   */
+  numSignatures?: number;
   writeAuthority?: Uint8Array;
   prevPublishTime?: bigint;
   emaPrice?: bigint;
@@ -192,7 +217,11 @@ export function buildPriceUpdateV2(params: {
   parts.push(Buffer.from(PRICE_UPDATE_V2_DISCRIMINATOR));
   parts.push(Buffer.from(params.writeAuthority ?? new Uint8Array(32)));
   parts.push(
-    Buffer.from(full ? [VERIFICATION_FULL_TAG] : [VERIFICATION_PARTIAL_TAG, 0])
+    Buffer.from(
+      full
+        ? [VERIFICATION_FULL_TAG]
+        : [VERIFICATION_PARTIAL_TAG, params.numSignatures ?? 5]
+    )
   );
   parts.push(Buffer.from(params.feedId));
   parts.push(i64le(params.price));
@@ -234,14 +263,11 @@ export async function settleWithPyth(
     priceUpdate: priceUpdateAccount,
   });
   const tx = new Transaction().add(ix);
-  const settleSignature = await sendAndConfirmTransaction(
-    connection,
-    tx,
-    [cranker],
-    {
-      skipPreflight: true,
-    }
-  );
+  // Preflight ON: a settle that would fail simulation (wrong feed, stale price, wide
+  // confidence) should surface here, not be submitted blind.
+  const settleSignature = await sendAndConfirmTransaction(connection, tx, [
+    cranker,
+  ]);
   return { priceUpdateAccount, settleSignature };
 }
 

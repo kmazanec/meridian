@@ -102,7 +102,7 @@ Build chunks (test-first; each ends in a tickable item):
   skipped-by-default (env-gated).
 - [x] **7. Public surface + consumability** — barrel export, `main`/`types`/`exports` map for
   Node and browser, declaration emit, `tsc --noEmit` green, import-surface test, README.
-- [ ] **8. Adversarial review + triage** — independent subagent (robustness/efficiency/
+- [x] **8. Adversarial review + triage** — independent subagent (robustness/efficiency/
   security); fix high/medium, re-run suite, record lows below.
 
 ## Implementation notes (filled in by the building agent)
@@ -281,3 +281,56 @@ Build chunks (test-first; each ends in a tickable item):
   `target/deploy/meridian.so` (an `anchor build` artifact), so wiring them into CI is left to
   F-10 alongside the BPF/deploy stage (consistent with the CI file's stated scope); they run
   locally after `anchor build`.
+
+### Chunk 8 — adversarial review
+
+An independent review subagent attacked the SDK for robustness, efficiency, and security.
+**High and medium findings were fixed; tests were added for the fixed behavior. The full
+suite is green (110 passing, 1 pending live-devnet).** Summary of what changed:
+
+- **H-1 — negative/garbage reflected prices.** `reflectPrice` (intent) and `complementPrice`
+  (reads) computed `PRICE_SCALE − p` with no guard, so a No price > `PRICE_SCALE` produced a
+  negative BN that would serialize as a garbage `u64` order price. Both now reject prices
+  outside `[0, PRICE_SCALE]`. Tested.
+- **H-2 — `skipPreflight: true` on the settlement path.** `postPriceUpdate` and
+  `settleWithPyth` submitted blind, hiding simulation failures and leaving the caller unable
+  to tell a successful settle from a failed one. Preflight is now ON by default
+  (`postPriceUpdate` exposes an opt-out for known-flaky RPCs).
+- **H-3 — unfaithful Partial fixture.** `buildPriceUpdateV2`'s Partial path hardcoded
+  `num_signatures = 0` (a real Receiver never posts a zero-guardian Partial). Now a
+  `numSignatures` param, defaulting to 5 (matching the program's own fixtures).
+- **M-1 — duplicated No-side aggregation.** `dualBook` had a second `collapse` path for the
+  No view that could drift from `aggregate`. Refactored: the No side mirrors each order
+  (`1 − price`, side flipped, seq preserved) and goes through the *same* `aggregate`.
+- **M-2 — no client-side order validation.** `placeOrder` now validates `size > 0` and limit
+  `price ∈ [1, PRICE_SCALE]` before building (mirrors the program), failing fast instead of
+  wasting a round-trip. Tested (incl. price-0 allowed for market orders).
+- **M-3 — opaque post errors.** `postPriceUpdate` now resolves/validates the price-update
+  account before sending and gives a clearer error than a later on-chain `WrongFeed`.
+- **M-4 — unbounded BUY_NO mint loop.** A large BUY_NO emitted N `mint_pair` ixs in one
+  transaction, blowing the size/compute limits. Capped at `MAX_BUY_NO_MINT_PAIRS = 6` with a
+  "split across transactions" error. Tested.
+- **M-5 — BigInt parse on Hermes data.** `fetchPriceUpdate` now guards the `price`/`conf`
+  string→BigInt conversion with a clear error instead of a raw `SyntaxError`, and null-checks
+  `res.binary`.
+- **M-6 — ESM import-rewrite regex.** The `finalize-dist.mjs` rewrite is textual; documented
+  the (verified) assumption that tsc output contains no string literals that look like
+  relative import specifiers, with guidance to switch to an AST rewriter if that changes.
+- **L-4 (fixed though low) — test feed-id sentinel.** The harness seeded ticker 0 (Aapl) with
+  an all-zero feed id, which the program rejects as the unconfigured-slot sentinel — so no
+  ticker-0 market could ever settle in tests. Harness now uses `[i+1; 32]` (kept in lockstep
+  with `Harness.feedId`).
+- **L-5 (fixed though low) — `payoutFor` defensive check.** Now throws on the inconsistent
+  "settled but `settlementPrice === null`" state instead of silently returning a payout.
+
+**Low-severity findings recorded for your decision (not actioned):**
+
+- **L-1:** the `dualBook` direction comment was flagged but is correct — no change needed
+  (noted for completeness).
+- **L-2:** `ORDERBOOK_N = 128` is a hardcoded TS constant (it isn't a program `#[constant]`,
+  so it can't be IDL-derived). Could add a CI/test assertion that reads the on-chain
+  `OrderBook` account size and checks it against `ORDERBOOK_N` so the two can't silently
+  diverge. Deferred — low value until the cap is actually tuned.
+- **L-3:** `fetchUserPosition` issues three parallel `getAccountInfo` RPCs rather than one
+  `getMultipleAccountsInfo`. Functionally correct; batching would give a single-slot snapshot
+  and one fewer failure point. Worth doing if F-08 reads positions on a hot path.

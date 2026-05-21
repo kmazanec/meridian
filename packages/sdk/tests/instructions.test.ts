@@ -388,4 +388,71 @@ describe("instruction builders (against the real program)", () => {
       expect(res.constructor.name).to.equal("FailedTransactionMetadata");
     });
   });
+
+  describe("placeOrder client-side validation (fail fast, no wasted round-trip)", () => {
+    const h = Harness.create();
+    const user = Keypair.generate().publicKey;
+    const usdc = PublicKey.unique();
+    const id = {
+      ticker: Ticker.Aapl,
+      strike: new BN(200_000_000),
+      tradingDay: day,
+    };
+    const base = { user, market: id, usdcMint: usdc, size: new BN(1_000) };
+
+    it("rejects a zero size", async () => {
+      let threw = false;
+      try {
+        await ix.placeOrder(h.program, {
+          ...base,
+          side: OrderSide.Bid,
+          price: new BN(500_000),
+          size: new BN(0),
+        });
+      } catch (e) {
+        threw = true;
+        expect((e as Error).message).to.match(
+          /size must be greater than zero/i
+        );
+      }
+      expect(threw).to.equal(true);
+    });
+
+    it("rejects a limit price of 0 or above PRICE_SCALE", async () => {
+      let zero = false;
+      try {
+        await ix.placeOrder(h.program, {
+          ...base,
+          side: OrderSide.Bid,
+          price: new BN(0),
+        });
+      } catch {
+        zero = true;
+      }
+      expect(zero, "price 0 rejected").to.equal(true);
+
+      let over = false;
+      try {
+        await ix.placeOrder(h.program, {
+          ...base,
+          side: OrderSide.Ask,
+          price: PAYOFF_UNIT.addn(1),
+        });
+      } catch {
+        over = true;
+      }
+      expect(over, "price > PRICE_SCALE rejected").to.equal(true);
+    });
+
+    it("allows price 0 for a market order (price is ignored)", async () => {
+      // Should build without throwing — market orders cross at any price.
+      const i = await ix.placeOrder(h.program, {
+        ...base,
+        side: OrderSide.Bid,
+        price: new BN(0),
+        isMarket: true,
+      });
+      expect(i.programId.toBase58()).to.equal(h.program.programId.toBase58());
+    });
+  });
 });

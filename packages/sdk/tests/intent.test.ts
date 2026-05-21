@@ -6,7 +6,12 @@ import { Ticker, OrderSide } from "../src/types";
 import { PAYOFF_UNIT, PRICE_SCALE } from "../src/constants";
 import { marketPda, ata } from "../src/pdas";
 import * as ix from "../src/instructions";
-import { buildTradeIntent, reflectPrice, TradeAction } from "../src/intent";
+import {
+  buildTradeIntent,
+  reflectPrice,
+  TradeAction,
+  MAX_BUY_NO_MINT_PAIRS,
+} from "../src/intent";
 
 /**
  * The instruction coder's `decode` exists at runtime but isn't on the public type in
@@ -163,6 +168,31 @@ describe("four-button intent translation", () => {
       const p = new BN(370_000);
       expect(reflectPrice(reflectPrice(p)).toString()).to.equal(p.toString());
       expect(reflectPrice(p).add(p).eq(PRICE_SCALE)).to.equal(true);
+    });
+
+    it("reflectPrice rejects prices outside [0, PRICE_SCALE] (no negative order price)", () => {
+      expect(() => reflectPrice(PRICE_SCALE.addn(1))).to.throw(/out of range/);
+      expect(() => reflectPrice(new BN(-1))).to.throw(/out of range/);
+      // Boundaries are allowed: 0 → PRICE_SCALE, PRICE_SCALE → 0.
+      expect(reflectPrice(0).eq(PRICE_SCALE)).to.equal(true);
+      expect(reflectPrice(PRICE_SCALE).isZero()).to.equal(true);
+    });
+
+    it("BUY_NO rejects a size exceeding the per-transaction mint cap", async () => {
+      let threw = false;
+      try {
+        await buildTradeIntent(h.program, user, {
+          market: id,
+          action: TradeAction.BuyNo,
+          price: new BN(300_000),
+          size: PAYOFF_UNIT.muln(MAX_BUY_NO_MINT_PAIRS + 1),
+          usdcMint: usdc,
+        });
+      } catch (e) {
+        threw = true;
+        expect((e as Error).message).to.match(/per-transaction mint cap/);
+      }
+      expect(threw).to.equal(true);
     });
   });
 

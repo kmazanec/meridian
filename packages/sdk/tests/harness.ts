@@ -189,9 +189,13 @@ export class Harness {
       [Buffer.from("config")],
       PROGRAM_ID
     );
+    // feed_id = [i+1; 32] (NOT [i; 32]): ticker 0 (Aapl) must be non-zero, because the
+    // program rejects an all-zero feed id as the unconfigured-slot sentinel — so an
+    // all-zero feed would fail with WrongFeed for the wrong reason. Kept in lockstep with
+    // `feedId()` below so settlement fixtures match.
     const tickers = Array.from({ length: NUM_TICKERS }, (_, i) => ({
       ticker: tickerToArg(i as Ticker),
-      feedId: Array.from({ length: 32 }, () => i),
+      feedId: Array.from({ length: 32 }, () => i + 1),
     }));
     const buf = await this.program.coder.accounts.encode("config", {
       admin: this.admin.publicKey,
@@ -213,9 +217,9 @@ export class Harness {
     return config;
   }
 
-  /** The 32-byte test feed id assigned to a ticker by {@link seedConfig}. */
+  /** The 32-byte test feed id assigned to a ticker by {@link seedConfig} (`[i+1; 32]`). */
   static feedId(ticker: Ticker): Uint8Array {
-    return new Uint8Array(32).fill(ticker);
+    return new Uint8Array(32).fill(ticker + 1);
   }
 
   /**

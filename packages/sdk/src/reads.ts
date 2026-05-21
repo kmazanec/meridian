@@ -234,9 +234,18 @@ export interface DualBook {
   no: BookView;
 }
 
-/** Complement a Yes price into the No price: `PRICE_SCALE − p`. */
+/**
+ * Complement a Yes price into the No price: `PRICE_SCALE − p`. Throws if `price` is
+ * outside `[0, PRICE_SCALE]`; on-chain order prices are always in range, so this only
+ * fires on genuinely corrupt input rather than silently yielding a negative price.
+ */
 export function complementPrice(price: BNLike): BN {
   const p = BN.isBN(price) ? price : new BN(price);
+  if (p.isNeg() || p.gt(PRICE_SCALE)) {
+    throw new Error(
+      `Price ${p.toString()} out of range [0, ${PRICE_SCALE.toString()}]`
+    );
+  }
   return PRICE_SCALE.sub(p);
 }
 
@@ -271,48 +280,32 @@ function aggregate(orders: OrderEntry[], side: OrderSide): BookLevel[] {
  * Sizes are identical (one Yes ⇄ one No within a pair); only price reflects.
  */
 export function dualBook(book: OrderBookAccount): DualBook {
-  const yesBids = aggregate(book.bids, OrderSide.Bid);
-  const yesAsks = aggregate(book.asks, OrderSide.Ask);
-
-  // No bids come from Yes asks (mirrored); No asks come from Yes bids (mirrored).
-  const noBids: BookLevel[] = book.asks
-    .filter((o) => o.active && !o.size.isZero())
-    .map((o) => ({ price: complementPrice(o.price), size: o.size, count: 1 }));
-  const noAsks: BookLevel[] = book.bids
-    .filter((o) => o.active && !o.size.isZero())
-    .map((o) => ({ price: complementPrice(o.price), size: o.size, count: 1 }));
+  // Mirror a Yes order into the opposite-side No order at `1 − price`, preserving size,
+  // owner, and seq (time priority). The same `aggregate` then collapses + sorts both
+  // perspectives identically — one code path, no risk of the two diverging.
+  const mirror = (o: OrderEntry, side: OrderSide): OrderEntry => ({
+    ...o,
+    price: complementPrice(o.price),
+    side,
+  });
 
   return {
-    yes: { bids: yesBids, asks: yesAsks },
+    yes: {
+      bids: aggregate(book.bids, OrderSide.Bid),
+      asks: aggregate(book.asks, OrderSide.Ask),
+    },
     no: {
-      bids: collapse(noBids, OrderSide.Bid),
-      asks: collapse(noAsks, OrderSide.Ask),
+      // No bids come from Yes asks (mirrored); No asks come from Yes bids (mirrored).
+      bids: aggregate(
+        book.asks.map((o) => mirror(o, OrderSide.Bid)),
+        OrderSide.Bid
+      ),
+      asks: aggregate(
+        book.bids.map((o) => mirror(o, OrderSide.Ask)),
+        OrderSide.Ask
+      ),
     },
   };
-}
-
-/** Collapse already-mirrored levels that share a price, then sort best-first. */
-function collapse(levels: BookLevel[], side: OrderSide): BookLevel[] {
-  const byPrice = new Map<string, BookLevel>();
-  for (const l of levels) {
-    const key = l.price.toString();
-    const cur = byPrice.get(key);
-    if (cur) {
-      cur.size = cur.size.add(l.size);
-      cur.count += l.count;
-    } else {
-      byPrice.set(key, {
-        price: l.price,
-        size: l.size.clone(),
-        count: l.count,
-      });
-    }
-  }
-  const out = [...byPrice.values()];
-  out.sort((a, b) =>
-    side === OrderSide.Bid ? b.price.cmp(a.price) : a.price.cmp(b.price)
-  );
-  return out;
 }
 
 // --- Positions / balances / PNL ---
@@ -380,6 +373,13 @@ export function payoutFor(
 ): BN {
   if (market.state !== "settled" || market.outcome === Outcome.Unsettled) {
     throw new Error("Market is not settled; payout is undefined");
+  }
+  if (market.settlementPrice === null) {
+    // A settled market always has a settlement price written; a null here means a
+    // corrupt/inconsistent account, not a valid state to compute a payout from.
+    throw new Error(
+      "Invariant violation: settled market has no settlement price"
+    );
   }
   const amt = BN.isBN(amount) ? amount : new BN(amount);
   const winning =

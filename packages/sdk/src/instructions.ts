@@ -20,6 +20,7 @@ import {
 } from "@solana/spl-token";
 import { SystemProgram, SYSVAR_RENT_PUBKEY } from "@solana/web3.js";
 import type { MeridianProgram } from "./program";
+import { PRICE_SCALE } from "./constants";
 import {
   ata,
   configPda,
@@ -46,6 +47,25 @@ export interface MarketId {
 
 function toBN(value: BNLike): BN {
   return BN.isBN(value) ? value : new BN(value);
+}
+
+/**
+ * Validate an order's price/size against the program's own preconditions so the SDK
+ * fails fast (and clearly) rather than spending a round-trip to learn the program
+ * rejected it. Mirrors `place_order.rs`: size > 0 always; for a limit order the price
+ * must be in `[1, PRICE_SCALE]`.
+ */
+function assertOrderArgs(price: BN, size: BN, isMarket: boolean): void {
+  if (size.lten(0)) {
+    throw new Error("Order size must be greater than zero");
+  }
+  if (!isMarket) {
+    if (price.lten(0) || price.gt(PRICE_SCALE)) {
+      throw new Error(
+        `Limit price ${price.toString()} out of range [1, ${PRICE_SCALE.toString()}]`
+      );
+    }
+  }
 }
 
 function pdasFor(id: MarketId): MarketPdas {
@@ -379,6 +399,10 @@ export async function placeOrder(
   p: PlaceOrderParams
 ): Promise<TransactionInstruction> {
   const k = resolveMarketPdas(p.market);
+  const price = toBN(p.price);
+  const size = toBN(p.size);
+  const isMarket = p.isMarket ?? false;
+  assertOrderArgs(price, size, isMarket);
   const userUsdc = p.userUsdc ?? ata(p.usdcMint, p.user);
   const userYes = p.userYes ?? ata(k.yesMint, p.user);
   const remaining = (p.makerAccounts ?? []).map((pubkey) => ({
@@ -389,9 +413,9 @@ export async function placeOrder(
   return program.methods
     .placeOrder({
       side: orderSideToArg(p.side),
-      price: toBN(p.price),
-      size: toBN(p.size),
-      isMarket: p.isMarket ?? false,
+      price,
+      size,
+      isMarket,
     })
     .accountsStrict({
       user: p.user,

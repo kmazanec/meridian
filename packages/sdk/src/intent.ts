@@ -50,6 +50,13 @@ export enum TradeAction {
   SellNo = "SELL_NO",
 }
 
+/**
+ * Max `mint_pair` instructions a single BUY_NO transaction may carry. Each pair mints 1.0
+ * Yes+No (~13 accounts); beyond this a single transaction risks the size/compute limits.
+ * Larger BUY_NO must be split across transactions by the caller.
+ */
+export const MAX_BUY_NO_MINT_PAIRS = 6;
+
 export interface TradeIntent {
   market: MarketId | PublicKey;
   action: TradeAction;
@@ -99,9 +106,19 @@ function resolvePdas(market: MarketId | PublicKey): MarketPdas {
       );
 }
 
-/** Reflect a No price to its Yes price (and vice-versa): `PRICE_SCALE − p`. */
+/**
+ * Reflect a No price to its Yes price (and vice-versa): `PRICE_SCALE − p`.
+ * Throws if `price` is outside `[0, PRICE_SCALE]` — a reflected price outside that range
+ * is meaningless and would otherwise become a negative/garbage order price.
+ */
 export function reflectPrice(price: BNLike): BN {
-  return PRICE_SCALE.sub(toBN(price));
+  const p = toBN(price);
+  if (p.isNeg() || p.gt(PRICE_SCALE)) {
+    throw new Error(
+      `Price ${p.toString()} out of range [0, ${PRICE_SCALE.toString()}]; cannot reflect`
+    );
+  }
+  return PRICE_SCALE.sub(p);
 }
 
 /**
@@ -177,6 +194,16 @@ export async function buildTradeIntent(
         );
       }
       const pairs = size.div(PAYOFF_UNIT).toNumber();
+      // Each pair is a separate mint_pair instruction (~13 accounts). Too many in one
+      // transaction blow the 1232-byte / compute limits, and one transaction is the
+      // "one wallet approval" contract here — so cap and tell the caller to batch larger
+      // BUY_NO across multiple transactions rather than silently building an invalid one.
+      if (pairs > MAX_BUY_NO_MINT_PAIRS) {
+        throw new Error(
+          `BUY_NO of ${pairs} tokens exceeds the per-transaction mint cap ` +
+            `(${MAX_BUY_NO_MINT_PAIRS}); split it across multiple transactions.`
+        );
+      }
       const yesPrice = reflectPrice(intent.price);
       const mints: TransactionInstruction[] = [];
       for (let i = 0; i < pairs; i++) {

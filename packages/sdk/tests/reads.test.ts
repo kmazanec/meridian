@@ -260,5 +260,12 @@ describe("reads: dual-perspective book + payouts", () => {
         /not settled/i
       );
     });
+
+    it("throws on the inconsistent settled-but-no-price state", () => {
+      const corrupt = { ...base, settlementPrice: null };
+      expect(() => payoutFor(corrupt, "yes", PAYOFF_UNIT)).to.throw(
+        /settlement price/i
+      );
+    });
   });
 });

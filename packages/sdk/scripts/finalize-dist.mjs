@@ -41,6 +41,12 @@ function resolveSpecifier(fromFile, spec) {
   return spec; // leave anything we can't resolve untouched
 }
 
+// Textual rewrite (not an AST pass). This is safe for THIS package because the rewritten
+// files are tsc output: it has no string/template literals whose contents are relative
+// path specifiers (the IDL's many string values are descriptions/names, never `./x`
+// paths), and `resolveSpecifier` leaves anything it can't resolve to a real emitted file
+// untouched. If source ever embeds a literal that looks like `from "./x"`, switch to an
+// AST-based rewriter (e.g. magic-string) instead.
 const RELATIVE_IMPORT =
   /(\bfrom\s+|\bimport\s+|\bexport\s+\*\s+from\s+|\bimport\()\s*(["'])(\.\.?\/[^"']*)\2/g;
 
