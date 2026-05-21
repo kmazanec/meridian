@@ -777,3 +777,17 @@ pub fn ix_settle_market(cranker: &Pubkey, market: &Pubkey, price_update: &Pubkey
         .to_account_metas(None),
     )
 }
+
+pub fn ix_admin_settle(admin: &Pubkey, market: &Pubkey, settlement_price: u64) -> Instruction {
+    let (config, _) = config_pda();
+    Instruction::new_with_bytes(
+        meridian::id(),
+        &meridian::instruction::AdminSettle { settlement_price }.data(),
+        meridian::accounts::AdminSettle {
+            admin: *admin,
+            config,
+            market: *market,
+        }
+        .to_account_metas(None),
+    )
+}

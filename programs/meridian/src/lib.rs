@@ -93,4 +93,10 @@ pub mod meridian {
     pub fn settle_market(ctx: Context<SettleMarket>) -> Result<()> {
         instructions::settle_market::handler(ctx)
     }
+
+    /// Admin-only, time-delayed settlement fallback when the oracle path can't
+    /// run. Admin supplies the closing price (USDC base units). Idempotent. (F-04)
+    pub fn admin_settle(ctx: Context<AdminSettle>, settlement_price: u64) -> Result<()> {
+        instructions::admin_settle::handler(ctx, settlement_price)
+    }
 }

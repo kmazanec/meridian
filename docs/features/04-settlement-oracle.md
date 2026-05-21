@@ -87,7 +87,7 @@ crates; confirmed by a local lockfile probe and another team's LESSONS.md). Trea
   write immutable `outcome`/`settlement_price`/`settled_at`/`state=Settled`; idempotent
   re-settle. Tests: above/at/below, stale, wide-conf, pre-4PM, wrong-feed, exponent scaling.
   *(AC: reads price, rejects stale/wide/pre-4PM, immutable outcome, permissionless+idempotent)*
-- [ ] **Chunk 3 — `admin_settle`** (admin-only): `Config.admin` check; reject before
+- [x] **Chunk 3 — `admin_settle`** (admin-only): `Config.admin` check; reject before
   `ADMIN_OVERRIDE_DELAY` after close; admin-supplied price; same immutable outcome;
   idempotent. Tests: admin-only, delay enforced/elapsed, outcome parity. *(AC: admin_settle)*
 - [ ] **Chunk 4 — immutability + payout-completeness**: second settle is no-op

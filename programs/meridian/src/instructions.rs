@@ -1,3 +1,4 @@
+pub mod admin_settle;
 pub mod cancel_order;
 pub mod create_strike_market;
 pub mod grow_order_book;
@@ -10,6 +11,7 @@ pub mod place_order;
 pub mod redeem;
 pub mod settle_market;
 
+pub use admin_settle::*;
 pub use cancel_order::*;
 pub use create_strike_market::*;
 pub use grow_order_book::*;
