@@ -44,8 +44,13 @@ default:
           -e CARGO_HOME=/build/.cargo \
           -e CARGO_TERM_COLOR=always \
           -e npm_config_cache=/build/.npm \
-          "$image" bash -lc "$*"
+          "$image" bash -c "$*"
       }
+      # NB: `bash -c`, NOT `bash -lc`. A login shell sources /etc/profile, which
+      # resets PATH to a default that drops the rust image's /usr/local/cargo/bin
+      # (set via ENV, not profile) — yielding `cargo: command not found` when we
+      # also run as a non-root UID with no passwd entry. A non-login shell keeps
+      # the image's ENV PATH.
 
 variables:
   CARGO_TERM_COLOR: always
