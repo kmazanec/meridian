@@ -51,7 +51,8 @@ triggers the documented fallback early (ARCHITECTURE.md §14 Q1).
   and, where feasible, callable permissionlessly after 4:00 PM ET (ARCHITECTURE.md
   ADR-005, §14 Q4).
 - The devnet feed spike is completed and its result documented (which oracle path the
-  devnet demo uses, and why).
+  devnet demo uses, and why). **[DEFERRED — needs US market hours + funded devnet keypair;
+  runnable script + procedure shipped at `scripts/spike-pyth-feed.mjs`, see notes below.]**
 
 ## Testing requirements
 
@@ -94,7 +95,7 @@ crates; confirmed by a local lockfile probe and another team's LESSONS.md). Trea
   (outcome/price unchanged); extend `test_invariants.rs` to settle via the real instruction
   then redeem both sides, asserting `Yes_payout + No_payout == PAYOFF_UNIT` across prices
   incl. the at-strike boundary. *(AC: immutability; payout-completeness invariant)*
-- [ ] **Chunk 5 — devnet spike script + notes**: `scripts/spike-pyth-feed.*`
+- [x] **Chunk 5 — devnet spike script + notes**: `scripts/spike-pyth-feed.*`
   (Hermes → Receiver → read; runnable, **not executed** here — needs market hours + funded
   devnet keypair); document procedure + fallback ladder; retire `force_settle` shim where
   the real settle is now cheaper. *(AC: spike — deferred-live, see note below)*
@@ -146,7 +147,34 @@ reflected in ROADMAP cross-cutting concern #2 (units/timing) so dependents re-sy
 The settlement logic is built and proven against `PriceUpdateV2` fixtures (exact byte
 layout + exponent scaling) in LiteSVM. The **live** spike — confirming each MAG7 feed
 returns a fresh price on Solana devnet during US market hours — requires market hours and a
-funded devnet keypair, so it is **not run inside the build session**. `scripts/spike-pyth-feed.*`
-is runnable; the live run + result documentation is a flagged manual step. Fallback ladder
-if a feed is flaky: (a) crypto-feed stand-ins (BTC/SOL, 24/7); (b) mocked oracle behind the
-interface; (c) mainnet-beta tiny-amount validation.
+funded devnet keypair, so it is **not run inside the build session**.
+
+`scripts/spike-pyth-feed.mjs` is runnable and documented:
+
+```
+npm i @pythnetwork/hermes-client @pythnetwork/pyth-solana-receiver @solana/web3.js
+FEED_AAPL=0x… FEED_MSFT=0x… …  \
+SOLANA_KEYPAIR=~/.config/solana/id.json RPC_URL=https://api.devnet.solana.com \
+  node scripts/spike-pyth-feed.mjs
+```
+
+It exits 0 if every feed is fresh within the staleness window, non-zero otherwise. The
+equity feed ids are intentionally **not hard-coded** (they must be confirmed live against
+`pyth.network/price-feeds` / Hermes `v2/price_feeds?asset_type=equity` and then also written
+into `Config.tickers[].feed_id` so the on-chain `WrongFeed` check lines up). The script
+exercises the Hermes leg by default; the receiver-post-and-read leg (the actual *devnet*
+question) is sketched inline and needs the funded keypair.
+
+**Spike checkbox stays unchecked until run live.** Fallback ladder if a feed is flaky:
+(a) crypto-feed stand-ins (BTC/SOL, 24/7) to prove the pipeline; (b) mocked oracle behind
+the interface for dev; (c) mainnet-beta tiny-amount validation.
+
+### `force_settle` test shim retained (deliberate)
+
+The plan floated retiring `tests/common/mod.rs::force_settle`. Decision: **keep it.** It is
+the cheap way for F-02-owned tests (`test_redeem.rs`, the collateralization cases in
+`test_invariants.rs`) to set an outcome without standing up the full oracle fixture — those
+tests exercise *redeem*, not *settle*. Real-instruction settlement coverage lives in
+`test_settlement.rs`, `test_admin_settle.rs`, and the new payout-completeness sweep, so the
+real path is well exercised; rewriting F-02's tests to route through `settle_market` would
+add churn to files F-02 owns for no added assurance.

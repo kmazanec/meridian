@@ -142,6 +142,15 @@ not duplicate the rule into each feature — reference it.
    and consumed unchanged by F-02/F-03/F-04/F-06.** No floats anywhere on-chain or in
    serialized client math.
 
+   **Settlement-timing sub-contract (fixed in F-04).** `Market.trading_day` (an
+   `i64` unix timestamp) is the **4:00 PM ET close instant** for the session, not a
+   date-at-midnight. `settle_market` gates on `now >= trading_day`; `admin_settle`
+   on `now >= trading_day + ADMIN_OVERRIDE_DELAY`. The DST-aware ET→unix conversion
+   is a *timing* concern and lives **off-chain** in the automation service (ADR-005);
+   the program never reimplements a timezone calendar. **F-05** (`add_strike` reuses
+   `create_strike_market`) and **F-07** (automation computes the value passed to
+   `create_strike_market`) must obey this.
+
 3. **Account & PDA derivation contract.** Source: ARCHITECTURE.md §4 + frozen in
    F-01. Seeds for the vault PDA, mint-authority PDA, `Market`, and `OrderBook` must
    be defined once in F-01 and reused verbatim by F-02–F-05 (on-chain) and F-06
