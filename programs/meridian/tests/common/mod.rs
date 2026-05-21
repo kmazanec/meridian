@@ -21,6 +21,7 @@ use {
         state::{Config, Market, OrderBook, OrderSide, Outcome, Ticker, TickerConfig},
     },
     solana_account::Account,
+    solana_clock::Clock,
     solana_keypair::Keypair,
     solana_message::{Message, VersionedMessage},
     solana_program_option::COption,
@@ -36,6 +37,18 @@ pub const USDC_DECIMALS: u8 = 6;
 /// The Rent sysvar id (SysvarRent111111111111111111111111111111111).
 pub const RENT_SYSVAR_ID: Pubkey =
     Pubkey::from_str_const("SysvarRent111111111111111111111111111111111");
+
+/// The Pyth Solana Receiver program id — a valid `PriceUpdateV2` account is owned
+/// by it. Must equal `oracle::PYTH_RECEIVER_PROGRAM_ID`.
+pub const PYTH_RECEIVER_PROGRAM_ID: Pubkey =
+    Pubkey::from_str_const("rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ");
+
+/// The feed id the test `Config` shim assigns to ticker index `i` (see
+/// `seed_config`: `feed_id: [i as u8; 32]`). Settlement tests must use this so the
+/// price-update feed matches the market's configured feed.
+pub fn test_feed_id(ticker: Ticker) -> [u8; 32] {
+    [ticker as u8; 32]
+}
 
 pub struct Fixture {
     pub svm: LiteSVM,
@@ -694,4 +707,73 @@ pub fn create_market_and_book(
     let ix = ix_grow_order_book(&f.admin.pubkey(), &market);
     send(&mut f.svm, &f.admin.pubkey(), ix, &[&payer]).expect("grow order book");
     market
+}
+
+// -------- settlement (F-04) test helpers --------
+
+/// Set the cluster clock's `unix_timestamp` so timing-gated instructions can be
+/// exercised deterministically (LiteSVM `set_sysvar::<Clock>`).
+pub fn set_clock(svm: &mut LiteSVM, unix_timestamp: i64) {
+    let mut clock = svm.get_sysvar::<Clock>();
+    clock.unix_timestamp = unix_timestamp;
+    svm.set_sysvar::<Clock>(&clock);
+}
+
+/// Inject a `PriceUpdateV2`-layout account owned by the Pyth receiver program.
+///
+/// Serializes the exact borsh layout the on-chain parser expects (see
+/// `oracle.rs`): discriminant, write_authority, a `Full` verification_level, then
+/// the `PriceFeedMessage` in source order, then `posted_slot`. Returns the account
+/// address (random, like a real posted update account — settlement validates it by
+/// owner + feed_id, not by address).
+pub fn seed_price_update(
+    svm: &mut LiteSVM,
+    feed_id: [u8; 32],
+    price: i64,
+    conf: u64,
+    exponent: i32,
+    publish_time: i64,
+) -> Pubkey {
+    let mut data = Vec::new();
+    data.extend_from_slice(&[0u8; 8]); // discriminant
+    data.extend_from_slice(&[0u8; 32]); // write_authority
+    data.push(1u8); // verification_level = Full
+    data.extend_from_slice(&feed_id);
+    data.extend_from_slice(&price.to_le_bytes());
+    data.extend_from_slice(&conf.to_le_bytes());
+    data.extend_from_slice(&exponent.to_le_bytes());
+    data.extend_from_slice(&publish_time.to_le_bytes());
+    data.extend_from_slice(&0i64.to_le_bytes()); // prev_publish_time
+    data.extend_from_slice(&0i64.to_le_bytes()); // ema_price
+    data.extend_from_slice(&0u64.to_le_bytes()); // ema_conf
+    data.extend_from_slice(&0u64.to_le_bytes()); // posted_slot
+
+    let addr = Pubkey::new_unique();
+    svm.set_account(
+        addr,
+        Account {
+            lamports: svm.minimum_balance_for_rent_exemption(data.len()),
+            data,
+            owner: PYTH_RECEIVER_PROGRAM_ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    )
+    .unwrap();
+    addr
+}
+
+pub fn ix_settle_market(cranker: &Pubkey, market: &Pubkey, price_update: &Pubkey) -> Instruction {
+    let (config, _) = config_pda();
+    Instruction::new_with_bytes(
+        meridian::id(),
+        &meridian::instruction::SettleMarket {}.data(),
+        meridian::accounts::SettleMarket {
+            cranker: *cranker,
+            config,
+            market: *market,
+            price_update: *price_update,
+        }
+        .to_account_metas(None),
+    )
 }

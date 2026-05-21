@@ -5,7 +5,7 @@
 //! `OrderPlaced`). Keeping them in one module gives the SDK (F-06) and any
 //! indexer a single place to find the event schema.
 
-use crate::state::Ticker;
+use crate::state::{Outcome, Ticker};
 use anchor_lang::prelude::*;
 
 /// Emitted once when the global config is created.
@@ -93,4 +93,17 @@ pub struct OrderCancelled {
     pub seq: u64,
     /// Escrow returned to the owner (USDC for a bid, Yes tokens for an ask).
     pub refunded: u64,
+}
+
+/// Emitted once when a market is settled, via either path (F-04).
+#[event]
+pub struct MarketSettled {
+    pub market: Pubkey,
+    pub outcome: Outcome,
+    /// Closing price written, in USDC base units (6 dp).
+    pub settlement_price: u64,
+    pub settled_at: i64,
+    /// True if settled via the admin override (`admin_settle`), false if via the
+    /// permissionless oracle path (`settle_market`).
+    pub by_admin: bool,
 }

@@ -8,6 +8,7 @@ pub mod matching;
 pub mod mint_pair;
 pub mod place_order;
 pub mod redeem;
+pub mod settle_market;
 
 pub use cancel_order::*;
 pub use create_strike_market::*;
@@ -18,3 +19,4 @@ pub use match_orders::*;
 pub use mint_pair::*;
 pub use place_order::*;
 pub use redeem::*;
+pub use settle_market::*;

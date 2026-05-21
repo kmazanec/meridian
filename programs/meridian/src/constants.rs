@@ -47,6 +47,30 @@ pub const ORDERBOOK_N: usize = 128;
 pub const NUM_TICKERS: usize = 7;
 
 // ---------------------------------------------------------------------------
+// Settlement & oracle parameters (F-04)
+// ---------------------------------------------------------------------------
+//
+// Timing contract: `Market.trading_day` is the unix timestamp of the market's
+// 4:00 PM ET close instant (the off-chain automation, which owns the DST-aware
+// market calendar per ADR-005, computes it). On-chain settlement timing is then a
+// single integer comparison — the program never reimplements a timezone calendar.
+
+/// Delay after close before the admin override (`admin_settle`) becomes callable.
+/// 1 hour (ADR-004/§7.5): long enough that the permissionless `settle_market`
+/// path is the default, short enough that a stuck market still settles same-day.
+pub const ADMIN_OVERRIDE_DELAY: i64 = 60 * 60;
+
+/// Maximum age (seconds) of a Pyth price update accepted by `settle_market`.
+/// Equity feeds update during market hours; settlement fires right after close,
+/// so a tight window rejects a stale post-close snapshot. (ARCHITECTURE §7.6.)
+pub const DEFAULT_MAX_STALENESS: i64 = 120;
+
+/// Maximum acceptable oracle confidence band, in basis points of the price
+/// (`conf / price <= MAX_CONFIDENCE_BPS / 10_000`). 100 bps = 1%. Wider bands are
+/// rejected (`WideConfidence`) so a near-strike outcome isn't decided on noise.
+pub const MAX_CONFIDENCE_BPS: u64 = 100;
+
+// ---------------------------------------------------------------------------
 // PDA seed prefixes (ROADMAP concern #3 — frozen derivation contract)
 // ---------------------------------------------------------------------------
 //

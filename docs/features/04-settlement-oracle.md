@@ -82,7 +82,7 @@ crates; confirmed by a local lockfile probe and another team's LESSONS.md). Trea
   `parse_price_update(&[u8]) -> OraclePrice {feed_id, price, conf, exponent, publish_time}`;
   `to_usdc_base_units()` (`price × 10^exponent` → 6-dp, integer only); `is_stale`,
   `confidence_ok`; owner==receiver-program + feed_id checks. *(AC: oracle quality)*
-- [ ] **Chunk 2 — `settle_market`** (permissionless after close): reject pre-4PM ET; parse
+- [x] **Chunk 2 — `settle_market`** (permissionless after close): reject pre-4PM ET; parse
   + validate oracle; outcome `price ≥ strike → YesWins` else `NoWins` (at-strike → Yes);
   write immutable `outcome`/`settlement_price`/`settled_at`/`state=Settled`; idempotent
   re-settle. Tests: above/at/below, stale, wide-conf, pre-4PM, wrong-feed, exponent scaling.
@@ -124,6 +124,22 @@ Borsh-version conflict. Vendor a 30-line parser"). Resolution: vendor a `PriceUp
 byte-parser in `oracle.rs`, layout verified against the Pyth Solana Receiver program
 `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ` (identical on devnet + mainnet), not copied
 from the other repo (their toolchain is older: Anchor 0.31 / Solana 3.1.14).
+
+### Settlement-timing contract: `trading_day` = the close instant (cross-cutting)
+
+`Market.trading_day` (an `i64` unix timestamp) is interpreted as **the unix timestamp
+of the market's 4:00 PM ET close instant** for that session. `settle_market` enforces
+`now >= trading_day`; `admin_settle` enforces `now >= trading_day + ADMIN_OVERRIDE_DELAY`.
+
+Rationale: ET ↔ unix conversion requires a DST-aware calendar, which is exactly the
+*timing* concern ADR-005 places **off-chain** in the automation service. The program must
+not reimplement a timezone/DST calendar; it does a single integer comparison. The
+automation service (F-07) computes the correct DST-adjusted 4:00 PM ET instant and passes
+it as `trading_day` at `create_strike_market` time.
+
+**Propagated:** this interpretation is shared by F-05 (`add_strike` reuses
+`create_strike_market`) and F-07 (automation computes the value). Recorded here and to be
+reflected in ROADMAP cross-cutting concern #2 (units/timing) so dependents re-sync.
 
 ### Deferred: live devnet feed spike
 

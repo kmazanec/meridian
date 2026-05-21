@@ -87,4 +87,10 @@ pub mod meridian {
     ) -> Result<()> {
         instructions::match_orders::handler(ctx, args)
     }
+
+    /// After 4:00 PM ET: read the Pyth oracle, validate it, and write the
+    /// immutable Yes/No outcome. Permissionless and idempotent. (F-04)
+    pub fn settle_market(ctx: Context<SettleMarket>) -> Result<()> {
+        instructions::settle_market::handler(ctx)
+    }
 }
