@@ -12,14 +12,17 @@
 # EXECUTOR NOTE: the `gauntlet-droplet` runner is a *shell* executor, so the
 # GitLab `image:` keyword is ignored — jobs run directly on the host shell, which
 # has no Rust/Node toolchain. We therefore run each job's real work inside a
-# container with `docker run`. The host only needs Docker (+ git for checkout).
-# `IN_DOCKER` centralizes the invocation:
+# container with `docker run`, via the `dind`-free `run_in_docker` shell function
+# defined in `before_script`. (A function in a real shell context evaluates
+# `$(id -u)` correctly; embedding `$()` in a GitLab `variables:` value does not —
+# GitLab interpolates the value as text and the nested quoting gets mangled.)
+# The host only needs Docker (+ git for checkout). `run_in_docker <image> <cmd>`:
 #   -v "$CI_PROJECT_DIR":/build -w /build   mount the checked-out repo
-#   -u $(id -u):$(id -g)                     write artifacts as the runner user
-#                                            (so GitLab cache/cleanup can manage
-#                                            target/ and node_modules/)
-#   -e CARGO_HOME=/build/.cargo              keep the cargo cache inside the
-#                                            project dir so `cache:` can archive it
+#   -u <uid>:<gid>                          write artifacts as the runner user so
+#                                           GitLab cache/cleanup can manage
+#                                           target/ and node_modules/
+#   -e CARGO_HOME=/build/.cargo             keep the cargo cache inside the
+#                                           project dir so `cache:` can archive it
 
 stages:
   - check
@@ -30,16 +33,22 @@ default:
   # `tags:` overrides this, so don't add per-job tags unless you mean to.
   tags:
     - gauntlet-droplet
+  # Define `run_in_docker` once; inherited by every job's shell session.
+  before_script:
+    - |
+      run_in_docker() {
+        image="$1"; shift
+        docker run --rm \
+          -v "$CI_PROJECT_DIR":/build -w /build \
+          -u "$(id -u):$(id -g)" \
+          -e CARGO_HOME=/build/.cargo \
+          -e CARGO_TERM_COLOR=always \
+          -e npm_config_cache=/build/.npm \
+          "$image" bash -lc "$*"
+      }
 
 variables:
   CARGO_TERM_COLOR: always
-  # Reusable docker-run prefix. Append an image + `bash -lc '<cmds>'`.
-  IN_DOCKER: >-
-    docker run --rm
-    -v "$CI_PROJECT_DIR":/build -w /build
-    -u "$(id -u):$(id -g)"
-    -e CARGO_HOME=/build/.cargo
-    -e CARGO_TERM_COLOR=always
 
 # Cache the Cargo registry and build output across runs. The key is tied to
 # Cargo.lock so a dependency change invalidates the cache cleanly.
@@ -63,17 +72,17 @@ workflow:
 fmt:
   stage: check
   script:
-    - $IN_DOCKER rust:1.89 bash -lc 'cargo fmt --all -- --check'
+    - run_in_docker rust:1.89 'cargo fmt --all -- --check'
 
 clippy:
   stage: check
   script:
-    - $IN_DOCKER rust:1.89 bash -lc 'cargo clippy --workspace --all-targets -- -D warnings'
+    - run_in_docker rust:1.89 'cargo clippy --workspace --all-targets -- -D warnings'
 
 test:
   stage: test
   script:
-    - $IN_DOCKER rust:1.89 bash -lc 'cargo test --workspace'
+    - run_in_docker rust:1.89 'cargo test --workspace'
 
 # TypeScript is linted with prettier (the only JS tooling the repo declares).
 # We run prettier via `npx` rather than `yarn install`: it needs no global
@@ -93,6 +102,4 @@ lint-ts:
     paths:
       - .npm/
   script:
-    - >-
-      $IN_DOCKER -e npm_config_cache=/build/.npm node:20
-      bash -lc 'npx --yes prettier@2 "*/**/*{.js,.ts}" --check'
+    - run_in_docker node:20 'npx --yes prettier@2 "*/**/*{.js,.ts}" --check'
