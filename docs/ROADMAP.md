@@ -1,6 +1,6 @@
 # Roadmap — Meridian
 
-**Status:** draft · **Date:** 2026-05-20 · **Source:** [ARCHITECTURE.md](../ARCHITECTURE.md) · [RESEARCH.md](../RESEARCH.md)
+**Status:** draft · **Date:** 2026-05-20 · **Source:** [ARCHITECTURE.md](../ARCHITECTURE.md) · [RESEARCH.md](../RESEARCH.md) · **Setup:** [local-development.md](local-development.md)
 
 ## Overview
 
