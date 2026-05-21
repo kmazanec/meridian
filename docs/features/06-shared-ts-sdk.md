@@ -97,7 +97,7 @@ Build chunks (test-first; each ends in a tickable item):
 - [x] **5. Four-button intent translation** — one `buildTradeIntent(...)` API: BUY_YES→bid,
   SELL_YES→ask, BUY_NO→`mint_pair + sell Yes`, SELL_NO→`buy Yes`; unit-asserted ix mapping
   (the anti-drift contract test) + end-to-end BUY_NO/SELL_NO in LiteSVM.
-- [ ] **6. Pyth/Hermes helper** — `fetchPriceUpdate` / `postPriceUpdate` / `settleWithPyth`;
+- [x] **6. Pyth/Hermes helper** — `fetchPriceUpdate` / `postPriceUpdate` / `settleWithPyth`;
   unit + fixture-into-LiteSVM proves `settle_market` reads it; live devnet test
   skipped-by-default (env-gated).
 - [ ] **7. Public surface + consumability** — barrel export, `main`/`types`/`exports` map for
@@ -233,3 +233,25 @@ Build chunks (test-first; each ends in a tickable item):
 - **Contract test asserts the *encoded bytes*** of each leg (decoded via the program's own
   instruction coder), and an end-to-end LiteSVM test proves BUY_NO leaves the trader holding
   exactly No (Yes sold) and SELL_NO nets a Yes (closing the No exposure).
+
+### Chunk 6 — Pyth/Hermes helper
+
+- **The Pyth SDKs are *optional peer dependencies*, imported lazily.** `@pythnetwork/
+  hermes-client` and `@pythnetwork/pyth-solana-receiver` are heavy and (in this dep tree)
+  fragile — hermes-client needs `axios`, and pyth-solana-receiver hits an `rpc-websockets`
+  exports clash with web3.js 1.98. Forcing them on every consumer (and into a browser
+  bundle that may never settle) is wrong, so `fetchPriceUpdate`/`postPriceUpdate`/
+  `settleWithPyth` `await import(...)` them on first call and throw a clear "install the
+  optional peer dep" message if absent. The constants and the fixture builder are
+  dependency-free and always available.
+- **`buildPriceUpdateV2` is a first-class SDK export, not just a test helper.** It emits the
+  exact `PriceUpdateV2` borsh bytes the Receiver writes and `oracle.rs` parses (discriminator,
+  variable-length verification tag, the `PriceFeedMessage` fields). Tests inject it into
+  LiteSVM (owned by the Receiver program id) to prove `settle_market` reads an SDK-built
+  update and writes the right outcome — and rejects a wrong-feed and a Partial-verification
+  update. It is also useful to F-09/the demo for proving settlement against crypto-feed
+  stand-ins without market hours.
+- **Live devnet round-trip is deferred per plan** to an env-gated (`PYTH_LIVE=1`),
+  skipped-by-default test, since it needs a funded keypair, an RPC, the optional deps, and
+  (for equities) US market hours — the same constraints the F-04 spike script documents.
+  The hermetic fixture path is what proves the on-chain contract here.

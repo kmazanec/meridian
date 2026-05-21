@@ -356,6 +356,25 @@ export class Harness {
     return addr;
   }
 
+  /**
+   * Inject a Pyth `PriceUpdateV2` account (owned by the Receiver program) at a fresh
+   * address, so `settle_market` can read it. `data` is built by `buildPriceUpdateV2`.
+   * Returns the account pubkey.
+   */
+  setPriceUpdateAccount(receiverProgramId: PublicKey, data: Buffer): PublicKey {
+    const addr = Keypair.generate().publicKey;
+    this.svm.setAccount(addr, {
+      lamports: Number(
+        this.svm.minimumBalanceForRentExemption(BigInt(data.length))
+      ),
+      data,
+      owner: receiverProgramId,
+      executable: false,
+      rentEpoch: 0,
+    });
+    return addr;
+  }
+
   /** Read an SPL token account's `amount` (base units). Returns 0n if absent. */
   tokenBalance(tokenAccount: PublicKey): bigint {
     const acc = this.svm.getAccount(tokenAccount);

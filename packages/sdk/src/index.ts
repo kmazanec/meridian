@@ -21,3 +21,8 @@ export * from "./pdas";
 export * from "./instructions";
 export * from "./reads";
 export * from "./intent";
+// Pyth helpers: the constants + fixture builder are dependency-free; the Hermes/Receiver
+// functions lazy-import their optional peer deps only when called, so re-exporting here
+// does not pull those into a consumer's bundle. A dedicated `@meridian/sdk/pyth` subpath
+// also exists for tree-shaking.
+export * from "./pyth";
