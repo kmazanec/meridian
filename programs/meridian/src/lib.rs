@@ -105,4 +105,20 @@ pub mod meridian {
     pub fn admin_settle(ctx: Context<AdminSettle>, settlement_price: u64) -> Result<()> {
         instructions::admin_settle::handler(ctx, settlement_price)
     }
+
+    /// Provision an additional strike market intraday for an existing
+    /// ticker/day. Admin-gated; same provisioning as the initial create. (F-05)
+    pub fn add_strike(ctx: Context<AddStrike>, args: CreateStrikeMarketArgs) -> Result<()> {
+        instructions::add_strike::handler(ctx, args)
+    }
+
+    /// Admin emergency stop: halt new minting and all trading program-wide. (F-05)
+    pub fn pause(ctx: Context<SetPause>) -> Result<()> {
+        instructions::admin_pause::pause(ctx)
+    }
+
+    /// Admin: lift the emergency stop, restoring minting and trading. (F-05)
+    pub fn unpause(ctx: Context<SetPause>) -> Result<()> {
+        instructions::admin_pause::unpause(ctx)
+    }
 }

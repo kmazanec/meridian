@@ -74,11 +74,11 @@ Decisions: `add_strike` = thin distinct instruction reusing the shared create lo
 - [x] **Chunk 1 — refactor**: extract `create_strike_market`'s Market-field population +
   `MarketCreated` emit into a shared `populate_market(...)` fn it calls. Pure refactor;
   F-02 tests stay green.
-- [ ] **Chunk 2 — `pause` / `unpause`**: admin-only instructions setting `Config.paused`;
+- [x] **Chunk 2 — `pause` / `unpause`**: admin-only instructions setting `Config.paused`;
   `PauseSet` event. Tests: pause blocks `mint_pair` + the real `place_order`/`match_orders`
   paths (`MarketPaused`); unpause restores; non-admin rejected (`Unauthorized`); idempotent
   re-pause. *(AC: pause blocks mint+trading, admin-only)*
-- [ ] **Chunk 3 — `add_strike`**: instruction mirroring `CreateStrikeMarket`, delegating to
+- [x] **Chunk 3 — `add_strike`**: instruction mirroring `CreateStrikeMarket`, delegating to
   `populate_market`; `StrikeAdded` event. Tests: happy path (accounts provisioned, `Open`,
   mints/vault PDA-owned with no external authority); duplicate rejected; non-admin rejected;
   added strike supports `mint_pair`. *(AC: add_strike under admin authority)*

@@ -107,3 +107,21 @@ pub struct MarketSettled {
     /// permissionless oracle path (`settle_market`).
     pub by_admin: bool,
 }
+
+/// Emitted when an additional strike market is provisioned intraday for an
+/// already-trading ticker/day. Distinguishes an intraday add from the day's
+/// initial provisioning for indexers and the automation service.
+#[event]
+pub struct StrikeAdded {
+    pub market: Pubkey,
+    pub ticker: Ticker,
+    pub strike: u64,
+    pub trading_day: i64,
+}
+
+/// Emitted when the admin sets the global pause flag (true = paused).
+#[event]
+pub struct PauseSet {
+    pub paused: bool,
+    pub admin: Pubkey,
+}

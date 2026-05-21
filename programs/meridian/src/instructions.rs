@@ -1,3 +1,5 @@
+pub mod add_strike;
+pub mod admin_pause;
 pub mod admin_settle;
 pub mod cancel_order;
 pub mod create_strike_market;
@@ -16,6 +18,8 @@ pub mod settle_market;
 // below exist to re-export the Anchor `Context` structs and `*Args` types; the
 // resulting `handler` name overlap is harmless and expected.
 #[allow(ambiguous_glob_reexports)]
+pub use add_strike::*;
+pub use admin_pause::*;
 pub use admin_settle::*;
 pub use cancel_order::*;
 pub use create_strike_market::*;

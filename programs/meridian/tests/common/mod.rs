@@ -834,3 +834,72 @@ pub fn ix_admin_settle(admin: &Pubkey, market: &Pubkey, settlement_price: u64) -
         .to_account_metas(None),
     )
 }
+
+// -------- admin: pause / unpause / add_strike (F-05) test helpers --------
+
+pub fn ix_pause(admin: &Pubkey) -> Instruction {
+    let (config, _) = config_pda();
+    Instruction::new_with_bytes(
+        meridian::id(),
+        &meridian::instruction::Pause {}.data(),
+        meridian::accounts::SetPause {
+            admin: *admin,
+            config,
+        }
+        .to_account_metas(None),
+    )
+}
+
+pub fn ix_unpause(admin: &Pubkey) -> Instruction {
+    let (config, _) = config_pda();
+    Instruction::new_with_bytes(
+        meridian::id(),
+        &meridian::instruction::Unpause {}.data(),
+        meridian::accounts::SetPause {
+            admin: *admin,
+            config,
+        }
+        .to_account_metas(None),
+    )
+}
+
+/// `add_strike` builds the same account set as `create_strike_market`.
+pub fn ix_add_strike(
+    admin: &Pubkey,
+    usdc_mint: &Pubkey,
+    ticker: Ticker,
+    strike: u64,
+    trading_day: i64,
+) -> Instruction {
+    let (config, _) = config_pda();
+    let (market, _) = market_pda(ticker, strike, trading_day);
+    let (mint_authority, _) = mint_authority_pda(&market);
+    let (yes_mint, _) = yes_mint_pda(&market);
+    let (no_mint, _) = no_mint_pda(&market);
+    let (vault, _) = vault_pda(&market);
+    Instruction::new_with_bytes(
+        meridian::id(),
+        &meridian::instruction::AddStrike {
+            args: meridian::instructions::CreateStrikeMarketArgs {
+                ticker,
+                strike,
+                trading_day,
+            },
+        }
+        .data(),
+        meridian::accounts::AddStrike {
+            admin: *admin,
+            config,
+            usdc_mint: *usdc_mint,
+            market,
+            mint_authority,
+            yes_mint,
+            no_mint,
+            vault,
+            token_program: token_program_id(),
+            system_program: anchor_lang::system_program::ID,
+            rent: RENT_SYSVAR_ID,
+        }
+        .to_account_metas(None),
+    )
+}
