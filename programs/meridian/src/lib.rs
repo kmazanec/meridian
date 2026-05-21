@@ -20,7 +20,7 @@ pub use events::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("j9aDZ19LCUNscRzu4pb8xMfcB42vxKN9MKyS3ej13vR");
+declare_id!("EWEYM6Ujg9j5SLxXeM2hcDY7XmWRRj6RTaJNnB8T3mn");
 
 #[program]
 pub mod meridian {

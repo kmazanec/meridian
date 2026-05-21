@@ -73,9 +73,9 @@ None — can start immediately.
 - Order book capacity: **N = 128 per side** (128 bids + 128 asks).
 - OrderBook/Order shape declared now (size frozen); matching logic deferred to F-03.
 
-**Toolchain (verified):** Rust 1.95.0 · anchor-cli 1.0.1 · solana-cli 3.1.15 (Agave) · platform-tools 1.52.
+**Toolchain (verified):** Rust 1.95.0 · anchor-cli 1.0.2 · solana-cli 3.1.15 (Agave) · platform-tools 1.52.
 
-- [x] **Chunk 1 — Anchor workspace scaffold.** `anchor init` meridian (v1 layout), `declare_id!`, `Anchor.toml` with `[tooling] validator = "solana"`, deps (anchor 1.0.1, solana 3.x, `resolver = "2"`). Proves: builds + **deploy success on local validator**.
+- [x] **Chunk 1 — Anchor workspace scaffold.** `anchor init` meridian (v1 layout), `declare_id!`, `Anchor.toml` with `[tooling] validator = "solana"`, deps (anchor 1.0.2, solana 3.x, `resolver = "2"`). Proves: builds + **deploy success on local validator**.
 - [x] **Chunk 2 — Constants & frozen contracts.** `constants.rs`: decimals, PAYOFF_UNIT, PRICE_SCALE, ORDERBOOK_N=128, PDA seed bytestrings. Tests pass: constant values + PDA derivation + seed distinctness.
 - [x] **Chunk 3 — Account types & enums.** `Config`/`Market`/`OrderBook`/`Order` + `MarketState`/`Outcome`/`OrderSide`/`Ticker` per ARCHITECTURE.md §4. INIT_SPACE accounting. Tests pass: size ≤ 10MB (Config 338B, Market 184B, OrderBook 14905B).
 - [x] **Chunk 4 — Errors & events.** Single `#[error_code] MeridianError` enum (20 codes) for F-02–F-05; `ConfigInitialized` event.
@@ -103,14 +103,19 @@ validator (`[tooling] validator = "solana"`, since `anchor test` would otherwise
 to surfpool in v1). Rationale: faster, more reliable CI gate; same behavioral coverage.
 
 **Toolchain note:** `avm` (Anchor version manager) is installed **from the Anchor git
-repo** (`cargo install --git https://github.com/solana-foundation/anchor avm`) and
-self-updated to **1.0.2**; `avm self-update` works (compiles from git). Do **not** use
-`cargo install avm` from crates.io — that resolves to a stale package whose ancient
-`openssl-sys 0.6.7` fails to build against OpenSSL 3.x. The active **anchor-cli is
-1.0.1** (kept in lockstep with `anchor-lang = "1.0.1"`); `anchor` is an avm-managed
-symlink. A future CLI bump to 1.0.2 should update `anchor-lang` + the CLI together and
-re-run the full build/test as its own change. Solana CLI lives at
+repo** (`cargo install --git https://github.com/solana-foundation/anchor avm`). Do
+**not** use `cargo install avm` from crates.io — that resolves to a stale package whose
+ancient `openssl-sys 0.6.7` fails to build against OpenSSL 3.x. Manage Anchor with
+`avm install <v>` / `avm use <v>`. The active **anchor-cli is 1.0.2**, in lockstep with
+`anchor-lang = "1.0.2"` (Cargo.toml) and `@anchor-lang/core ^1.0.2` (package.json);
+`anchor` is an avm-managed symlink. Solana CLI lives at
 `~/.local/share/solana/install/active_release/bin` (add to PATH).
+
+**Program ID note:** the program ID is `EWEYM6Ujg9j5SLxXeM2hcDY7XmWRRj6RTaJNnB8T3mn`
+(synced across `declare_id!`, `Anchor.toml`, and the IDL). It changed once during the
+1.0.2 bump because the keypair (gitignored under `target/deploy/`) was regenerated;
+this is harmless for a not-yet-deployed scaffold — PDAs are derived *relative to* the
+program ID, so only the seed contract (above) is frozen, not the resulting addresses.
 
 ### Frozen contract handoff (for F-02–F-06)
 
@@ -121,7 +126,7 @@ re-run the full build/test as its own change. Solana CLI lives at
   **no realloc** — only the borsh length prefix grows. `Order.active` is the sole
   source of truth for slot occupancy (a default `Order` looks like a 0-price Bid;
   gate all reads on `active`).
-- **PDA seeds** (frozen — derive from program id `j9aDZ19LCUNscRzu4pb8xMfcB42vxKN9MKyS3ej13vR`):
+- **PDA seeds** (frozen — derive from program id `EWEYM6Ujg9j5SLxXeM2hcDY7XmWRRj6RTaJNnB8T3mn`):
   - Config: `[b"config"]`
   - Market: `[b"market", ticker_index:u8, strike:u64 LE, trading_day:i64 LE]`
   - OrderBook: `[b"order_book", market]` · Vault: `[b"vault", market]`
