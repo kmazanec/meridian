@@ -113,7 +113,13 @@ pub fn handler<'info>(
 ) -> Result<()> {
     require!(args.size > 0, MeridianError::InvalidOrderSize);
     if !args.is_market {
-        require!(args.price <= PRICE_SCALE, MeridianError::PriceOutOfRange);
+        // Limit price must be in [1, PRICE_SCALE]. A 0-price bid would escrow nothing yet
+        // could acquire Yes for free from a market-sell taker and squat a book slot at no
+        // cost (adversarial review M-4); a 0-price ask is economically meaningless.
+        require!(
+            args.price > 0 && args.price <= PRICE_SCALE,
+            MeridianError::PriceOutOfRange
+        );
     }
 
     // --- 1. Cross the opposite side (taker-crosses-on-placement). ---

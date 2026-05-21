@@ -122,7 +122,7 @@ Chunks:
   (`usdc_escrow == Σ ceil(price*size)` over bids, `yes_escrow == Σ size` over asks, incl.
   odd-price rounding); (c) all four trade paths execute at book level (Buy Yes, Sell Yes,
   Buy No = mint+sell-Yes with effective $0.30 cost, Sell No = buy-Yes), vault still invariant.
-- [ ] **Adversarial review** — high/medium fixed, lows recorded below.
+- [x] **Adversarial review** — 1 high + 4 medium fixed (see below); lows recorded for the user.
 - [ ] **Rebase + MR** — rebased onto local main, pushed, MR opened.
 
 ## Implementation notes (filled in by the building agent)
@@ -202,6 +202,42 @@ cannot alter terms or misdirect funds. This is the main manual-review hotspot.
 back-to-front so indices stay valid). Splitting phases avoids holding a book borrow across
 CPIs and keeps the matching logic auditable. `match_orders` uses the same three-phase
 shape.
+
+### Adversarial review — findings & resolutions
+
+An independent review attacked the matching engine, escrow accounting, and trust
+boundaries. Triage (HIGH/MEDIUM fixed; LOW recorded for the user):
+
+**Fixed:**
+- **H-1 — `remaining_accounts` not verified SPL-owned (book-lock DoS).** A maker could
+  corrupt their payout account so every fill through their order reverts, permanently
+  blocking that price level. Fixed: new `matching::verify_maker_account` checks the
+  account is owned by the SPL Token program (so raw-byte `try_deserialize` can't be
+  spoofed), is writable, is **not frozen** (M-1), and has the right token-owner + mint —
+  used by both `cross_incoming` and `match_orders`. Regression test:
+  `crank_rejects_non_spl_maker_account`.
+- **M-1 — frozen maker payout account → matching DoS.** Folded into `verify_maker_account`
+  (rejects `state != Initialized` with a clear error).
+- **M-2 — `match_orders.yes_mint` lacked the PDA seed constraint** (defense-in-depth gap
+  vs. `place_order`). Fixed: added `seeds = [YES_MINT_SEED, market]`.
+- **M-3 — unchecked `size -= amt` in `apply_crank_fills`** (silent wraparound on a future
+  planning regression → escrow desync). Fixed: `checked_sub` → `MathOverflow`.
+- **M-4 — zero-price limit order** escrowed nothing and could acquire Yes for free / squat
+  a slot. Fixed: limit price must be in `[1, PRICE_SCALE]`. Regression test:
+  `place_order_rejects_zero_price_limit`.
+
+**LOW (recorded — not auto-applied; for the user to decide):**
+- **L-1** — `remaining_accounts` writability now checked inside `verify_maker_account`
+  (folded in), so this is effectively addressed.
+- **L-2** — `cancel_order` intentionally has no market-state gate (users must always
+  reclaim escrow); add an inline comment on the `market` field to make intent explicit.
+- **L-3** — `OrderMatched` from the crank labels the cranker as `taker` and only one
+  side as `maker`; consider a dedicated `OrdersCranked` event (or a `cranker` field) so
+  indexers attribute crank settlements correctly.
+- **L-4** — the `!maker.active` guard in `cross_incoming` planning is dead code (orders
+  are removed, never tombstoned); remove or comment.
+- **L-5** — fixed in passing: the `grow_order_book` realloc-safety comment wrongly claimed
+  the runtime zeroes realloc'd bytes; corrected to the borsh-length-prefix reasoning.
 
 ### `match_orders` is a defensive/liveness no-op in normal operation
 

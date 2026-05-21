@@ -74,6 +74,7 @@ pub struct MatchOrders<'info> {
     #[account(seeds = [MINT_AUTH_SEED, market.key().as_ref()], bump = market.mint_authority_bump)]
     pub mint_authority: UncheckedAccount<'info>,
 
+    #[account(seeds = [crate::constants::YES_MINT_SEED, market.key().as_ref()], bump)]
     pub yes_mint: Box<Account<'info, Mint>>,
 
     #[account(mut, seeds = [USDC_ESCROW_SEED, market.key().as_ref()], bump)]
@@ -171,23 +172,25 @@ pub fn handler<'info>(
         &[ctx.accounts.market.mint_authority_bump],
     ]];
 
+    let token_program_id = ctx.accounts.token_program.key();
     for (i, plan) in plans.iter().enumerate() {
         let bid_owner_yes = &ctx.remaining_accounts[i * 2];
         let ask_owner_usdc = &ctx.remaining_accounts[i * 2 + 1];
 
-        let bid_ta = TokenAccount::try_deserialize(&mut &bid_owner_yes.data.borrow()[..])
-            .map_err(|_| MeridianError::InvalidArgument)?;
-        require_keys_eq!(bid_ta.owner, plan.bid_owner, MeridianError::NotOrderOwner);
-        require_keys_eq!(bid_ta.mint, ctx.accounts.yes_mint.key(), MeridianError::InvalidArgument);
-
-        let ask_ta = TokenAccount::try_deserialize(&mut &ask_owner_usdc.data.borrow()[..])
-            .map_err(|_| MeridianError::InvalidArgument)?;
-        require_keys_eq!(ask_ta.owner, plan.ask_owner, MeridianError::NotOrderOwner);
-        require_keys_eq!(
-            ask_ta.mint,
-            ctx.accounts.usdc_escrow.mint,
-            MeridianError::InvalidArgument
-        );
+        // Full trust-boundary checks on both payout accounts (SPL-owned, writable,
+        // not frozen, correct token-owner + mint). See matching::verify_maker_account.
+        matching::verify_maker_account(
+            bid_owner_yes,
+            &token_program_id,
+            &plan.bid_owner,
+            &ctx.accounts.yes_mint.key(),
+        )?;
+        matching::verify_maker_account(
+            ask_owner_usdc,
+            &token_program_id,
+            &plan.ask_owner,
+            &ctx.accounts.usdc_escrow.mint,
+        )?;
 
         // Yes: yes_escrow → bid owner (bought Yes).
         token::transfer(
@@ -232,14 +235,16 @@ pub fn handler<'info>(
     }
 
     // --- Phase 3: apply size decrements / removals (back-to-front per side). ---
-    apply_crank_fills(&mut ctx.accounts.order_book, &plans);
+    apply_crank_fills(&mut ctx.accounts.order_book, &plans)?;
 
     Ok(())
 }
 
-fn apply_crank_fills(book: &mut OrderBook, plans: &[CrankFill]) {
+fn apply_crank_fills(book: &mut OrderBook, plans: &[CrankFill]) -> Result<()> {
     // Decrement remaining sizes first (by accumulated fill per index), then remove
-    // emptied orders back-to-front so earlier indices stay valid.
+    // emptied orders back-to-front so earlier indices stay valid. Checked subtraction
+    // turns any future planning regression into an explicit revert, never silent
+    // wraparound corruption of a resting size (which would desync escrow).
     use std::collections::BTreeMap;
     let mut bid_fill: BTreeMap<usize, u64> = BTreeMap::new();
     let mut ask_fill: BTreeMap<usize, u64> = BTreeMap::new();
@@ -248,10 +253,16 @@ fn apply_crank_fills(book: &mut OrderBook, plans: &[CrankFill]) {
         *ask_fill.entry(p.ask_index).or_default() += p.fill_size;
     }
     for (idx, amt) in &bid_fill {
-        book.bids[*idx].size -= amt;
+        book.bids[*idx].size = book.bids[*idx]
+            .size
+            .checked_sub(*amt)
+            .ok_or(MeridianError::MathOverflow)?;
     }
     for (idx, amt) in &ask_fill {
-        book.asks[*idx].size -= amt;
+        book.asks[*idx].size = book.asks[*idx]
+            .size
+            .checked_sub(*amt)
+            .ok_or(MeridianError::MathOverflow)?;
     }
     // Remove emptied (size == 0) back-to-front.
     for idx in bid_fill.keys().rev() {
@@ -264,4 +275,5 @@ fn apply_crank_fills(book: &mut OrderBook, plans: &[CrankFill]) {
             book.asks.remove(*idx);
         }
     }
+    Ok(())
 }

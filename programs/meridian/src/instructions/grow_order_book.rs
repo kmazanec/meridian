@@ -35,9 +35,11 @@ pub struct GrowOrderBook<'info> {
     pub market: Box<Account<'info, Market>>,
 
     /// The order book PDA, reallocated up to its full `8 + INIT_SPACE` size. `realloc`
-    /// (vs `init`) keeps the existing data; `realloc::zero = false` is safe because the
-    /// appended bytes are zeroed by the runtime and the borsh Vec length prefixes
-    /// (already 0 from init) are untouched, so the book still deserializes as empty.
+    /// (vs `init`) keeps the existing data. `realloc::zero = false` is safe here NOT
+    /// because the runtime zeroes the appended bytes (it does not on realloc) but because
+    /// those bytes extend past the borsh `Vec` length prefixes (still 0 from init): borsh
+    /// reads only the declared element count, so the uninitialized tail is never accessed
+    /// and the book still deserializes as empty. This reasoning is borsh-encoding-specific.
     #[account(
         mut,
         seeds = [ORDER_BOOK_SEED, market.key().as_ref()],

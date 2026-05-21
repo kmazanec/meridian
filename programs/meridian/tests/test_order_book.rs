@@ -266,6 +266,22 @@ fn place_order_rejects_price_out_of_range() {
 }
 
 #[test]
+fn place_order_rejects_zero_price_limit() {
+    // Adversarial review M-4: a 0-price limit order escrows nothing and could acquire Yes
+    // for free / squat slots. Limit price must be in [1, PRICE_SCALE].
+    let mut f = setup(5 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+    let _u = f.user.pubkey();
+    ensure_yes_ata(&mut f, _u, &market);
+    let user = f.user.insecure_clone();
+    let ix = ix_place_order(
+        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 0, ONE, false, &[],
+    );
+    let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
+    assert!(res.is_err(), "zero-price limit order must be rejected");
+}
+
+#[test]
 fn place_order_rejected_when_paused() {
     let mut f = setup(5 * ONE);
     let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
@@ -800,6 +816,25 @@ fn crank_cannot_misdirect_funds_to_wrong_account() {
     // Book untouched.
     let (ob_pda, _) = order_book_pda(&market);
     assert_eq!(read_order_book(&f.svm, &ob_pda).bids.len(), 1, "no settlement happened");
+}
+
+#[test]
+fn crank_rejects_non_spl_maker_account() {
+    // Adversarial review H-1: the maker payout account must be SPL-Token-owned. Passing a
+    // program-owned account (e.g. the order_book PDA) whose bytes might parse must be
+    // rejected before any transfer, so a maker can't brick matching with a corrupt acct.
+    let mut f = setup(10 * ONE);
+    let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
+    let (_bid_yes, _ask_usdc) = setup_crossed(&mut f, &market, 600_000, ONE, 500_000, ONE);
+    let (yes_mint, _) = yes_mint_pda(&market);
+    let bid_yes = ata(&f.user.pubkey(), &yes_mint);
+    // Substitute the order_book PDA (owned by the program, not the token program) for the
+    // ask owner's USDC payout account.
+    let (order_book, _) = order_book_pda(&market);
+    let cranker = f.admin.insecure_clone();
+    let ix = ix_match_orders(&f.admin.pubkey(), &market, 4, &[bid_yes, order_book]);
+    let res = send(&mut f.svm, &f.admin.pubkey(), ix, &[&cranker]);
+    assert!(res.is_err(), "a non-SPL-owned maker account must be rejected");
 }
 
 #[test]

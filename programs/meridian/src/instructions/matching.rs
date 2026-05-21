@@ -86,6 +86,33 @@ pub fn insert_sorted(book: &mut OrderBook, order: Order) {
     }
 }
 
+/// Validate a maker payout account supplied via `remaining_accounts` and return its
+/// deserialized token-account view. Enforces the full trust boundary:
+///   - the account is *owned by the SPL Token program* (so `try_deserialize` of raw bytes
+///     can't be spoofed by a crafted non-token account — H-1);
+///   - it is writable (clear error vs. a generic privilege failure — L-1);
+///   - it is not frozen (a frozen payout account would revert the whole batch — M-1);
+///   - its token-`owner` is the recorded order owner (no fund misdirection);
+///   - its mint is `expected_mint` (right asset).
+pub(crate) fn verify_maker_account(
+    maker_acct: &AccountInfo,
+    token_program_id: &Pubkey,
+    expected_owner: &Pubkey,
+    expected_mint: &Pubkey,
+) -> Result<()> {
+    require_keys_eq!(*maker_acct.owner, *token_program_id, MeridianError::InvalidArgument);
+    require!(maker_acct.is_writable, MeridianError::InvalidArgument);
+    let ta = anchor_spl::token::TokenAccount::try_deserialize(&mut &maker_acct.data.borrow()[..])
+        .map_err(|_| MeridianError::InvalidArgument)?;
+    require!(
+        ta.state == anchor_spl::token::spl_token::state::AccountState::Initialized,
+        MeridianError::InvalidArgument
+    );
+    require_keys_eq!(ta.owner, *expected_owner, MeridianError::NotOrderOwner);
+    require_keys_eq!(ta.mint, *expected_mint, MeridianError::InvalidArgument);
+    Ok(())
+}
+
 /// Does an incoming order at `price` (taker) cross a resting order at `maker_price`?
 /// For a taker **Bid** (buying Yes), it crosses asks priced ≤ the taker's limit.
 /// For a taker **Ask** (selling Yes), it crosses bids priced ≥ the taker's limit.
@@ -186,24 +213,20 @@ pub fn cross_incoming<'info>(
     let mut filled_size: u64 = 0;
     let mut usdc_total: u64 = 0;
 
+    let token_program_id = ctx.accounts.token_program.key();
     for (i, plan) in plans.iter().enumerate() {
         let maker_acct = &ctx.remaining_accounts[i];
-        let maker_ta = anchor_spl::token::TokenAccount::try_deserialize(
-            &mut &maker_acct.data.borrow()[..],
-        )
-        .map_err(|_| MeridianError::InvalidArgument)?;
-        // The supplied account must belong to the recorded maker (trustlessness).
-        require_keys_eq!(maker_ta.owner, plan.maker_owner, MeridianError::NotOrderOwner);
 
         match taker_side {
             OrderSide::Bid => {
                 // Taker buys Yes: pay maker USDC (taker → maker), deliver Yes to taker
-                // (yes_escrow → taker, PDA-signed).
-                require_keys_eq!(
-                    maker_ta.mint,
-                    ctx.accounts.usdc_escrow.mint,
-                    MeridianError::InvalidArgument
-                );
+                // (yes_escrow → taker, PDA-signed). Maker (seller) receives USDC.
+                verify_maker_account(
+                    maker_acct,
+                    &token_program_id,
+                    &plan.maker_owner,
+                    &ctx.accounts.usdc_escrow.mint,
+                )?;
                 token::transfer(
                     CpiContext::new(
                         ctx.accounts.token_program.key(),
@@ -230,12 +253,13 @@ pub fn cross_incoming<'info>(
             }
             OrderSide::Ask => {
                 // Taker sells Yes: deliver Yes to maker (taker → maker), pay taker USDC
-                // (usdc_escrow → taker, PDA-signed).
-                require_keys_eq!(
-                    maker_ta.mint,
-                    ctx.accounts.yes_mint.key(),
-                    MeridianError::InvalidArgument
-                );
+                // (usdc_escrow → taker, PDA-signed). Maker (buyer) receives Yes.
+                verify_maker_account(
+                    maker_acct,
+                    &token_program_id,
+                    &plan.maker_owner,
+                    &ctx.accounts.yes_mint.key(),
+                )?;
                 token::transfer(
                     CpiContext::new(
                         ctx.accounts.token_program.key(),
