@@ -29,11 +29,23 @@ fn mint_happy_path() {
     let (vault, _) = vault_pda(&market);
 
     // User received 1.0 Yes + 1.0 No.
-    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), ONE, "1 Yes");
-    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &no_mint)), ONE, "1 No");
+    assert_eq!(
+        token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)),
+        ONE,
+        "1 Yes"
+    );
+    assert_eq!(
+        token_balance(&f.svm, &ata(&f.user.pubkey(), &no_mint)),
+        ONE,
+        "1 No"
+    );
     // Vault holds $1; user paid $1 (5 - 1 = 4 left).
     assert_eq!(token_balance(&f.svm, &vault), ONE, "vault has $1");
-    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &f.usdc_mint)), 4 * ONE, "user paid $1");
+    assert_eq!(
+        token_balance(&f.svm, &ata(&f.user.pubkey(), &f.usdc_mint)),
+        4 * ONE,
+        "user paid $1"
+    );
     // pairs_minted incremented.
     assert_eq!(read_market(&f.svm, &market).pairs_minted, 1);
 }
@@ -51,7 +63,11 @@ fn mint_multiple_keeps_invariant() {
         // Collateralization invariant: vault == PAYOFF_UNIT * pairs_minted.
         let m = read_market(&f.svm, &market);
         assert_eq!(m.pairs_minted, n);
-        assert_eq!(token_balance(&f.svm, &vault), n * ONE, "vault == 1e6 * pairs_minted");
+        assert_eq!(
+            token_balance(&f.svm, &vault),
+            n * ONE,
+            "vault == 1e6 * pairs_minted"
+        );
     }
 }
 

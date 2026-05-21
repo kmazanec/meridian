@@ -7,7 +7,10 @@ mod common;
 
 use {
     common::*,
-    meridian::{instructions::RedeemSide, state::{Outcome, Ticker}},
+    meridian::{
+        instructions::RedeemSide,
+        state::{Outcome, Ticker},
+    },
     solana_signer::Signer,
 };
 
@@ -41,11 +44,22 @@ fn redeem_winning_yes_pays_one_per_token() {
     let user_usdc = ata(&f.user.pubkey(), &f.usdc_mint);
 
     let usdc_before = token_balance(&f.svm, &user_usdc);
-    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::Yes, 2 * ONE, &user_yes, &user_usdc);
+    let ix = ix_redeem(
+        &f.user.pubkey(),
+        &market,
+        RedeemSide::Yes,
+        2 * ONE,
+        &user_yes,
+        &user_usdc,
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("redeem winning Yes");
 
     assert_eq!(token_balance(&f.svm, &user_yes), 0, "Yes tokens burned");
-    assert_eq!(token_balance(&f.svm, &user_usdc), usdc_before + 2 * ONE, "paid $2");
+    assert_eq!(
+        token_balance(&f.svm, &user_usdc),
+        usdc_before + 2 * ONE,
+        "paid $2"
+    );
 }
 
 #[test]
@@ -60,11 +74,22 @@ fn redeem_losing_no_pays_zero() {
     let user_usdc = ata(&f.user.pubkey(), &f.usdc_mint);
 
     let usdc_before = token_balance(&f.svm, &user_usdc);
-    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::No, 2 * ONE, &user_no, &user_usdc);
+    let ix = ix_redeem(
+        &f.user.pubkey(),
+        &market,
+        RedeemSide::No,
+        2 * ONE,
+        &user_no,
+        &user_usdc,
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("redeem losing No (burns for $0)");
 
     assert_eq!(token_balance(&f.svm, &user_no), 0, "No tokens burned");
-    assert_eq!(token_balance(&f.svm, &user_usdc), usdc_before, "no payout for losing side");
+    assert_eq!(
+        token_balance(&f.svm, &user_usdc),
+        usdc_before,
+        "no payout for losing side"
+    );
 }
 
 #[test]
@@ -79,9 +104,20 @@ fn redeem_no_wins_case() {
     let user_usdc = ata(&f.user.pubkey(), &f.usdc_mint);
 
     let usdc_before = token_balance(&f.svm, &user_usdc);
-    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::No, ONE, &user_no, &user_usdc);
+    let ix = ix_redeem(
+        &f.user.pubkey(),
+        &market,
+        RedeemSide::No,
+        ONE,
+        &user_no,
+        &user_usdc,
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("redeem winning No");
-    assert_eq!(token_balance(&f.svm, &user_usdc), usdc_before + ONE, "No wins pays $1");
+    assert_eq!(
+        token_balance(&f.svm, &user_usdc),
+        usdc_before + ONE,
+        "No wins pays $1"
+    );
 }
 
 #[test]
@@ -96,12 +132,26 @@ fn redeem_partial_then_rest() {
     let user_usdc = ata(&f.user.pubkey(), &f.usdc_mint);
 
     // Redeem 1.0 first.
-    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::Yes, ONE, &user_yes, &user_usdc);
+    let ix = ix_redeem(
+        &f.user.pubkey(),
+        &market,
+        RedeemSide::Yes,
+        ONE,
+        &user_yes,
+        &user_usdc,
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("partial redeem");
     assert_eq!(token_balance(&f.svm, &user_yes), 2 * ONE, "2 Yes left");
 
     // Redeem the remaining 2.0.
-    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::Yes, 2 * ONE, &user_yes, &user_usdc);
+    let ix = ix_redeem(
+        &f.user.pubkey(),
+        &market,
+        RedeemSide::Yes,
+        2 * ONE,
+        &user_yes,
+        &user_usdc,
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("redeem rest");
     assert_eq!(token_balance(&f.svm, &user_yes), 0, "all redeemed");
 }
@@ -116,7 +166,14 @@ fn redeem_rejected_before_settlement() {
     let user_yes = ata(&f.user.pubkey(), &yes_mint);
     let user_usdc = ata(&f.user.pubkey(), &f.usdc_mint);
 
-    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::Yes, ONE, &user_yes, &user_usdc);
+    let ix = ix_redeem(
+        &f.user.pubkey(),
+        &market,
+        RedeemSide::Yes,
+        ONE,
+        &user_yes,
+        &user_usdc,
+    );
     let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
     assert!(res.is_err(), "redeem must be rejected before settlement");
 }

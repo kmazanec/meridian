@@ -52,7 +52,13 @@ fn create_happy_path() {
 fn create_rejects_non_admin() {
     let mut f = setup(0);
     let imposter = f.user.insecure_clone(); // user is not the admin
-    let ix = ix_create_strike_market(&imposter.pubkey(), &f.usdc_mint, Ticker::Meta, 680_000_000, DAY);
+    let ix = ix_create_strike_market(
+        &imposter.pubkey(),
+        &f.usdc_mint,
+        Ticker::Meta,
+        680_000_000,
+        DAY,
+    );
     let res = send(&mut f.svm, &imposter.pubkey(), ix, &[&imposter]);
     assert!(res.is_err(), "non-admin must be rejected");
 }
@@ -85,7 +91,13 @@ fn create_rejects_wrong_usdc_mint() {
     // A different mint, not Config.usdc_mint.
     let wrong_mint = solana_pubkey::Pubkey::new_unique();
     seed_mint(&mut f.svm, &wrong_mint, 6, None);
-    let ix = ix_create_strike_market(&f.admin.pubkey(), &wrong_mint, Ticker::Meta, 680_000_000, DAY);
+    let ix = ix_create_strike_market(
+        &f.admin.pubkey(),
+        &wrong_mint,
+        Ticker::Meta,
+        680_000_000,
+        DAY,
+    );
     let res = send(&mut f.svm, &f.admin.pubkey(), ix, &[&admin]);
     assert!(res.is_err(), "wrong USDC mint must be rejected");
 }

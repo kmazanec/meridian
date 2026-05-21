@@ -49,9 +49,12 @@ pub enum Outcome {
 }
 
 /// Which side of the (Yes-vs-USDC) order book an order rests on.
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug, InitSpace)]
+#[derive(
+    AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug, InitSpace, Default,
+)]
 pub enum OrderSide {
     /// Bid: offering to buy Yes tokens (escrows USDC).
+    #[default]
     Bid,
     /// Ask: offering to sell Yes tokens (escrows Yes tokens).
     Ask,
@@ -182,10 +185,4 @@ pub struct OrderBook {
     pub asks: Vec<Order>,
     /// PDA bump for the order book account.
     pub bump: u8,
-}
-
-impl Default for OrderSide {
-    fn default() -> Self {
-        OrderSide::Bid
-    }
 }

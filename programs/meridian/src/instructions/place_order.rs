@@ -22,8 +22,7 @@
 //! the cranker/taker cannot misdirect funds or alter prices/sizes.
 
 use crate::constants::{
-    MINT_AUTH_SEED, ORDER_BOOK_SEED, PRICE_SCALE, USDC_ESCROW_SEED, YES_ESCROW_SEED,
-    YES_MINT_SEED,
+    MINT_AUTH_SEED, ORDER_BOOK_SEED, PRICE_SCALE, USDC_ESCROW_SEED, YES_ESCROW_SEED, YES_MINT_SEED,
 };
 use crate::error::MeridianError;
 use crate::instructions::matching;
@@ -149,7 +148,10 @@ fn rest_remainder<'info>(
         OrderSide::Bid => order_book.bids.len(),
         OrderSide::Ask => order_book.asks.len(),
     };
-    require!(side_len < crate::constants::ORDERBOOK_N, MeridianError::BookFull);
+    require!(
+        side_len < crate::constants::ORDERBOOK_N,
+        MeridianError::BookFull
+    );
 
     // Escrow: bid → USDC (ceil), ask → Yes (exact).
     match args.side {

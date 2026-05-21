@@ -83,7 +83,11 @@ pub fn handler(ctx: Context<CancelOrder>, args: CancelOrderArgs) -> Result<()> {
     let order = side_vec[pos];
 
     // Only the owner may cancel.
-    require_keys_eq!(order.owner, ctx.accounts.user.key(), MeridianError::NotOrderOwner);
+    require_keys_eq!(
+        order.owner,
+        ctx.accounts.user.key(),
+        MeridianError::NotOrderOwner
+    );
 
     // Compute and pay the refund from the matching escrow, PDA-signed.
     let market_key = ctx.accounts.market.key();

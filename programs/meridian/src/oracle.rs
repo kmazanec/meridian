@@ -49,8 +49,7 @@ use anchor_lang::prelude::*;
 
 /// The Pyth Solana Receiver program id (same on devnet and mainnet, ADR-004).
 /// A valid `PriceUpdateV2` account is owned by this program.
-pub const PYTH_RECEIVER_PROGRAM_ID: Pubkey =
-    pubkey!("rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ");
+pub const PYTH_RECEIVER_PROGRAM_ID: Pubkey = pubkey!("rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ");
 
 /// Anchor account discriminant length (every Anchor account is prefixed by 8 bytes).
 const DISCRIMINATOR_LEN: usize = 8;
@@ -115,7 +114,9 @@ impl OraclePrice {
 
         let scaled: u128 = if shift >= 0 {
             let factor = pow10_u128(shift as u32).ok_or(MeridianError::MathOverflow)?;
-            price.checked_mul(factor).ok_or(MeridianError::MathOverflow)?
+            price
+                .checked_mul(factor)
+                .ok_or(MeridianError::MathOverflow)?
         } else {
             let divisor = pow10_u128((-shift) as u32).ok_or(MeridianError::MathOverflow)?;
             price / divisor

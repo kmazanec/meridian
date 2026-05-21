@@ -66,7 +66,11 @@ pub fn token_program_id() -> Pubkey {
 pub fn ata(owner: &Pubkey, mint: &Pubkey) -> Pubkey {
     // Associated token account derivation (SPL ATA program).
     Pubkey::find_program_address(
-        &[owner.as_ref(), spl_token_interface::ID.as_ref(), mint.as_ref()],
+        &[
+            owner.as_ref(),
+            spl_token_interface::ID.as_ref(),
+            mint.as_ref(),
+        ],
         &spl_associated_token_account_id(),
     )
     .0
@@ -141,10 +145,22 @@ pub fn setup(user_usdc: u64) -> Fixture {
 
     // User USDC ATA with a starting balance.
     let user_usdc_ata = ata(&user.pubkey(), &usdc_mint);
-    seed_token_account(&mut svm, &user_usdc_ata, &usdc_mint, &user.pubkey(), user_usdc);
+    seed_token_account(
+        &mut svm,
+        &user_usdc_ata,
+        &usdc_mint,
+        &user.pubkey(),
+        user_usdc,
+    );
     // Second user funded with the same starting balance.
     let user2_usdc_ata = ata(&user2.pubkey(), &usdc_mint);
-    seed_token_account(&mut svm, &user2_usdc_ata, &usdc_mint, &user2.pubkey(), user_usdc);
+    seed_token_account(
+        &mut svm,
+        &user2_usdc_ata,
+        &usdc_mint,
+        &user2.pubkey(),
+        user_usdc,
+    );
 
     // Seed the Config singleton directly (test shim).
     seed_config(&mut svm, &admin.pubkey(), &usdc_mint);
@@ -267,7 +283,9 @@ pub fn read_market(svm: &LiteSVM, market: &Pubkey) -> Market {
 pub fn token_balance(svm: &LiteSVM, addr: &Pubkey) -> u64 {
     match svm.get_account(addr) {
         Some(a) if a.data.len() >= SplAccount::LEN => {
-            SplAccount::unpack(&a.data[..SplAccount::LEN]).map(|t| t.amount).unwrap_or(0)
+            SplAccount::unpack(&a.data[..SplAccount::LEN])
+                .map(|t| t.amount)
+                .unwrap_or(0)
         }
         _ => 0,
     }
@@ -333,6 +351,9 @@ pub fn set_paused(svm: &mut LiteSVM, paused: bool) {
 /// Expires the blockhash first so repeated identical transactions in a test
 /// aren't rejected by the runtime's dedup as `AlreadyProcessed` — each send
 /// stands on its own and any rejection is the program's, not the harness's.
+// The `Err` type is LiteSVM's `FailedTransactionMetadata`, sized by the library;
+// boxing it would change every test call site for no real-world benefit.
+#[allow(clippy::result_large_err)]
 pub fn send(
     svm: &mut LiteSVM,
     payer: &Pubkey,
@@ -388,11 +409,7 @@ pub fn ix_create_strike_market(
     )
 }
 
-pub fn ix_mint_pair(
-    user: &Pubkey,
-    usdc_mint: &Pubkey,
-    market: &Pubkey,
-) -> Instruction {
+pub fn ix_mint_pair(user: &Pubkey, usdc_mint: &Pubkey, market: &Pubkey) -> Instruction {
     let (config, _) = config_pda();
     let (mint_authority, _) = mint_authority_pda(market);
     let (yes_mint, _) = yes_mint_pda(market);
@@ -530,7 +547,9 @@ pub fn ix_place_order(
     }
     .to_account_metas(None);
     for acct in maker_accounts {
-        metas.push(anchor_lang::solana_program::instruction::AccountMeta::new(*acct, false));
+        metas.push(anchor_lang::solana_program::instruction::AccountMeta::new(
+            *acct, false,
+        ));
     }
     Instruction::new_with_bytes(
         meridian::id(),
@@ -606,7 +625,9 @@ pub fn ix_match_orders(
     }
     .to_account_metas(None);
     for acct in pair_accounts {
-        metas.push(anchor_lang::solana_program::instruction::AccountMeta::new(*acct, false));
+        metas.push(anchor_lang::solana_program::instruction::AccountMeta::new(
+            *acct, false,
+        ));
     }
     Instruction::new_with_bytes(
         meridian::id(),
@@ -676,8 +697,7 @@ pub fn seed_crossed_book(
     let (yes_escrow, _) = yes_escrow_pda(market);
     let (mint_auth, _) = mint_authority_pda(market);
     let (yes_mint, _) = yes_mint_pda(market);
-    let bid_usdc = ((bid_price as u128 * bid_size as u128 + (PRICE_SCALE_T - 1))
-        / PRICE_SCALE_T) as u64;
+    let bid_usdc = (bid_price as u128 * bid_size as u128).div_ceil(PRICE_SCALE_T) as u64;
     let usdc_mint = svm
         .get_account(&usdc_escrow)
         .map(|a| SplAccount::unpack(&a.data[..SplAccount::LEN]).unwrap().mint)

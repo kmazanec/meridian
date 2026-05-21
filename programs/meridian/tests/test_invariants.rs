@@ -10,7 +10,10 @@ mod common;
 
 use {
     common::*,
-    meridian::{instructions::RedeemSide, state::{Outcome, Ticker}},
+    meridian::{
+        instructions::RedeemSide,
+        state::{Outcome, Ticker},
+    },
     solana_signer::Signer,
 };
 
@@ -40,7 +43,11 @@ fn vault_tracks_collateral_through_full_cycle() {
     for n in 1..=4u64 {
         let ix = ix_mint_pair(&f.user.pubkey(), &f.usdc_mint, &market);
         send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("mint");
-        assert_eq!(token_balance(&f.svm, &vault), n * ONE, "vault == 1e6 * pairs_minted");
+        assert_eq!(
+            token_balance(&f.svm, &vault),
+            n * ONE,
+            "vault == 1e6 * pairs_minted"
+        );
     }
     assert_eq!(read_market(&f.svm, &market).pairs_minted, 4);
     assert_eq!(token_balance(&f.svm, &vault), 4 * ONE);
@@ -49,11 +56,26 @@ fn vault_tracks_collateral_through_full_cycle() {
     force_settle(&mut f.svm, &market, Outcome::YesWins);
     let usdc_before = token_balance(&f.svm, &user_usdc);
 
-    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::Yes, 4 * ONE, &user_yes, &user_usdc);
+    let ix = ix_redeem(
+        &f.user.pubkey(),
+        &market,
+        RedeemSide::Yes,
+        4 * ONE,
+        &user_yes,
+        &user_usdc,
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("redeem all");
 
-    assert_eq!(token_balance(&f.svm, &vault), 0, "vault drained after winners redeem");
-    assert_eq!(token_balance(&f.svm, &user_usdc), usdc_before + 4 * ONE, "user paid out $4");
+    assert_eq!(
+        token_balance(&f.svm, &vault),
+        0,
+        "vault drained after winners redeem"
+    );
+    assert_eq!(
+        token_balance(&f.svm, &user_usdc),
+        usdc_before + 4 * ONE,
+        "user paid out $4"
+    );
 }
 
 #[test]
@@ -76,13 +98,31 @@ fn dollar_conservation_user_breaks_even_when_right() {
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("mint");
     force_settle(&mut f.svm, &market, Outcome::YesWins);
 
-    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::Yes, ONE, &ata(&f.user.pubkey(), &yes_mint), &user_usdc);
+    let ix = ix_redeem(
+        &f.user.pubkey(),
+        &market,
+        RedeemSide::Yes,
+        ONE,
+        &ata(&f.user.pubkey(), &yes_mint),
+        &user_usdc,
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("redeem yes");
-    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::No, ONE, &ata(&f.user.pubkey(), &no_mint), &user_usdc);
+    let ix = ix_redeem(
+        &f.user.pubkey(),
+        &market,
+        RedeemSide::No,
+        ONE,
+        &ata(&f.user.pubkey(), &no_mint),
+        &user_usdc,
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("burn no");
 
     // Holding both sides == $1 redeemable; user is exactly back to start.
-    assert_eq!(token_balance(&f.svm, &user_usdc), start_usdc, "Yes+No redeem == $1, break even");
+    assert_eq!(
+        token_balance(&f.svm, &user_usdc),
+        start_usdc,
+        "Yes+No redeem == $1, break even"
+    );
 }
 
 #[test]
@@ -104,12 +144,30 @@ fn double_redeem_rejected() {
     let user_usdc = ata(&f.user.pubkey(), &f.usdc_mint);
     let (vault, _) = vault_pda(&market);
 
-    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::Yes, ONE, &user_yes, &user_usdc);
+    let ix = ix_redeem(
+        &f.user.pubkey(),
+        &market,
+        RedeemSide::Yes,
+        ONE,
+        &user_yes,
+        &user_usdc,
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("first redeem ok");
-    assert_eq!(token_balance(&f.svm, &vault), 0, "vault drained exactly once");
+    assert_eq!(
+        token_balance(&f.svm, &vault),
+        0,
+        "vault drained exactly once"
+    );
 
     // Second redeem of the same (now-zero) position must fail.
-    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::Yes, ONE, &user_yes, &user_usdc);
+    let ix = ix_redeem(
+        &f.user.pubkey(),
+        &market,
+        RedeemSide::Yes,
+        ONE,
+        &user_yes,
+        &user_usdc,
+    );
     let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
     assert!(res.is_err(), "double-redeem must be rejected");
 }
@@ -125,7 +183,13 @@ fn cross_market_vault_substitution_rejected() {
     // Market A (META @ $680) and Market B (META @ $700) share the USDC mint.
     let ixa = ix_create_strike_market(&f.admin.pubkey(), &f.usdc_mint, Ticker::Meta, STRIKE, DAY);
     send(&mut f.svm, &f.admin.pubkey(), ixa, &[&admin]).expect("create A");
-    let ixb = ix_create_strike_market(&f.admin.pubkey(), &f.usdc_mint, Ticker::Meta, 700_000_000, DAY);
+    let ixb = ix_create_strike_market(
+        &f.admin.pubkey(),
+        &f.usdc_mint,
+        Ticker::Meta,
+        700_000_000,
+        DAY,
+    );
     send(&mut f.svm, &f.admin.pubkey(), ixb, &[&admin]).expect("create B");
     let market_a = market_pda(Ticker::Meta, STRIKE, DAY).0;
     let market_b = market_pda(Ticker::Meta, 700_000_000, DAY).0;
@@ -149,7 +213,11 @@ fn cross_market_vault_substitution_rejected() {
 
     let ix = Instruction::new_with_bytes(
         meridian::id(),
-        &meridian::instruction::Redeem { side: RedeemSide::Yes, amount: ONE }.data(),
+        &meridian::instruction::Redeem {
+            side: RedeemSide::Yes,
+            amount: ONE,
+        }
+        .data(),
         meridian::accounts::Redeem {
             user: f.user.pubkey(),
             market: market_a,
@@ -164,7 +232,10 @@ fn cross_market_vault_substitution_rejected() {
         .to_account_metas(None),
     );
     let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
-    assert!(res.is_err(), "redeeming against a foreign vault must be rejected");
+    assert!(
+        res.is_err(),
+        "redeeming against a foreign vault must be rejected"
+    );
 }
 
 /// Payout-completeness invariant (ARCHITECTURE §7.2, owned by F-04): for a
@@ -198,7 +269,11 @@ fn payout_completeness_at(price_usdc_6dp: u64, expect: Outcome) {
     let cranker = f.user.insecure_clone();
     let ix = ix_settle_market(&f.user.pubkey(), &market, &pu);
     send(&mut f.svm, &f.user.pubkey(), ix, &[&cranker]).expect("settle");
-    assert_eq!(read_market(&f.svm, &market).outcome, expect, "outcome at price");
+    assert_eq!(
+        read_market(&f.svm, &market).outcome,
+        expect,
+        "outcome at price"
+    );
 
     // Redeem both sides; measure USDC paid for each.
     let (yes_mint, _) = yes_mint_pda(&market);
@@ -206,12 +281,26 @@ fn payout_completeness_at(price_usdc_6dp: u64, expect: Outcome) {
     let user_usdc = ata(&f.user.pubkey(), &f.usdc_mint);
 
     let before = token_balance(&f.svm, &user_usdc);
-    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::Yes, ONE, &ata(&f.user.pubkey(), &yes_mint), &user_usdc);
+    let ix = ix_redeem(
+        &f.user.pubkey(),
+        &market,
+        RedeemSide::Yes,
+        ONE,
+        &ata(&f.user.pubkey(), &yes_mint),
+        &user_usdc,
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("redeem yes");
     let yes_payout = token_balance(&f.svm, &user_usdc) - before;
 
     let before = token_balance(&f.svm, &user_usdc);
-    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::No, ONE, &ata(&f.user.pubkey(), &no_mint), &user_usdc);
+    let ix = ix_redeem(
+        &f.user.pubkey(),
+        &market,
+        RedeemSide::No,
+        ONE,
+        &ata(&f.user.pubkey(), &no_mint),
+        &user_usdc,
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("redeem no");
     let no_payout = token_balance(&f.svm, &user_usdc) - before;
 
@@ -268,7 +357,14 @@ fn redeem_wrong_side_account_rejected() {
     let user_no = ata(&f.user.pubkey(), &no_mint);
     let user_usdc = ata(&f.user.pubkey(), &f.usdc_mint);
     // Claim Yes side but pass the No account.
-    let ix = ix_redeem(&f.user.pubkey(), &market, RedeemSide::Yes, ONE, &user_no, &user_usdc);
+    let ix = ix_redeem(
+        &f.user.pubkey(),
+        &market,
+        RedeemSide::Yes,
+        ONE,
+        &user_no,
+        &user_usdc,
+    );
     let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
     assert!(res.is_err(), "mismatched side/account must be rejected");
 }

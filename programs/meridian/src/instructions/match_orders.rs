@@ -226,7 +226,11 @@ pub fn handler<'info>(
         emit!(crate::events::OrderMatched {
             market: market_key,
             maker_seq: plan.bid_seq.min(plan.ask_seq),
-            maker: if plan.bid_seq < plan.ask_seq { plan.bid_owner } else { plan.ask_owner },
+            maker: if plan.bid_seq < plan.ask_seq {
+                plan.bid_owner
+            } else {
+                plan.ask_owner
+            },
             taker: ctx.accounts.cranker.key(),
             price: plan.trade_price,
             fill_size: plan.fill_size,

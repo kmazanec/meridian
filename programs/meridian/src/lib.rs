@@ -6,6 +6,12 @@
 //! are implemented by later features (F-02–F-05) against the account shapes
 //! defined here.
 
+// `diverging_sub_expression` fires inside Anchor's `#[program]` macro expansion
+// (the generated dispatch/handler glue), not in our handler bodies. The lint is
+// emitted against macro-generated code that a module-level `#[allow]` can't
+// reach, so suppress it crate-wide.
+#![allow(clippy::diverging_sub_expression)]
+
 pub mod constants;
 pub mod error;
 pub mod events;

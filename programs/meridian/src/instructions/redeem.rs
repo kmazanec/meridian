@@ -75,8 +75,14 @@ pub fn handler(ctx: Context<Redeem>, side: RedeemSide, amount: u64) -> Result<()
 
     // The token account being burned must be the mint for the chosen side.
     let (side_mint, mint_ai) = match side {
-        RedeemSide::Yes => (ctx.accounts.yes_mint.key(), ctx.accounts.yes_mint.to_account_info()),
-        RedeemSide::No => (ctx.accounts.no_mint.key(), ctx.accounts.no_mint.to_account_info()),
+        RedeemSide::Yes => (
+            ctx.accounts.yes_mint.key(),
+            ctx.accounts.yes_mint.to_account_info(),
+        ),
+        RedeemSide::No => (
+            ctx.accounts.no_mint.key(),
+            ctx.accounts.no_mint.to_account_info(),
+        ),
     };
     require_keys_eq!(
         ctx.accounts.user_tokens.mint,

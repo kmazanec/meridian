@@ -129,6 +129,13 @@ fn admin_settle_idempotent_after_oracle_settle() {
     send(&mut f.svm, &f.admin.pubkey(), ix2, &[&admin]).expect("admin settle is a safe no-op");
 
     let m = read_market(&f.svm, &market);
-    assert_eq!(m.outcome, Outcome::YesWins, "oracle outcome not overwritten");
-    assert_eq!(m.settlement_price, after_oracle.settlement_price, "price immutable");
+    assert_eq!(
+        m.outcome,
+        Outcome::YesWins,
+        "oracle outcome not overwritten"
+    );
+    assert_eq!(
+        m.settlement_price, after_oracle.settlement_price,
+        "price immutable"
+    );
 }

@@ -91,7 +91,10 @@ pub fn handler(ctx: Context<SettleMarket>) -> Result<()> {
     // Require *full* guardian verification. `Partial` updates clear a lower
     // guardian-collusion bar and Pyth documents them as unsafe for settlement;
     // an attacker who could post a Partial update must not be able to settle.
-    require!(price.fully_verified, MeridianError::InsufficientVerification);
+    require!(
+        price.fully_verified,
+        MeridianError::InsufficientVerification
+    );
 
     // Feed match: the update must be for *this* market's configured feed. Reject a
     // zero feed id outright so an unconfigured ticker (all-zero Config slot) can
@@ -116,7 +119,13 @@ pub fn handler(ctx: Context<SettleMarket>) -> Result<()> {
     let settlement_price = price.to_usdc_base_units()?;
 
     let market_key = ctx.accounts.market.key();
-    write_settlement(&mut ctx.accounts.market, market_key, settlement_price, now, false)
+    write_settlement(
+        &mut ctx.accounts.market,
+        market_key,
+        settlement_price,
+        now,
+        false,
+    )
 }
 
 /// Look up the configured Pyth feed id for the market's ticker.

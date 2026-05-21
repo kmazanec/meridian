@@ -17,7 +17,7 @@ const STRIKE: u64 = 680_000_000;
 const ONE: u64 = 1_000_000;
 
 fn ceil_cost(price: u64, size: u64) -> u64 {
-    (((price as u128) * (size as u128) + (ONE as u128 - 1)) / ONE as u128) as u64
+    ((price as u128) * (size as u128)).div_ceil(ONE as u128) as u64
 }
 
 fn ensure_yes_ata(f: &mut Fixture, user: solana_pubkey::Pubkey, market: &solana_pubkey::Pubkey) {
@@ -62,8 +62,16 @@ fn assert_escrow_reconciles(f: &Fixture, market: &solana_pubkey::Pubkey) {
     let want_yes: u64 = ob.asks.iter().map(|o| o.size).sum();
     let (usdc_escrow, _) = usdc_escrow_pda(market);
     let (yes_escrow, _) = yes_escrow_pda(market);
-    assert_eq!(token_balance(&f.svm, &usdc_escrow), want_usdc, "usdc escrow == Σ ceil(bid)");
-    assert_eq!(token_balance(&f.svm, &yes_escrow), want_yes, "yes escrow == Σ ask size");
+    assert_eq!(
+        token_balance(&f.svm, &usdc_escrow),
+        want_usdc,
+        "usdc escrow == Σ ceil(bid)"
+    );
+    assert_eq!(
+        token_balance(&f.svm, &yes_escrow),
+        want_yes,
+        "yes escrow == Σ ask size"
+    );
 }
 
 #[test]
@@ -84,31 +92,67 @@ fn trading_never_touches_collateral_vault() {
     // A flurry of trading activity: rest, cross, partial, cancel.
     let _up = f.user.pubkey();
     ensure_yes_ata(&mut f, _up, &market); // user can receive Yes
-    // user2 rests an ask 2.0 @ $0.50 (escrows Yes).
-    let ix = ix_place_order(&f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 500_000, 2 * ONE, false, &[]);
+                                          // user2 rests an ask 2.0 @ $0.50 (escrows Yes).
+    let ix = ix_place_order(
+        &f.user2.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Ask,
+        500_000,
+        2 * ONE,
+        false,
+        &[],
+    );
     send(&mut f.svm, &f.user2.pubkey(), ix, &[&user2]).expect("ask");
     assert_collateralization(&f, &market); // unchanged by resting
 
     // user crosses 1.5 of it (market buy). Maker (user2) gets USDC.
     let maker_usdc = ata(&f.user2.pubkey(), &f.usdc_mint);
-    let ix = ix_place_order(&f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 0, 3 * ONE / 2, true, &[maker_usdc]);
+    let ix = ix_place_order(
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        0,
+        3 * ONE / 2,
+        true,
+        &[maker_usdc],
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("cross");
     assert_collateralization(&f, &market); // unchanged by matching
 
     // user rests a bid 2.0 @ $0.40 (escrows USDC), then cancels it.
-    let ix = ix_place_order(&f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 400_000, 2 * ONE, false, &[]);
+    let ix = ix_place_order(
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        400_000,
+        2 * ONE,
+        false,
+        &[],
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("bid");
     assert_collateralization(&f, &market);
     let refund_to = ata(&f.user.pubkey(), &f.usdc_mint);
     // The bid's seq: find it.
     let (ob_pda, _) = order_book_pda(&market);
-    let seq = read_order_book(&f.svm, &ob_pda).bids.iter().find(|o| o.owner == f.user.pubkey()).unwrap().seq;
+    let seq = read_order_book(&f.svm, &ob_pda)
+        .bids
+        .iter()
+        .find(|o| o.owner == f.user.pubkey())
+        .unwrap()
+        .seq;
     let ix = ix_cancel_order(&f.user.pubkey(), &market, OrderSide::Bid, seq, &refund_to);
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("cancel");
 
     // Through all of it, the vault is exactly what minting set — trading never touched it.
     assert_collateralization(&f, &market);
-    assert_eq!(token_balance(&f.svm, &vault), vault_after_mint, "vault untouched by trading");
+    assert_eq!(
+        token_balance(&f.svm, &vault),
+        vault_after_mint,
+        "vault untouched by trading"
+    );
 }
 
 #[test]
@@ -122,13 +166,31 @@ fn escrow_reconciles_with_resting_book() {
 
     // user rests three bids at odd prices (exercise ceil rounding).
     for (p, s) in [(333_333u64, ONE), (650_000, 2 * ONE), (1, 3)] {
-        let ix = ix_place_order(&f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, p, s, false, &[]);
+        let ix = ix_place_order(
+            &f.user.pubkey(),
+            &f.usdc_mint,
+            &market,
+            OrderSide::Bid,
+            p,
+            s,
+            false,
+            &[],
+        );
         send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("bid");
     }
     // user2 mints and rests two asks.
     mint_pairs_for(&mut f, &user2, &market, 5);
     for (p, s) in [(700_000u64, 2 * ONE), (900_000, ONE)] {
-        let ix = ix_place_order(&f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, p, s, false, &[]);
+        let ix = ix_place_order(
+            &f.user2.pubkey(),
+            &f.usdc_mint,
+            &market,
+            OrderSide::Ask,
+            p,
+            s,
+            false,
+            &[],
+        );
         send(&mut f.svm, &f.user2.pubkey(), ix, &[&user2]).expect("ask");
     }
     assert_escrow_reconciles(&f, &market);
@@ -150,21 +212,65 @@ fn four_trade_paths_on_one_book() {
 
     // --- BUY YES: trader buys Yes from a resting ask. ---
     mint_pairs_for(&mut f, &lp, &market, 4); // lp has 4 Yes to sell
-    let ix = ix_place_order(&f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 600_000, ONE, false, &[]);
+    let ix = ix_place_order(
+        &f.user2.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Ask,
+        600_000,
+        ONE,
+        false,
+        &[],
+    );
     send(&mut f.svm, &f.user2.pubkey(), ix, &[&lp]).expect("lp ask");
     let lp_usdc = ata(&f.user2.pubkey(), &f.usdc_mint);
-    let ix = ix_place_order(&f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 0, ONE, true, &[lp_usdc]);
+    let ix = ix_place_order(
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        0,
+        ONE,
+        true,
+        &[lp_usdc],
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&trader]).expect("buy yes");
-    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), ONE, "Buy Yes → holds 1 Yes");
+    assert_eq!(
+        token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)),
+        ONE,
+        "Buy Yes → holds 1 Yes"
+    );
 
     // --- SELL YES: trader sells the Yes back into a resting bid. ---
-    let ix = ix_place_order(&f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 550_000, ONE, false, &[]);
+    let ix = ix_place_order(
+        &f.user2.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        550_000,
+        ONE,
+        false,
+        &[],
+    );
     send(&mut f.svm, &f.user2.pubkey(), ix, &[&lp]).expect("lp bid");
     let lp_yes = ata(&f.user2.pubkey(), &yes_mint);
     let usdc_before = token_balance(&f.svm, &ata(&f.user.pubkey(), &f.usdc_mint));
-    let ix = ix_place_order(&f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 0, ONE, true, &[lp_yes]);
+    let ix = ix_place_order(
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Ask,
+        0,
+        ONE,
+        true,
+        &[lp_yes],
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&trader]).expect("sell yes");
-    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), 0, "Sell Yes → no Yes left");
+    assert_eq!(
+        token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)),
+        0,
+        "Sell Yes → no Yes left"
+    );
     assert_eq!(
         token_balance(&f.svm, &ata(&f.user.pubkey(), &f.usdc_mint)),
         usdc_before + 550_000,
@@ -173,17 +279,39 @@ fn four_trade_paths_on_one_book() {
 
     // --- BUY NO: mint a pair, sell the Yes, keep the No (effective No cost = $1 − Yes proceeds). ---
     // lp posts a bid to buy the Yes leg.
-    let ix = ix_place_order(&f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 700_000, ONE, false, &[]);
+    let ix = ix_place_order(
+        &f.user2.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        700_000,
+        ONE,
+        false,
+        &[],
+    );
     send(&mut f.svm, &f.user2.pubkey(), ix, &[&lp]).expect("lp bid for no");
     // Capture balances BEFORE the whole Buy-No path (mint pair, then sell the Yes leg).
     let no_before = token_balance(&f.svm, &ata(&f.user.pubkey(), &no_mint));
     let usdc_before_buy_no = token_balance(&f.svm, &ata(&f.user.pubkey(), &f.usdc_mint));
     mint_pairs_for(&mut f, &trader, &market, 1); // mint costs $1.00, gives 1 Yes + 1 No
     let lp_yes = ata(&f.user2.pubkey(), &yes_mint);
-    let ix = ix_place_order(&f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 0, ONE, true, &[lp_yes]);
+    let ix = ix_place_order(
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Ask,
+        0,
+        ONE,
+        true,
+        &[lp_yes],
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&trader]).expect("sell yes leg of buy-no");
     // Net Buy-No: +1 No; net USDC = −$1.00 (mint) + $0.70 (Yes sale) = −$0.30 effective No cost.
-    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &no_mint)), no_before + ONE, "Buy No → +1 No");
+    assert_eq!(
+        token_balance(&f.svm, &ata(&f.user.pubkey(), &no_mint)),
+        no_before + ONE,
+        "Buy No → +1 No"
+    );
     assert_eq!(
         token_balance(&f.svm, &ata(&f.user.pubkey(), &f.usdc_mint)),
         usdc_before_buy_no - ONE + 700_000,
@@ -191,11 +319,29 @@ fn four_trade_paths_on_one_book() {
     );
 
     // --- SELL NO: buy a Yes from a resting ask → now hold Yes+No (redeemable $1), closing No. ---
-    let ix = ix_place_order(&f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 650_000, ONE, false, &[]);
+    let ix = ix_place_order(
+        &f.user2.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Ask,
+        650_000,
+        ONE,
+        false,
+        &[],
+    );
     send(&mut f.svm, &f.user2.pubkey(), ix, &[&lp]).expect("lp ask for sell-no");
     let yes_before = token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint));
     let lp_usdc = ata(&f.user2.pubkey(), &f.usdc_mint);
-    let ix = ix_place_order(&f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 0, ONE, true, &[lp_usdc]);
+    let ix = ix_place_order(
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        0,
+        ONE,
+        true,
+        &[lp_usdc],
+    );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&trader]).expect("buy yes leg of sell-no");
     assert_eq!(
         token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)),

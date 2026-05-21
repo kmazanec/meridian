@@ -108,7 +108,8 @@ fn setup() -> Fixture {
     )
     .unwrap();
 
-    svm.airdrop(&upgrade_authority.pubkey(), 10_000_000_000).unwrap();
+    svm.airdrop(&upgrade_authority.pubkey(), 10_000_000_000)
+        .unwrap();
 
     Fixture {
         svm,
@@ -156,6 +157,9 @@ fn build_init_ix(admin: &Pubkey, usdc_mint: &Pubkey, fee_account: Option<Pubkey>
     )
 }
 
+// `FailedTransactionMetadata` (LiteSVM's error type) is large by design; boxing
+// it would churn every call site for no benefit in a test helper.
+#[allow(clippy::result_large_err)]
 fn send(
     svm: &mut LiteSVM,
     payer: &Keypair,
@@ -190,9 +194,9 @@ fn initialize_config_happy_path() {
     assert_eq!(cfg.bump, expected_bump, "bump recorded");
 
     let expected = sample_tickers();
-    for i in 0..NUM_TICKERS {
-        assert_eq!(cfg.tickers[i].ticker, expected[i].ticker, "ticker {i}");
-        assert_eq!(cfg.tickers[i].feed_id, expected[i].feed_id, "feed id {i}");
+    for (i, (got, want)) in cfg.tickers.iter().zip(expected.iter()).enumerate() {
+        assert_eq!(got.ticker, want.ticker, "ticker {i}");
+        assert_eq!(got.feed_id, want.feed_id, "feed id {i}");
     }
 }
 
@@ -228,8 +232,14 @@ fn initialize_config_rejects_reinitialization() {
     // And the config must be UNCHANGED — proves the second init did not mutate it.
     let cfg_after = read_config(&f.svm);
     assert_eq!(cfg_after.admin, cfg_before.admin, "admin unchanged");
-    assert_eq!(cfg_after.fee_account, cfg_before.fee_account, "fee unchanged");
-    assert_eq!(cfg_after.fee_account, None, "still the first value, not other_fee");
+    assert_eq!(
+        cfg_after.fee_account, cfg_before.fee_account,
+        "fee unchanged"
+    );
+    assert_eq!(
+        cfg_after.fee_account, None,
+        "still the first value, not other_fee"
+    );
 }
 
 #[test]

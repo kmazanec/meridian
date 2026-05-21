@@ -10,6 +10,7 @@
 //!     (best bid first);
 //!   - **asks** are kept sorted by price **ascending**, ties by `seq` **ascending**
 //!     (best ask first).
+//!
 //! So the best order on each side is always index 0, and price-time priority is a simple
 //! front-to-back scan.
 
@@ -55,7 +56,9 @@ pub fn fill_usdc(price: u64, s_before: u64, s_after: u64) -> Result<u64> {
     debug_assert!(s_after <= s_before);
     let before = bid_cost_ceil(price, s_before)?;
     let after = bid_cost_ceil(price, s_after)?;
-    before.checked_sub(after).ok_or(MeridianError::MathOverflow.into())
+    before
+        .checked_sub(after)
+        .ok_or(MeridianError::MathOverflow.into())
 }
 
 /// Insert an order keeping the side sorted by price-time priority.
@@ -100,7 +103,11 @@ pub(crate) fn verify_maker_account(
     expected_owner: &Pubkey,
     expected_mint: &Pubkey,
 ) -> Result<()> {
-    require_keys_eq!(*maker_acct.owner, *token_program_id, MeridianError::InvalidArgument);
+    require_keys_eq!(
+        *maker_acct.owner,
+        *token_program_id,
+        MeridianError::InvalidArgument
+    );
     require!(maker_acct.is_writable, MeridianError::InvalidArgument);
     let ta = anchor_spl::token::TokenAccount::try_deserialize(&mut &maker_acct.data.borrow()[..])
         .map_err(|_| MeridianError::InvalidArgument)?;

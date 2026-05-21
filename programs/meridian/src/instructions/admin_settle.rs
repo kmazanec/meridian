@@ -67,5 +67,11 @@ pub fn handler(ctx: Context<AdminSettle>, settlement_price: u64) -> Result<()> {
     require!(now >= earliest, MeridianError::OverrideDelayNotElapsed);
 
     let market_key = ctx.accounts.market.key();
-    write_settlement(&mut ctx.accounts.market, market_key, settlement_price, now, true)
+    write_settlement(
+        &mut ctx.accounts.market,
+        market_key,
+        settlement_price,
+        now,
+        true,
+    )
 }

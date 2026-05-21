@@ -29,6 +29,7 @@
 //!   2. `grow_order_book` — `realloc` the PDA up to the full `8 + INIT_SPACE`, top up
 //!      rent, then wire `Market.order_book`. Trading instructions require
 //!      `market.order_book == order_book.key()`, so they only succeed after this step.
+//!
 //! Both the frozen PDA seed (`[order_book, market]`) and the frozen `ORDERBOOK_N = 128`
 //! are preserved; only the *creation mechanism* differs from F-01's note.
 

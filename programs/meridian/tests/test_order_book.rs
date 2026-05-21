@@ -71,13 +71,20 @@ fn init_then_grow_wires_market_and_escrows() {
     send(&mut f.svm, &f.admin.pubkey(), ix, &[&payer]).expect("grow order book");
 
     let (ob_pda, _) = order_book_pda(&market);
-    assert_eq!(read_market(&f.svm, &market).order_book, ob_pda, "market wired after grow");
+    assert_eq!(
+        read_market(&f.svm, &market).order_book,
+        ob_pda,
+        "market wired after grow"
+    );
 
     // OrderBook account is well-formed, empty, and at full on-chain size.
     let ob = read_order_book(&f.svm, &ob_pda);
     assert_eq!(ob.market, market, "book back-references market");
     assert_eq!(ob.next_seq, 0, "seq starts at 0");
-    assert!(ob.bids.is_empty() && ob.asks.is_empty(), "book starts empty");
+    assert!(
+        ob.bids.is_empty() && ob.asks.is_empty(),
+        "book starts empty"
+    );
     let ob_acct = f.svm.get_account(&ob_pda).expect("ob account");
     assert_eq!(
         ob_acct.data.len(),
@@ -93,7 +100,10 @@ fn init_then_grow_wires_market_and_escrows() {
 
     let ue = read_token_account(&f.svm, &usdc_escrow).expect("usdc escrow exists");
     assert_eq!(ue.mint, f.usdc_mint, "usdc escrow mint");
-    assert_eq!(ue.owner, mint_auth, "usdc escrow authority is mint_auth PDA");
+    assert_eq!(
+        ue.owner, mint_auth,
+        "usdc escrow authority is mint_auth PDA"
+    );
     assert_eq!(ue.amount, 0, "usdc escrow starts empty");
 
     let ye = read_token_account(&f.svm, &yes_escrow).expect("yes escrow exists");
@@ -111,7 +121,10 @@ fn init_order_book_rejected_twice() {
     let payer = f.user.insecure_clone();
     let ix = ix_init_order_book(&f.user.pubkey(), &f.usdc_mint, &market);
     let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&payer]);
-    assert!(res.is_err(), "re-initializing the order book must be rejected");
+    assert!(
+        res.is_err(),
+        "re-initializing the order book must be rejected"
+    );
 }
 
 #[test]
@@ -123,7 +136,10 @@ fn grow_order_book_rejected_twice() {
     let payer = f.user.insecure_clone();
     let ix = ix_grow_order_book(&f.user.pubkey(), &market);
     let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&payer]);
-    assert!(res.is_err(), "re-growing a wired order book must be rejected");
+    assert!(
+        res.is_err(),
+        "re-growing a wired order book must be rejected"
+    );
 }
 
 #[test]
@@ -154,7 +170,14 @@ fn limit_bid_rests_and_escrows_usdc() {
     let size = 2 * ONE; // 2.0 Yes
     let usdc_before = token_balance(&f.svm, &ata(&f.user.pubkey(), &f.usdc_mint));
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, price, size, false, &[],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        price,
+        size,
+        false,
+        &[],
     );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("place bid");
 
@@ -172,7 +195,11 @@ fn limit_bid_rests_and_escrows_usdc() {
 
     // USDC escrowed = $1.20; user balance dropped by that.
     let (usdc_escrow, _) = usdc_escrow_pda(&market);
-    assert_eq!(token_balance(&f.svm, &usdc_escrow), 1_200_000, "escrowed $1.20");
+    assert_eq!(
+        token_balance(&f.svm, &usdc_escrow),
+        1_200_000,
+        "escrowed $1.20"
+    );
     assert_eq!(
         token_balance(&f.svm, &ata(&f.user.pubkey(), &f.usdc_mint)),
         usdc_before - 1_200_000,
@@ -193,7 +220,14 @@ fn limit_ask_rests_and_escrows_yes() {
 
     // Ask: sell 2.0 Yes @ $0.70 → escrow 2.0 Yes tokens.
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 700_000, 2 * ONE, false, &[],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Ask,
+        700_000,
+        2 * ONE,
+        false,
+        &[],
     );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("place ask");
 
@@ -203,7 +237,11 @@ fn limit_ask_rests_and_escrows_yes() {
     assert_eq!(ob.asks[0].size, 2 * ONE);
 
     let (yes_escrow, _) = yes_escrow_pda(&market);
-    assert_eq!(token_balance(&f.svm, &yes_escrow), 2 * ONE, "escrowed 2 Yes");
+    assert_eq!(
+        token_balance(&f.svm, &yes_escrow),
+        2 * ONE,
+        "escrowed 2 Yes"
+    );
     assert_eq!(
         token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)),
         0,
@@ -222,7 +260,14 @@ fn price_time_priority_ordering_on_each_side() {
     // Place bids @ 0.50, 0.60, 0.60 (the two 0.60s test the seq tiebreak).
     for p in [500_000u64, 600_000, 600_000] {
         let ix = ix_place_order(
-            &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, p, ONE, false, &[],
+            &f.user.pubkey(),
+            &f.usdc_mint,
+            &market,
+            OrderSide::Bid,
+            p,
+            ONE,
+            false,
+            &[],
         );
         send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("bid");
     }
@@ -244,7 +289,14 @@ fn place_order_rejects_zero_size() {
     ensure_yes_ata(&mut f, _u, &market);
     let user = f.user.insecure_clone();
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 500_000, 0, false, &[],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        500_000,
+        0,
+        false,
+        &[],
     );
     let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
     assert!(res.is_err(), "zero size must be rejected");
@@ -259,7 +311,14 @@ fn place_order_rejects_price_out_of_range() {
     let user = f.user.insecure_clone();
     // Price > PRICE_SCALE ($1.00) is invalid.
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 1_000_001, ONE, false, &[],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        1_000_001,
+        ONE,
+        false,
+        &[],
     );
     let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
     assert!(res.is_err(), "price above PRICE_SCALE must be rejected");
@@ -275,7 +334,14 @@ fn place_order_rejects_zero_price_limit() {
     ensure_yes_ata(&mut f, _u, &market);
     let user = f.user.insecure_clone();
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 0, ONE, false, &[],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        0,
+        ONE,
+        false,
+        &[],
     );
     let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
     assert!(res.is_err(), "zero-price limit order must be rejected");
@@ -290,7 +356,14 @@ fn place_order_rejected_when_paused() {
     set_paused(&mut f.svm, true);
     let user = f.user.insecure_clone();
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 500_000, ONE, false, &[],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        500_000,
+        ONE,
+        false,
+        &[],
     );
     let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
     assert!(res.is_err(), "trading must be rejected when paused");
@@ -305,7 +378,14 @@ fn place_order_rejected_when_settled() {
     force_settle(&mut f.svm, &market, meridian::state::Outcome::YesWins);
     let user = f.user.insecure_clone();
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 500_000, ONE, false, &[],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        500_000,
+        ONE,
+        false,
+        &[],
     );
     let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
     assert!(res.is_err(), "trading must be rejected on a settled market");
@@ -326,19 +406,40 @@ fn book_full_rejects_new_resting_order() {
         // Tiny distinct prices; size 1 base unit → cheap escrow.
         let price = 1 + i; // all <= PRICE_SCALE
         let ix = ix_place_order(
-            &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, price, 1, false, &[],
+            &f.user.pubkey(),
+            &f.usdc_mint,
+            &market,
+            OrderSide::Bid,
+            price,
+            1,
+            false,
+            &[],
         );
         send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("fill book");
     }
     let (ob_pda, _) = order_book_pda(&market);
-    assert_eq!(read_order_book(&f.svm, &ob_pda).bids.len(), n as usize, "book full");
+    assert_eq!(
+        read_order_book(&f.svm, &ob_pda).bids.len(),
+        n as usize,
+        "book full"
+    );
 
     // One more must be rejected with BookFull.
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 999_999, 1, false, &[],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        999_999,
+        1,
+        false,
+        &[],
     );
     let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
-    assert!(res.is_err(), "resting beyond capacity must be rejected (BookFull)");
+    assert!(
+        res.is_err(),
+        "resting beyond capacity must be rejected (BookFull)"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -365,7 +466,14 @@ fn taker_buy_crosses_resting_ask_full_fill() {
     let maker = f.user2.insecure_clone();
     mint_pairs_for(&mut f, &maker, &market, 2);
     let ix = ix_place_order(
-        &f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 500_000, 2 * ONE, false, &[],
+        &f.user2.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Ask,
+        500_000,
+        2 * ONE,
+        false,
+        &[],
     );
     send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("maker ask");
 
@@ -378,7 +486,14 @@ fn taker_buy_crosses_resting_ask_full_fill() {
     let maker_usdc_before = token_balance(&f.svm, &maker_usdc);
 
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 0, 2 * ONE, true, &[maker_usdc],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        0,
+        2 * ONE,
+        true,
+        &[maker_usdc],
     );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&taker]).expect("taker market buy");
 
@@ -388,13 +503,21 @@ fn taker_buy_crosses_resting_ask_full_fill() {
     assert!(ob.asks.is_empty() && ob.bids.is_empty(), "book cleared");
 
     // Taker holds 2.0 Yes; paid $1.00 (2.0 @ $0.50). Maker received $1.00.
-    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), 2 * ONE, "taker got 2 Yes");
+    assert_eq!(
+        token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)),
+        2 * ONE,
+        "taker got 2 Yes"
+    );
     assert_eq!(
         token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey())),
         taker_usdc_before - 1_000_000,
         "taker paid $1.00"
     );
-    assert_eq!(token_balance(&f.svm, &maker_usdc), maker_usdc_before + 1_000_000, "maker got $1.00");
+    assert_eq!(
+        token_balance(&f.svm, &maker_usdc),
+        maker_usdc_before + 1_000_000,
+        "maker got $1.00"
+    );
     // Yes escrow drained.
     let (yes_escrow, _) = yes_escrow_pda(&market);
     assert_eq!(token_balance(&f.svm, &yes_escrow), 0, "yes escrow emptied");
@@ -411,7 +534,14 @@ fn taker_sell_crosses_resting_bid_full_fill() {
     let _u2 = f.user2.pubkey();
     ensure_yes_ata(&mut f, _u2, &market); // maker will receive Yes
     let ix = ix_place_order(
-        &f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 600_000, 2 * ONE, false, &[],
+        &f.user2.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        600_000,
+        2 * ONE,
+        false,
+        &[],
     );
     send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("maker bid");
 
@@ -422,7 +552,14 @@ fn taker_sell_crosses_resting_bid_full_fill() {
     let taker_usdc_before = token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey()));
 
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 0, 2 * ONE, true, &[maker_yes],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Ask,
+        0,
+        2 * ONE,
+        true,
+        &[maker_yes],
     );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&taker]).expect("taker market sell");
 
@@ -431,14 +568,22 @@ fn taker_sell_crosses_resting_bid_full_fill() {
     assert!(ob.asks.is_empty() && ob.bids.is_empty(), "book cleared");
 
     // Maker holds 2.0 Yes; taker received $1.20; USDC escrow drained.
-    assert_eq!(token_balance(&f.svm, &maker_yes), 2 * ONE, "maker got 2 Yes");
+    assert_eq!(
+        token_balance(&f.svm, &maker_yes),
+        2 * ONE,
+        "maker got 2 Yes"
+    );
     assert_eq!(
         token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey())),
         taker_usdc_before + 1_200_000,
         "taker received $1.20"
     );
     let (usdc_escrow, _) = usdc_escrow_pda(&market);
-    assert_eq!(token_balance(&f.svm, &usdc_escrow), 0, "usdc escrow emptied");
+    assert_eq!(
+        token_balance(&f.svm, &usdc_escrow),
+        0,
+        "usdc escrow emptied"
+    );
     let _ = yes_mint;
 }
 
@@ -453,7 +598,14 @@ fn partial_fill_across_two_price_levels() {
     mint_pairs_for(&mut f, &maker, &market, 2);
     for p in [400_000u64, 500_000] {
         let ix = ix_place_order(
-            &f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, p, ONE, false, &[],
+            &f.user2.pubkey(),
+            &f.usdc_mint,
+            &market,
+            OrderSide::Ask,
+            p,
+            ONE,
+            false,
+            &[],
         );
         send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("ask");
     }
@@ -467,13 +619,23 @@ fn partial_fill_across_two_price_levels() {
 
     // Best-price-first order: the $0.40 ask is consumed first, then the $0.50.
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 0, 3 * ONE / 2, true,
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        0,
+        3 * ONE / 2,
+        true,
         &[maker_usdc, maker_usdc],
     );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&taker]).expect("taker partial");
 
     // Taker holds 1.5 Yes; paid $0.40 + $0.25 = $0.65.
-    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), 3 * ONE / 2, "1.5 Yes");
+    assert_eq!(
+        token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)),
+        3 * ONE / 2,
+        "1.5 Yes"
+    );
     assert_eq!(
         token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey())),
         taker_usdc_before - 650_000,
@@ -497,7 +659,14 @@ fn crossing_limit_fills_then_rests_remainder() {
     let maker = f.user2.insecure_clone();
     mint_pairs_for(&mut f, &maker, &market, 1);
     let ix = ix_place_order(
-        &f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 500_000, ONE, false, &[],
+        &f.user2.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Ask,
+        500_000,
+        ONE,
+        false,
+        &[],
     );
     send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("ask");
 
@@ -507,13 +676,23 @@ fn crossing_limit_fills_then_rests_remainder() {
     let taker = f.user.insecure_clone();
     let maker_usdc = usdc_ata(&f, &f.user2.pubkey());
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 500_000, 3 * ONE, false,
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        500_000,
+        3 * ONE,
+        false,
         &[maker_usdc],
     );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&taker]).expect("crossing limit");
 
     let (yes_mint, _) = yes_mint_pda(&market);
-    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), ONE, "got 1.0 Yes");
+    assert_eq!(
+        token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)),
+        ONE,
+        "got 1.0 Yes"
+    );
 
     // Remainder 2.0 @ $0.50 rests as a bid; escrow holds $1.00 for it.
     let (ob_pda, _) = order_book_pda(&market);
@@ -522,7 +701,11 @@ fn crossing_limit_fills_then_rests_remainder() {
     assert_eq!(ob.bids.len(), 1, "remainder rests");
     assert_eq!(ob.bids[0].size, 2 * ONE);
     let (usdc_escrow, _) = usdc_escrow_pda(&market);
-    assert_eq!(token_balance(&f.svm, &usdc_escrow), 1_000_000, "escrow for resting remainder");
+    assert_eq!(
+        token_balance(&f.svm, &usdc_escrow),
+        1_000_000,
+        "escrow for resting remainder"
+    );
 }
 
 #[test]
@@ -534,7 +717,14 @@ fn market_order_remainder_is_cancelled_not_rested() {
     let maker = f.user2.insecure_clone();
     mint_pairs_for(&mut f, &maker, &market, 1);
     let ix = ix_place_order(
-        &f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 500_000, ONE, false, &[],
+        &f.user2.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Ask,
+        500_000,
+        ONE,
+        false,
+        &[],
     );
     send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("ask");
 
@@ -545,12 +735,23 @@ fn market_order_remainder_is_cancelled_not_rested() {
     let maker_usdc = usdc_ata(&f, &f.user2.pubkey());
     let usdc_before = token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey()));
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 0, 3 * ONE, true, &[maker_usdc],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        0,
+        3 * ONE,
+        true,
+        &[maker_usdc],
     );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&taker]).expect("market buy");
 
     let (yes_mint, _) = yes_mint_pda(&market);
-    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), ONE, "got only 1.0 Yes");
+    assert_eq!(
+        token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)),
+        ONE,
+        "got only 1.0 Yes"
+    );
     // Only $0.50 spent (for the 1.0 filled); nothing escrowed for the dropped remainder.
     assert_eq!(
         token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey())),
@@ -572,7 +773,14 @@ fn non_crossing_limit_does_not_fill() {
     let maker = f.user2.insecure_clone();
     mint_pairs_for(&mut f, &maker, &market, 1);
     let ix = ix_place_order(
-        &f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 700_000, ONE, false, &[],
+        &f.user2.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Ask,
+        700_000,
+        ONE,
+        false,
+        &[],
     );
     send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("ask");
 
@@ -581,7 +789,14 @@ fn non_crossing_limit_does_not_fill() {
     ensure_yes_ata(&mut f, _u, &market);
     let taker = f.user.insecure_clone();
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 600_000, ONE, false, &[],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        600_000,
+        ONE,
+        false,
+        &[],
     );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&taker]).expect("non-crossing bid");
 
@@ -590,7 +805,11 @@ fn non_crossing_limit_does_not_fill() {
     assert_eq!(ob.asks.len(), 1, "ask still resting");
     assert_eq!(ob.bids.len(), 1, "bid rests, no fill");
     let (yes_mint, _) = yes_mint_pda(&market);
-    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), 0, "taker got no Yes");
+    assert_eq!(
+        token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)),
+        0,
+        "taker got no Yes"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -608,21 +827,38 @@ fn cancel_bid_returns_usdc_escrow() {
     // Bid 2.0 Yes @ $0.60 → escrow $1.20.
     let usdc_before = token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey()));
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 600_000, 2 * ONE, false, &[],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        600_000,
+        2 * ONE,
+        false,
+        &[],
     );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("bid");
-    assert_eq!(token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey())), usdc_before - 1_200_000);
+    assert_eq!(
+        token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey())),
+        usdc_before - 1_200_000
+    );
 
     // Cancel seq 0 → full $1.20 returned, book empty, escrow drained.
     let refund_to = usdc_ata(&f, &f.user.pubkey());
     let ix = ix_cancel_order(&f.user.pubkey(), &market, OrderSide::Bid, 0, &refund_to);
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("cancel");
 
-    assert_eq!(token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey())), usdc_before, "fully refunded");
+    assert_eq!(
+        token_balance(&f.svm, &usdc_ata(&f, &f.user.pubkey())),
+        usdc_before,
+        "fully refunded"
+    );
     let (usdc_escrow, _) = usdc_escrow_pda(&market);
     assert_eq!(token_balance(&f.svm, &usdc_escrow), 0, "escrow drained");
     let (ob_pda, _) = order_book_pda(&market);
-    assert!(read_order_book(&f.svm, &ob_pda).bids.is_empty(), "bid removed");
+    assert!(
+        read_order_book(&f.svm, &ob_pda).bids.is_empty(),
+        "bid removed"
+    );
 }
 
 #[test]
@@ -634,16 +870,31 @@ fn cancel_ask_returns_yes_escrow() {
     let (yes_mint, _) = yes_mint_pda(&market);
 
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 700_000, 2 * ONE, false, &[],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Ask,
+        700_000,
+        2 * ONE,
+        false,
+        &[],
     );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("ask");
-    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), 0, "Yes escrowed");
+    assert_eq!(
+        token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)),
+        0,
+        "Yes escrowed"
+    );
 
     let refund_to = ata(&f.user.pubkey(), &yes_mint);
     let ix = ix_cancel_order(&f.user.pubkey(), &market, OrderSide::Ask, 0, &refund_to);
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("cancel ask");
 
-    assert_eq!(token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)), 2 * ONE, "Yes returned");
+    assert_eq!(
+        token_balance(&f.svm, &ata(&f.user.pubkey(), &yes_mint)),
+        2 * ONE,
+        "Yes returned"
+    );
     let (yes_escrow, _) = yes_escrow_pda(&market);
     assert_eq!(token_balance(&f.svm, &yes_escrow), 0, "yes escrow drained");
 }
@@ -659,7 +910,14 @@ fn cancel_partially_filled_bid_refunds_remaining() {
 
     // Maker bid 3.0 Yes @ $0.50 → escrow ceil(0.5*3.0) = $1.50.
     let ix = ix_place_order(
-        &f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 500_000, 3 * ONE, false, &[],
+        &f.user2.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        500_000,
+        3 * ONE,
+        false,
+        &[],
     );
     send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("bid");
     let (usdc_escrow, _) = usdc_escrow_pda(&market);
@@ -670,18 +928,37 @@ fn cancel_partially_filled_bid_refunds_remaining() {
     mint_pairs_for(&mut f, &taker, &market, 1);
     let maker_yes = yes_ata(&market, &f.user2.pubkey());
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 0, ONE, true, &[maker_yes],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Ask,
+        0,
+        ONE,
+        true,
+        &[maker_yes],
     );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&taker]).expect("partial hit");
-    assert_eq!(token_balance(&f.svm, &usdc_escrow), 1_000_000, "escrow now $1.00 for 2.0 remaining");
+    assert_eq!(
+        token_balance(&f.svm, &usdc_escrow),
+        1_000_000,
+        "escrow now $1.00 for 2.0 remaining"
+    );
 
     // Maker cancels remaining 2.0 @ $0.50 → refund exactly $1.00.
     let maker_usdc = usdc_ata(&f, &f.user2.pubkey());
     let maker_usdc_before = token_balance(&f.svm, &maker_usdc);
     let ix = ix_cancel_order(&f.user2.pubkey(), &market, OrderSide::Bid, 0, &maker_usdc);
     send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("cancel remainder");
-    assert_eq!(token_balance(&f.svm, &maker_usdc), maker_usdc_before + 1_000_000, "refund $1.00");
-    assert_eq!(token_balance(&f.svm, &usdc_escrow), 0, "escrow fully drained");
+    assert_eq!(
+        token_balance(&f.svm, &maker_usdc),
+        maker_usdc_before + 1_000_000,
+        "refund $1.00"
+    );
+    assert_eq!(
+        token_balance(&f.svm, &usdc_escrow),
+        0,
+        "escrow fully drained"
+    );
 }
 
 #[test]
@@ -692,19 +969,36 @@ fn cancel_rejects_non_owner() {
     ensure_yes_ata(&mut f, _u, &market);
     let user = f.user.insecure_clone();
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 600_000, ONE, false, &[],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        600_000,
+        ONE,
+        false,
+        &[],
     );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("bid");
 
     // user2 tries to cancel user's order, refunding to user2 — must fail.
     let attacker = f.user2.insecure_clone();
     let attacker_usdc = usdc_ata(&f, &f.user2.pubkey());
-    let ix = ix_cancel_order(&f.user2.pubkey(), &market, OrderSide::Bid, 0, &attacker_usdc);
+    let ix = ix_cancel_order(
+        &f.user2.pubkey(),
+        &market,
+        OrderSide::Bid,
+        0,
+        &attacker_usdc,
+    );
     let res = send(&mut f.svm, &f.user2.pubkey(), ix, &[&attacker]);
     assert!(res.is_err(), "non-owner cancel must be rejected");
     // Order still resting.
     let (ob_pda, _) = order_book_pda(&market);
-    assert_eq!(read_order_book(&f.svm, &ob_pda).bids.len(), 1, "order untouched");
+    assert_eq!(
+        read_order_book(&f.svm, &ob_pda).bids.len(),
+        1,
+        "order untouched"
+    );
 }
 
 #[test]
@@ -716,7 +1010,10 @@ fn cancel_rejects_missing_order() {
     let refund_to = usdc_ata(&f, &f.user.pubkey());
     let ix = ix_cancel_order(&f.user.pubkey(), &market, OrderSide::Bid, 7, &refund_to);
     let res = send(&mut f.svm, &f.user.pubkey(), ix, &[&user]);
-    assert!(res.is_err(), "cancelling a nonexistent order must be rejected");
+    assert!(
+        res.is_err(),
+        "cancelling a nonexistent order must be rejected"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -757,14 +1054,29 @@ fn crank_settles_crossed_pair() {
     send(&mut f.svm, &f.admin.pubkey(), ix, &[&cranker]).expect("crank");
 
     // Bid owner received 2.0 Yes; ask owner received $1.20; book + escrows cleared.
-    assert_eq!(token_balance(&f.svm, &bid_yes), 2 * ONE, "bid owner got 2 Yes");
-    assert_eq!(token_balance(&f.svm, &ask_usdc), ask_usdc_before + 1_200_000, "ask owner got $1.20");
+    assert_eq!(
+        token_balance(&f.svm, &bid_yes),
+        2 * ONE,
+        "bid owner got 2 Yes"
+    );
+    assert_eq!(
+        token_balance(&f.svm, &ask_usdc),
+        ask_usdc_before + 1_200_000,
+        "ask owner got $1.20"
+    );
     let (ob_pda, _) = order_book_pda(&market);
     let ob = read_order_book(&f.svm, &ob_pda);
-    assert!(ob.bids.is_empty() && ob.asks.is_empty(), "crossed pair fully settled");
+    assert!(
+        ob.bids.is_empty() && ob.asks.is_empty(),
+        "crossed pair fully settled"
+    );
     let (usdc_escrow, _) = usdc_escrow_pda(&market);
     let (yes_escrow, _) = yes_escrow_pda(&market);
-    assert_eq!(token_balance(&f.svm, &usdc_escrow), 0, "usdc escrow drained");
+    assert_eq!(
+        token_balance(&f.svm, &usdc_escrow),
+        0,
+        "usdc escrow drained"
+    );
     assert_eq!(token_balance(&f.svm, &yes_escrow), 0, "yes escrow drained");
 }
 
@@ -777,13 +1089,27 @@ fn crank_is_noop_on_uncrossed_book() {
     ensure_yes_ata(&mut f, _u, &market);
     let user = f.user.insecure_clone();
     let ix = ix_place_order(
-        &f.user.pubkey(), &f.usdc_mint, &market, OrderSide::Bid, 400_000, ONE, false, &[],
+        &f.user.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Bid,
+        400_000,
+        ONE,
+        false,
+        &[],
     );
     send(&mut f.svm, &f.user.pubkey(), ix, &[&user]).expect("bid");
     let maker = f.user2.insecure_clone();
     mint_pairs_for(&mut f, &maker, &market, 1);
     let ix = ix_place_order(
-        &f.user2.pubkey(), &f.usdc_mint, &market, OrderSide::Ask, 700_000, ONE, false, &[],
+        &f.user2.pubkey(),
+        &f.usdc_mint,
+        &market,
+        OrderSide::Ask,
+        700_000,
+        ONE,
+        false,
+        &[],
     );
     send(&mut f.svm, &f.user2.pubkey(), ix, &[&maker]).expect("ask");
 
@@ -812,10 +1138,17 @@ fn crank_cannot_misdirect_funds_to_wrong_account() {
     let cranker = f.admin.insecure_clone();
     let ix = ix_match_orders(&f.admin.pubkey(), &market, 4, &[bid_yes, attacker_usdc]);
     let res = send(&mut f.svm, &f.admin.pubkey(), ix, &[&cranker]);
-    assert!(res.is_err(), "crank must reject a maker account not owned by the order owner");
+    assert!(
+        res.is_err(),
+        "crank must reject a maker account not owned by the order owner"
+    );
     // Book untouched.
     let (ob_pda, _) = order_book_pda(&market);
-    assert_eq!(read_order_book(&f.svm, &ob_pda).bids.len(), 1, "no settlement happened");
+    assert_eq!(
+        read_order_book(&f.svm, &ob_pda).bids.len(),
+        1,
+        "no settlement happened"
+    );
 }
 
 #[test]
@@ -834,7 +1167,10 @@ fn crank_rejects_non_spl_maker_account() {
     let cranker = f.admin.insecure_clone();
     let ix = ix_match_orders(&f.admin.pubkey(), &market, 4, &[bid_yes, order_book]);
     let res = send(&mut f.svm, &f.admin.pubkey(), ix, &[&cranker]);
-    assert!(res.is_err(), "a non-SPL-owned maker account must be rejected");
+    assert!(
+        res.is_err(),
+        "a non-SPL-owned maker account must be rejected"
+    );
 }
 
 #[test]
@@ -851,7 +1187,11 @@ fn crank_uses_onchain_price_not_caller_supplied() {
     let ix = ix_match_orders(&f.user2.pubkey(), &market, 4, &[bid_yes, ask_usdc]);
     send(&mut f.svm, &f.user2.pubkey(), ix, &[&cranker]).expect("crank");
     assert_eq!(token_balance(&f.svm, &bid_yes), ONE, "1.0 Yes delivered");
-    assert_eq!(token_balance(&f.svm, &ask_usdc), ask_usdc_before + 600_000, "settled at on-chain $0.60");
+    assert_eq!(
+        token_balance(&f.svm, &ask_usdc),
+        ask_usdc_before + 600_000,
+        "settled at on-chain $0.60"
+    );
 }
 
 #[test]
