@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-meridian = "EWEYM6Ujg9j5SLxXeM2hcDY7XmWRRj6RTaJNnB8T3mn"
+meridian = "9R3jRbvh9jeQLGEggB3VXQTwj88YjUKqKM8x75SefGen"
 
 [provider]
 cluster = "localnet"

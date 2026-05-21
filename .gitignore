@@ -1,8 +1,17 @@
 .anchor
 .DS_Store
-target
-**/*.rs.bk
 node_modules
 test-ledger
 .yarn
 .surfpool
+**/*.rs.bk
+
+# Ignore build output, but keep the canonical program keypair committed so the
+# program ID is reproducible across clones/worktrees. Without this, every fresh
+# build regenerates a new keypair and thus a different program ID.
+# NOTE: this is a DEVNET/LOCALNET program keypair — it only identifies the on-chain
+# program, it is NOT a funded wallet. Use a separate, secret keypair for mainnet.
+/target/*
+!/target/deploy/
+/target/deploy/*
+!/target/deploy/meridian-keypair.json
