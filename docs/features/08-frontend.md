@@ -132,8 +132,8 @@ Build chunks (test-first; each ends in a tickable item):
   winner) → history. **Passes locally** against the real program. Runs locally /
   manually (the CI Node image has no `solana-test-validator`); the unit suite + typecheck
   run in CI.
-- [ ] **10. Adversarial review + triage** — independent subagent
-  (robustness/efficiency/security); fix high/medium, re-run suite, record lows below.
+- [x] **10. Adversarial review + triage** — independent subagent
+  (robustness/efficiency/security); fixed high/medium, re-ran suite, lows recorded below.
 
 ## Implementation notes (filled in by the building agent)
 
@@ -376,3 +376,56 @@ Build chunks (test-first; each ends in a tickable item):
   the documented local/manual browser-verification gate, as the plan anticipated. Running
   it: `yarn workspace @meridian/web test:e2e` (needs a built `target/deploy/meridian.so`;
   in a worktree without one, `MERIDIAN_SO=/path/to/meridian.so yarn … test:e2e`).
+
+### Chunk 10 — adversarial review + triage
+
+An independent review subagent attacked the frontend for robustness, efficiency, and
+security/safety-boundaries. **All high + medium findings were fixed and tested; the unit
+suite (107 passing) and the validator-backed e2e are green after the fixes.** What changed:
+
+- **H-1 — confirmed-but-reverted tx shown as success.** `useSendIx` awaited
+  `confirmTransaction` but never checked `value.err`; a tx that landed on-chain *failed*
+  was reported as success and recorded into the cost-basis store. Now it throws on a
+  non-null `value.err`. Tested.
+- **H-2 — double-submit.** The submit button only disabled once the wallet send started,
+  but `buildTradeIntent` awaits *before* that — a second click during the build slipped
+  through and placed a duplicate order. Added a synchronous `submitting` guard set at the
+  top of `submit` (and the build/send wrapped in try/finally). Tested.
+- **H-3 — Markets/Landing prices never refreshed.** `useTickerPrices` fetched once with no
+  interval. Added a 15 s poll so the "live prices" stay live for the session.
+- **M-1 — invalid price silently became $0.00.** `parsePrice(input) ?? new BN(0)` (and
+  `Number("")===0`) let a blank/invalid limit price submit as price 0. `parsePrice`/
+  `parseSize` now reject blank input, and the panel requires a valid price for a limit
+  order instead of defaulting to 0. Tested.
+- **M-2 — portfolio never auto-refreshed.** `usePortfolio` was manual-refresh-only; added
+  a 15 s poll so settlement / new fills surface without navigating away.
+- **M-3 / L-1 — serial per-market RPC reads.** `usePortfolio` read each market's
+  account/position/book serially; now parallelized with `Promise.all` across markets.
+- **M-4 — e2e wallet build safety.** The e2e keypair adapter signs with a key from
+  `localStorage`. Hardened `Providers` to **throw at build/load time if
+  `NEXT_PUBLIC_E2E=1` under `NODE_ENV==="production"`**, so a misconfigured prod deploy
+  fails loudly instead of shipping a signing backdoor (the branch is still dead-code-
+  eliminated when the env is unset).
+- **M-5 — `yesSideFor` could drift from the SDK.** The frontend mirrors which Yes-book
+  side each action lands on (to compute maker accounts); a divergence from the SDK would
+  feed wrong `remaining_accounts`. Added a contract test asserting `yesSideFor(action)`
+  equals the SDK's `buildTradeIntent(...).bookSide` for all four actions.
+- **M-6 — `usePolled` stale-closure contract.** Documented the (currently-satisfied)
+  invariant that callers must list everything `load` closes over in `deps`.
+- **L-5 (fixed, low) — `action.startsWith("BUY")`** replaced with explicit enum compares.
+
+**Low-severity findings recorded for your decision (not actioned):**
+
+- **L-2:** `useHistory` scans the wallet's recent signatures (mixed program/non-program
+  txs) rather than filtering by program id; fine at demo scale, worth narrowing later.
+- **L-3:** `aggregateBasis` uses BN floor-division for the weighted-average entry price —
+  a sub-unit rounding drift in the *displayed* cost basis only (never affects trades).
+- **L-4:** `parseSize` float-parse edge cases (e.g. `"1.0000005"`) round to a non-whole
+  token and surface a slightly confusing BUY_NO whole-token error; the `Math.round` is the
+  right mitigation, message could be clearer.
+- **L-6:** `usePortfolio.refresh` is now `useCallback`-stable (fixed in passing while
+  parallelizing); noted for completeness.
+- **L-7:** `e2e/.localnet.json` holds the local deployer/admin secret alongside the test
+  wallet secret. It's a throwaway local-validator key, gitignored and teardown-deleted,
+  but if a CI run is killed mid-setup the file could linger; acceptable for a local-only,
+  non-mainnet harness.

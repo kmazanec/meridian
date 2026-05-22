@@ -74,4 +74,17 @@ describe("useSendIx", () => {
     await waitFor(() => expect(result.current.status).toBe("error"));
     expect(result.current.error?.message).toBe("user rejected");
   });
+
+  it("treats a confirmed-but-reverted transaction as an error, not success", async () => {
+    // The tx lands on-chain but the program reverts: confirmTransaction resolves with
+    // a non-null value.err. This must surface as an error, never as "success".
+    connection.confirmTransaction.mockResolvedValue({
+      value: { err: { InstructionError: [2, { Custom: 1 }] } },
+    });
+    const { result } = renderHook(() => useSendIx());
+    await act(async () => {
+      await expect(result.current.send([ix])).rejects.toThrow(/reverted/i);
+    });
+    await waitFor(() => expect(result.current.status).toBe("error"));
+  });
 });

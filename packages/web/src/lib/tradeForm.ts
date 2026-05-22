@@ -95,6 +95,9 @@ export function validateTradeForm(opts: {
 
 /** Parse a decimal dollar string (e.g. "0.65") into integer price-scale base units. */
 export function parsePrice(input: string): BN | null {
+  // `Number("")` and `Number("  ")` are 0, not NaN — reject blank input explicitly so
+  // an empty field doesn't silently parse to a $0.00 price.
+  if (input.trim() === "") return null;
   const n = Number(input);
   if (!Number.isFinite(n) || n < 0) return null;
   return new BN(Math.round(n * PRICE_SCALE.toNumber()));
@@ -102,6 +105,7 @@ export function parsePrice(input: string): BN | null {
 
 /** Parse a decimal token-count string (e.g. "1.5") into 6dp base units. */
 export function parseSize(input: string): BN | null {
+  if (input.trim() === "") return null;
   const n = Number(input);
   if (!Number.isFinite(n) || n <= 0) return null;
   return new BN(Math.round(n * PAYOFF_UNIT.toNumber()));

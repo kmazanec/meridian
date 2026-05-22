@@ -32,6 +32,12 @@ const DEFAULT_POLL_MS = 8_000;
  * Generic polling resource. Runs `load` immediately and every `pollMs`, tracking
  * loading/error and exposing a manual `refresh`. `deps` controls re-subscription;
  * `enabled` short-circuits when inputs aren't ready (e.g. no wallet).
+ *
+ * Contract: `load` is intentionally NOT in the effect deps (it's an inline closure that
+ * changes every render). Callers MUST list in `deps` every value `load` closes over that
+ * can change (the program, the market key, etc.) — each caller below does. A `load` that
+ * closes over an un-listed mutable value would read it stale; that's the price of not
+ * re-subscribing on every render.
  */
 function usePolled<T>(
   load: () => Promise<T | null>,

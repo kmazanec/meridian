@@ -13,8 +13,22 @@ import { E2EWalletAdapter } from "@/lib/e2eWallet";
 import "@solana/wallet-adapter-react-ui/styles.css";
 
 // In e2e mode an in-process keypair adapter is registered so a headless browser can
-// sign without an extension. Never enabled in a normal build.
-const E2E = process.env.NEXT_PUBLIC_E2E === "1";
+// sign without an extension. This signs with a key read from localStorage, so it must
+// NEVER reach a production build: refuse to enable it under `NODE_ENV === "production"`,
+// turning a misconfigured `NEXT_PUBLIC_E2E=1` prod deploy into a hard, obvious failure
+// rather than a silent key-signing backdoor. The branch is dead-code-eliminated when
+// `NEXT_PUBLIC_E2E` is unset (Next inlines the env literal).
+const E2E =
+  process.env.NEXT_PUBLIC_E2E === "1" && process.env.NODE_ENV !== "production";
+
+if (
+  process.env.NEXT_PUBLIC_E2E === "1" &&
+  process.env.NODE_ENV === "production"
+) {
+  throw new Error(
+    "NEXT_PUBLIC_E2E must not be set in a production build — the e2e keypair wallet is a test-only signing backdoor."
+  );
+}
 
 /**
  * The wallet + connection context every page sits inside. Wallets are discovered via

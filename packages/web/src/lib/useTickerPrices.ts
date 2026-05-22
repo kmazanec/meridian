@@ -27,33 +27,43 @@ export function useTickerPrices(markets: DiscoveredMarket[]): LivePrices {
       setPrices({});
       return;
     }
-    Promise.all(
-      reps.map(async (m) => {
-        const book = await fetchOrderBook(program, m.address);
-        const price = book ? priceFromBook(dualBook(book).yes) : null;
-        return [m.ticker, price] as const;
-      })
-    )
-      .then((pairs) => {
-        if (cancelled) return;
-        const next: LivePrices = {};
-        for (const [ticker, price] of pairs) {
-          if (price) next[ticker] = price;
-        }
-        setPrices(next);
-      })
-      .catch(() => {
-        // Prices are best-effort decoration; a transient RPC error just leaves the
-        // last good prices in place rather than blanking the grid.
-      });
+
+    const load = () =>
+      Promise.all(
+        reps.map(async (m) => {
+          const book = await fetchOrderBook(program, m.address);
+          const price = book ? priceFromBook(dualBook(book).yes) : null;
+          return [m.ticker, price] as const;
+        })
+      )
+        .then((pairs) => {
+          if (cancelled) return;
+          const next: LivePrices = {};
+          for (const [ticker, price] of pairs) {
+            if (price) next[ticker] = price;
+          }
+          setPrices(next);
+        })
+        .catch(() => {
+          // Prices are best-effort decoration; a transient RPC error just leaves the
+          // last good prices in place rather than blanking the grid.
+        });
+
+    load();
+    // Refresh on an interval so the Markets/Landing prices stay live for the session.
+    const id = setInterval(load, PRICE_POLL_MS);
     return () => {
       cancelled = true;
+      clearInterval(id);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [program, key]);
 
   return prices;
 }
+
+/** How often the Markets/Landing live prices refresh. */
+const PRICE_POLL_MS = 15_000;
 
 /** One representative open market per ticker: the median-strike open market. */
 export function representativeMarkets(

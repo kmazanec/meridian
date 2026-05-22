@@ -166,4 +166,39 @@ describe("TradePanel", () => {
     expect(screen.getByRole("alert").textContent).toMatch(/whole number/i);
     expect(buildTradeIntent).not.toHaveBeenCalled();
   });
+
+  it("rejects an empty/invalid limit price instead of sending price 0", async () => {
+    renderPanel();
+    const price = screen.getByLabelText("Yes price ($)");
+    await userEvent.clear(price); // invalid → must not fall back to 0
+    await userEvent.click(screen.getByTestId("submit-trade"));
+    expect(screen.getByRole("alert").textContent).toMatch(/valid price/i);
+    expect(buildTradeIntent).not.toHaveBeenCalled();
+  });
+
+  it("does not double-submit while a trade is being built/sent", async () => {
+    // onSubmit hangs until we release it, simulating an in-flight send.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const onSubmit = vi.fn().mockReturnValue(gate);
+    render(
+      <TradePanel
+        program={program}
+        user={user}
+        market={market}
+        marketAddress={marketAddress}
+        book={null}
+        position={null}
+        usdcMint={usdcMint}
+        onSubmit={onSubmit}
+      />
+    );
+    const submit = screen.getByTestId("submit-trade");
+    await userEvent.click(submit);
+    // A second click while the first is in flight must be ignored.
+    await userEvent.click(submit);
+    release();
+    expect(buildTradeIntent).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
 });

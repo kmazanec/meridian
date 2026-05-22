@@ -76,6 +76,10 @@ export function TradePanel({
   const [sizeInput, setSizeInput] = useState("1");
   const [isMarket, setIsMarket] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // Local guard against double-submit: `busy` (from the send hook) only flips once the
+  // wallet send starts, but `buildTradeIntent` awaits *before* that — so a second click
+  // during the build would slip through. This is set synchronously at the top of submit.
+  const [submitting, setSubmitting] = useState(false);
 
   const guard = useMemo(
     () => checkPositionConstraint(action, position),
@@ -83,18 +87,30 @@ export function TradePanel({
   );
 
   const submit = async () => {
+    if (submitting || busy) return;
     setFormError(null);
     if (!user || !usdcMint) {
       setFormError("Connect a wallet to trade.");
       return;
     }
-    const price = parsePrice(priceInput) ?? new BN(0);
+    const price = parsePrice(priceInput);
+    // For a limit order a price is required; a market order ignores it (cross at any).
+    if (!isMarket && !price) {
+      setFormError("Enter a valid price.");
+      return;
+    }
+    const effectivePrice = price ?? new BN(0);
     const size = parseSize(sizeInput);
     if (!size) {
       setFormError("Enter a valid size.");
       return;
     }
-    const valid = validateTradeForm({ action, price, size, isMarket });
+    const valid = validateTradeForm({
+      action,
+      price: effectivePrice,
+      size,
+      isMarket,
+    });
     if (!valid.ok) {
       setFormError(valid.error ?? "Invalid trade.");
       return;
@@ -104,30 +120,41 @@ export function TradePanel({
       return;
     }
 
-    // Compute maker accounts to cross from the live book, in the Yes-book frame.
-    const makerAccounts =
-      book && usdcMint
-        ? makerAccountsFor({
-            book,
-            side: yesSideFor(action),
-            price: yesPriceFor(action, price),
-            size,
-            isMarket,
-            usdcMint,
-            yesMint: market.yesMint,
-          })
-        : [];
+    setSubmitting(true);
+    try {
+      // Compute maker accounts to cross from the live book, in the Yes-book frame.
+      const makerAccounts =
+        book && usdcMint
+          ? makerAccountsFor({
+              book,
+              side: yesSideFor(action),
+              price: yesPriceFor(action, effectivePrice),
+              size,
+              isMarket,
+              usdcMint,
+              yesMint: market.yesMint,
+            })
+          : [];
 
-    const built = await buildTradeIntent(program, user, {
-      market: marketAddress,
-      action,
-      price,
-      size,
-      isMarket,
-      usdcMint,
-      makerAccounts,
-    });
-    await onSubmit(built.instructions, { action, price, size });
+      const built = await buildTradeIntent(program, user, {
+        market: marketAddress,
+        action,
+        price: effectivePrice,
+        size,
+        isMarket,
+        usdcMint,
+        makerAccounts,
+      });
+      await onSubmit(built.instructions, {
+        action,
+        price: effectivePrice,
+        size,
+      });
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : "Trade failed.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const priceLabel = isNoAction(action) ? "No price ($)" : "Yes price ($)";
@@ -203,15 +230,19 @@ export function TradePanel({
       )}
 
       <Button
-        variant={action.startsWith("BUY") ? "accent" : "ghost"}
+        variant={
+          action === TradeAction.BuyYes || action === TradeAction.BuyNo
+            ? "accent"
+            : "ghost"
+        }
         className={cx("mt-4 w-full")}
         data-testid="submit-trade"
-        disabled={busy || guard.blocked || !user}
+        disabled={busy || submitting || guard.blocked || !user}
         onClick={submit}
       >
         {!user
           ? "Connect wallet"
-          : busy
+          : busy || submitting
           ? "Submitting…"
           : ACTIONS.find((a) => a.action === action)?.label}
       </Button>
