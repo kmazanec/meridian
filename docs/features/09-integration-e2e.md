@@ -87,8 +87,9 @@ opt-in env-gated live-devnet settlement smoke test (real Pyth Hermes→Receiver 
 - [x] **Chunk 3 — Four trade paths.** `tests/trade-paths.test.ts`: Buy/Sell Yes, Buy/Sell
   No via `buildTradeIntent` vs maker liquidity; partial-fill + at-strike boundary. (AC#2)
   **Green: 6 passing.**
-- [ ] **Chunk 4 — Multi-user.** `tests/multi-user.test.ts`: maker mints+quotes, taker
-  fills, settle, both redeem correctly; collateralization across both + vault drains. (AC#3,#4,#5)
+- [x] **Chunk 4 — Multi-user.** `tests/multi-user.test.ts`: maker mints+quotes, taker
+  fills, settle, both redeem correctly; collateralization across both + vault drains;
+  zero-sum P&L (+$1.40 / −$1.40) verified. (AC#3,#4,#5) **Green: 1 passing.**
 - [ ] **Chunk 5 — Automation vs real validator.** `tests/automation.test.ts`:
   `runMorningJob` (Mock price → strikes → provision via real `RpcChainClient`) then
   `runSettlementJob` (discovery + injected settler); created/settled counts + outcomes. (AC#6,#5)
