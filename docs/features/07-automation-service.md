@@ -92,7 +92,7 @@ Build chunks (test-first; each ends in a tickable item):
 - [x] **3. Market calendar** (`calendar.ts`) — weekend/holiday/half-day; DST-aware ET→unix;
   `closeInstant()` = 4:00 PM ET (1:00 PM half-days) = `trading_day`. Tests across DST,
   holiday, half-day, weekend.
-- [ ] **4. PriceSource + Alerter + logger + retry** — interfaces + impls (Pyth + mock
+- [x] **4. PriceSource + Alerter + logger + retry** — interfaces + impls (Pyth + mock
   source; webhook + log alerter). Tests: mock close; webhook POST + log fallback; backoff
   math; the wide-confidence retry-every-30s-up-to-15min-then-alert loop (injected clock).
 - [ ] **5. Morning job** (`morningJob.ts` + provisioning) — per ticker: prev close →
@@ -171,3 +171,26 @@ Build chunks (test-first; each ends in a tickable item):
   holiday/half-day table is computed, not a static list, but NYSE occasionally varies
   (one-off closures, ad-hoc half-days) — a documented, bounded demo limitation; the
   `admin_settle` fallback covers any mis-classified session.
+
+### Chunk 4 — price source, alerter, logger, retry primitives
+
+- **`PriceSource` interface** with `MockPriceSource` (deterministic configured map — the
+  demo path that needs no market hours) and `PythPriceSource` (reuses the SDK's
+  `fetchPriceUpdate` lazily; converts native-scale price → USDC base units with the *same*
+  truncating integer math as the on-chain `oracle.rs::to_usdc_base_units`, so an off-chain
+  strike lines up with what settlement computes). Env selects the impl. A real EOD equities
+  API can drop in behind the same interface later.
+- **`Alerter` interface** with `WebhookAlerter` (generic JSON POST — Slack/Discord/
+  PagerDuty-compatible incoming webhook, with an `AbortController` timeout) and `LogAlerter`
+  (the no-webhook fallback). `makeAlerter` picks webhook when a URL is set, else logs.
+  **Alert delivery is best-effort:** a down/erroring webhook is logged and swallowed, never
+  crashing the job (on-chain state is the source of truth; a missed alert is a monitoring
+  gap, not a correctness bug). Every alert is *also* emitted as an ALERT-level log line so
+  the signal survives a webhook outage.
+- **`logger`** — tiny structured JSON-line logger with an injectable sink (tests capture
+  lines; deployment redirects output) and an `alert` level.
+- **`retry`** — `withBackoff` (exponential, bounded, for transient RPC failures) and
+  `retryEvery` (fixed-interval within a time budget). The latter is the **wide-confidence
+  settlement loop**: poll every 30s for up to 15 min, then throw `RetryGaveUp` (the caller
+  alerts for `admin_settle`). Clock + sleep are injectable, so the loop is deterministic and
+  instant under test.
