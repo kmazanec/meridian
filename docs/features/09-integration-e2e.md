@@ -108,7 +108,7 @@ opt-in env-gated live-devnet settlement smoke test (real Pyth Hermes→Receiver 
   updated. Full suite verified: **12 passing, 1 pending** (devnet opt-in skipped).
 - [x] **Adversarial review** — robustness/efficiency/security-integrity; high/medium fixed
   (see below); lows recorded for the user.
-- [ ] **Rebase, push, open MR.**
+- [x] **Rebase, push, open MR.**
 
 ## Adversarial review
 
