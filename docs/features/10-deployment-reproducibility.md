@@ -90,10 +90,14 @@ validator → deploy → init config + USDC → create markets → seed demo wal
   invariants) **Green: 23 contract tests; full pipeline (deploy→bootstrap→create-markets→
   lifecycle) run live against a real local validator via the bins — outcome yesWins, zero-sum
   P&L +$1.40/−$1.40, vault drained to $0, invariants held at every phase.**
-- [ ] **Chunk 4 — `make dev` + Makefile + `.env.example`.** Makefile (`dev`, `demo`,
-  `deploy-devnet`/`bootstrap-devnet`/`create-markets-devnet`/`lifecycle-devnet`, `test`,
-  `lint`, `build`, `stop`, `clean`); `.env.example` (every var, grouped, safe placeholders,
-  loud header); gitignore root `.env`. Env-drift guard test. (AC#1, AC#3)
+- [x] **Chunk 4 — `make dev` + Makefile + `.env.example`.** Makefile (`dev`, `demo`/
+  `lifecycle`, `deploy`/`bootstrap`/`create-markets` (local) + `*-devnet` forms, `build`,
+  `test`, `lint`, `stop`, `clean`, `help`); `dev-up` bin + `devStack.ts` (seed demo wallet +
+  write web `.env.local`); `.env.example` (every var, grouped, placeholders, loud header);
+  gitignore root `.env` / `.localnet/` / `deploy-manifest.json`. Env-drift guard test. (AC#1,
+  AC#3) **Green: 39 contract tests; `make dev` → `make demo` → `make stop` run live (full
+  bring-up: deploy, USDC+Config, day's markets, seeded demo wallet, web `.env.local`;
+  lifecycle green; clean teardown).**
 - [ ] **Chunk 5 — Reproducibility verification.** `tests/repro.test.ts` (validator-gated):
   boot a real validator, run the *actual* ops scripts as subprocesses, assert exit 0 +
   invariants. Add ops typecheck + contract tests to CI `lint-ts` (validator suite excluded,
@@ -186,3 +190,29 @@ validator → deploy → init config + USDC → create markets → seed demo wal
 - **Settlement uses `admin_settle`** (deterministic, no live oracle) — the documented demo
   path, exactly as the F-09 local suites. The genuine Pyth pull path is the opt-in devnet
   smoke in the convergence suite, surfaced in the devnet runbook (Chunk 6).
+
+### Chunk 4 — Makefile + make dev + .env.example
+
+- **The Makefile owns the local validator lifecycle; the ops bins own everything else.**
+  `make dev` starts `solana-test-validator` (detached, pid in `.localnet/`), generates +
+  airdrops an **ephemeral local deployer** (persisted to `.localnet/deployer.json` so
+  later `make demo`/`make create-markets` reuse the *same* Config admin), then runs the
+  `dev-up` bin (deploy → bootstrap → create-markets → seed demo wallet → write web
+  `.env.local`). `make stop` kills it and wipes `.localnet/`. This keeps the long-lived
+  process under the operator's direct control (not buried in a Node process across `make`
+  recipe lines).
+- **`dev-up` refuses any non-local RPC** (it airdrops + mints mock USDC) — a guard so the
+  full-bring-up convenience can't accidentally seed devnet/mainnet. Devnet uses the explicit
+  `*-devnet` targets, which require the operator's own `DEPLOYER_KEYPAIR` and never airdrop.
+- **`devStack.seedDevStack`** reproduces the web e2e `localnet.mjs` seeding (single-side
+  inventory in two open markets + a settled redeemable market) via the SDK + `Fixture`, and
+  writes `packages/web/.env.local` (`NEXT_PUBLIC_RPC_URL`/`_USDC_MINT`/`_CLUSTER`) so the
+  frontend talks to the local stack with no manual config.
+- **`.env.example`** documents the *entire* env surface (deploy/ops, build overrides, live
+  Pyth, automation, web), grouped by task with a loud never-commit header and only safe
+  placeholders. An **env-drift guard test** cross-checks it against the loaders' self-
+  documented keys (`OPS_ENV_KEYS`, automation `ENV_KEYS`, web `NEXT_PUBLIC_*`) and asserts no
+  real secret leaked into the template — so a future env var can't ship undocumented.
+- **Secrets discipline:** root `.env`, `.localnet/` (holds the demo wallet secret + local
+  deployer), and `deploy-manifest.json` are gitignored; `.env.example` is the only env file
+  committed. The deploy manifest itself carries only public addresses.

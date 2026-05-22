@@ -6,6 +6,16 @@ test-ledger
 .surfpool
 **/*.rs.bk
 
+# Filled-in environment secrets (NEVER commit). The template `.env.example` IS committed.
+.env
+.env.*
+!.env.example
+
+# Local dev-stack state written by `make dev` (validator pid/ledger, demo wallet secret,
+# deploy manifest). All regenerated; none belongs in git.
+/.localnet/
+/deploy-manifest.json
+
 # Compiled TS package output (the off-chain workspace).
 packages/*/dist
 
