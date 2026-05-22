@@ -106,10 +106,11 @@ validator → deploy → init config + USDC → create markets → seed demo wal
   `docs/local-development.md`. (Testing requirement; AC#4) **Green: repro passes against a
   real validator (~33s); skips cleanly without a validator (1 pending); immutable install +
   lint clean.**
-- [ ] **Chunk 6 — README + devnet runbook.** README one-command flow + Risks/Limitations
-  note; `docs/devnet-deployment.md` novice runbook (install CLI, fund keypair, `.env`, the
-  four make targets, explorer, live-Pyth opt-in vs admin-override, troubleshooting); update
-  Status, repo-layout, `docs/local-development.md`. (AC#1, AC#5)
+- [x] **Chunk 6 — README + devnet runbook.** README one-command flow + Risks/Limitations
+  note + refreshed repo-layout/CI/Status/doc-map; `docs/devnet-deployment.md` novice runbook
+  (install toolchain, create+fund a devnet keypair, `.env`, the four `make *-devnet` targets,
+  explorer viewing, live-Pyth opt-in vs admin-override, troubleshooting table); updated
+  `docs/local-development.md` with the `make dev` flow + ops repro test. (AC#1, AC#5)
 - [ ] **Adversarial review** — robustness/efficiency/security-integrity; fix high/medium;
   record lows for the user.
 - [ ] **Rebase, push, open MR.**

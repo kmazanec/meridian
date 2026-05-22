@@ -59,18 +59,27 @@ user's wallet signs every state-changing action.
 │   │   ├── oracle.rs         # Vendored Pyth PriceUpdateV2 parser (no SDK)
 │   │   ├── error.rs          # Program error codes
 │   │   └── events.rs         # Emitted events
-│   └── tests/                # LiteSVM in-process test suite (87 tests)
+│   └── tests/                # LiteSVM in-process test suite
+├── packages/                 # Off-chain TypeScript workspaces (Yarn)
+│   ├── sdk/                  # @meridian/sdk — typed client: builders, PDAs, intents, Pyth
+│   ├── automation/          # @meridian/automation — scheduled morning/settlement jobs
+│   ├── web/                 # @meridian/web — Next.js frontend (four-button trading UX)
+│   ├── e2e/                 # @meridian/e2e — convergence suite vs a real validator
+│   └── ops/                 # @meridian/ops — deploy + lifecycle scripts (local & devnet)
 ├── docs/
-│   ├── ROADMAP.md            # Delivery plan, dependency graph, critical path
-│   ├── local-development.md  # Which Solana cluster you need (spoiler: none)
-│   └── features/             # One spec file per deliverable (F-01 … F-10)
-├── migrations/deploy.ts      # Anchor deploy migration
-├── scripts/                  # Spikes & utilities (e.g. devnet Pyth feed probe)
-├── Anchor.toml               # Anchor provider/program config
-├── Cargo.toml                # Rust workspace
-├── rust-toolchain.toml       # Pinned Rust toolchain (1.89.0 + rustfmt + clippy)
-├── ARCHITECTURE.md           # System design with decision records (ADRs)
-└── RESEARCH.md               # Technology background for newcomers
+│   ├── ROADMAP.md           # Delivery plan, dependency graph, critical path
+│   ├── local-development.md # Local dev loop + the one-command `make dev` stack
+│   ├── devnet-deployment.md # Step-by-step devnet deploy runbook (novice-friendly)
+│   └── features/            # One spec file per deliverable (F-01 … F-10)
+├── migrations/deploy.ts     # Anchor deploy migration
+├── scripts/                 # Spikes & utilities (e.g. devnet Pyth feed probe)
+├── Makefile                 # One-command dev (`make dev`) + devnet (`make *-devnet`)
+├── .env.example             # Every environment variable, documented, with placeholders
+├── Anchor.toml              # Anchor provider/program config
+├── Cargo.toml               # Rust workspace
+├── rust-toolchain.toml      # Pinned Rust toolchain (1.89.0 + rustfmt + clippy)
+├── ARCHITECTURE.md          # System design with decision records (ADRs)
+└── RESEARCH.md              # Technology background for newcomers
 ```
 
 ---
@@ -100,37 +109,62 @@ six on-chain invariants these instructions preserve.
 - **Rust** — pinned by [`rust-toolchain.toml`](rust-toolchain.toml) (1.89.0,
   with `rustfmt` and `clippy`). Install [rustup](https://rustup.rs/) and the
   toolchain is selected automatically in this directory.
-- **(Optional) Solana CLI + Anchor** — only needed for `anchor build` /
-  `anchor deploy` against a validator. This project currently develops and tests
-  entirely in-process via LiteSVM, so neither is required to run the test suite.
-  When you do need them: Solana CLI 3.1.x and Anchor CLI 1.0.2.
-- **(Optional) Node.js + Yarn** — only for linting the TypeScript
-  (`migrations/`, `scripts/`).
+- **Solana CLI + Anchor** — required for `make dev`, deploying, and the
+  validator-backed suites (`anchor build` / `solana-test-validator`). The Rust
+  unit tests alone don't need them (they run in-process via LiteSVM). Versions:
+  Solana CLI 3.1.x, Anchor CLI 1.0.2.
+- **Node.js + Yarn** — for the off-chain workspaces (`packages/*`), the
+  `make dev` stack, and the deploy/lifecycle scripts. Node 20+ (22 works);
+  Yarn 4 via `corepack enable`.
 
 ---
 
 ## Quick start
 
+### One command: a full local stack
+
 ```bash
-# Run the full Rust test suite (LiteSVM, in-process — no validator, no airdrop)
+make dev    # build the program → boot a local validator → deploy → init Config + USDC →
+            # create the day's markets → seed a demo wallet → write the frontend env
+make demo   # run the lifecycle headless: create → mint → trade → settle → redeem
+make stop   # tear it all down
+make help   # list every target
+```
+
+`make dev` leaves a local validator running and writes `packages/web/.env.local`, so the
+frontend talks to it immediately:
+
+```bash
+corepack yarn@4.10.2 workspace @meridian/web dev   # open the trading UI against the local stack
+```
+
+### Just the tests
+
+```bash
+# Rust program tests (LiteSVM, in-process — no validator, no airdrop)
 cargo test
 
-# Format and lint the Rust code
+# Format + lint the Rust
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 
-# Lint the TypeScript (optional)
-yarn install
-yarn lint
+# Off-chain workspaces (SDK / automation / web) + prettier
+corepack yarn@4.10.2 install
+corepack yarn@4.10.2 lint
+corepack yarn@4.10.2 test
 ```
 
-> **Which Solana cluster do I need?** **None** for the day-to-day loop. The unit
-> and invariant tests run in-process under
-> [LiteSVM](https://github.com/LiteSVM/litesvm) — there is no local validator to
-> start and no airdrop to perform. See
-> [`docs/local-development.md`](docs/local-development.md) for the full breakdown
-> of what targets which cluster (and how to point the CLI at devnet for manual
-> `solana` commands).
+> **Which Solana cluster do I need?** **None** for the day-to-day *unit* tests — they run
+> in-process under [LiteSVM](https://github.com/LiteSVM/litesvm). `make dev`, the convergence
+> suite, and the deploy scripts use a local `solana-test-validator` (or devnet). See
+> [`docs/local-development.md`](docs/local-development.md) for the full breakdown.
+
+### Deploying to devnet
+
+The same scripts deploy and run the lifecycle on real Solana **devnet** with your own funded
+keypair. Follow the step-by-step, novice-friendly runbook:
+**[`docs/devnet-deployment.md`](docs/devnet-deployment.md)** (`make deploy-devnet` →
+`bootstrap-devnet` → `create-markets-devnet` → `lifecycle-devnet`).
 
 ### Building / deploying with Anchor
 
@@ -176,14 +210,19 @@ cargo test --test test_redeem    # a single test file
 
 [`.gitlab-ci.yml`](.gitlab-ci.yml) runs on every push / merge request:
 
-1. **fmt** — `cargo fmt --all -- --check`
-2. **clippy** — `cargo clippy --workspace --all-targets -- -D warnings`
-3. **test** — `cargo test` (the 87 LiteSVM tests)
-4. **lint-ts** — `yarn lint` (prettier check on `migrations/` and `scripts/`)
+1. **build-program** — `cargo build-sbf` (produces `meridian.so`, passed forward as an
+   artifact the Rust tests `include_bytes!`).
+2. **fmt** — `cargo fmt --all -- --check`
+3. **verify** — `cargo clippy --workspace --all-targets -- -D warnings` then `cargo test`.
+4. **lint-ts** — prettier + each off-chain workspace's typecheck/build/tests: `@meridian/sdk`,
+   `@meridian/automation`, `@meridian/web`, plus the `@meridian/e2e` and `@meridian/ops`
+   typecheck + *pure contract tests*.
 
-The pipeline uses the official `rust` image and relies on `rust-toolchain.toml`
-for the pinned compiler version, with the Cargo registry and `target/` cached
-between runs.
+The validator-backed suites (the convergence run and the `@meridian/ops` reproducibility
+test) need `solana-test-validator`, which the Node CI image lacks; they run locally / as
+documented gates (see [`docs/local-development.md`](docs/local-development.md)). The Rust
+jobs use the official Anchor image and rely on `rust-toolchain.toml` for the pinned compiler,
+with the Cargo registry and `target/` cached between runs.
 
 ---
 
@@ -194,15 +233,37 @@ between runs.
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | System design, account/data model, instructions, invariants, sequence flows, ADRs, risks |
 | [`RESEARCH.md`](RESEARCH.md) | Technology background (Solana, PDAs, SPL tokens, oracles) for newcomers |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Delivery plan, dependency graph, critical path, cross-cutting contracts |
-| [`docs/local-development.md`](docs/local-development.md) | Local dev loop, cluster targeting, devnet funding |
+| [`docs/local-development.md`](docs/local-development.md) | Local dev loop, the `make dev` stack, cluster targeting |
+| [`docs/devnet-deployment.md`](docs/devnet-deployment.md) | Step-by-step devnet deploy runbook (novice-friendly) |
 | [`docs/features/`](docs/features/) | One spec per deliverable (F-01 … F-10) with acceptance criteria |
+
+---
+
+## Risks & limitations
+
+This is a **technical demonstration on devnet** — no real funds, no mainnet. (See
+[`ARCHITECTURE.md` §11](ARCHITECTURE.md) for the full treatment.)
+
+- **Devnet only** for the core submission; never mainnet or real money.
+- **Demo-grade order book:** a bounded on-chain array caps resting orders per side; it is not
+  tuned for high throughput (a production path would use a slab/heap structure).
+- **Automation liveness:** a single off-chain scheduler is a single point of failure for
+  *timing* (not for funds — the program enforces correctness on-chain). Settlement is
+  idempotent and the admin override is the fallback if the service is down.
+- **Oracle:** equity Pyth feeds only update during US market hours and have per-cluster feed
+  ids; the time-delayed, admin-only `admin_settle` override is the guaranteed settlement
+  fallback (and the default for the reproducible demo).
+- **No KYC / custody / margin**, by design.
+- **No regulatory or compliance claims** are made.
 
 ---
 
 ## Status
 
-The on-chain program is implemented through settlement: scaffold and accounts
-(F-01), mint/redeem vault (F-02), order book & matching (F-03), and settlement &
-oracle (F-04) are landed and tested. The shared TS SDK, automation service,
-frontend, end-to-end integration, and one-command devnet deployment (F-06 … F-10)
-are tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+The full system is implemented and deployable end-to-end. The on-chain program — scaffold and
+accounts (F-01), mint/redeem vault (F-02), order book & matching (F-03), settlement & oracle
+(F-04), market admin (F-05) — plus the shared TS SDK (F-06), automation service (F-07),
+frontend (F-08), cross-stack integration/E2E (F-09), and one-command + devnet deployment
+(F-10) are landed and tested. Run it locally with `make dev`; deploy it to devnet with the
+[devnet runbook](docs/devnet-deployment.md). The delivery plan is in
+[`docs/ROADMAP.md`](docs/ROADMAP.md).
