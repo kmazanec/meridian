@@ -51,6 +51,8 @@ export interface OpsEnv {
   feedIdsHex: Partial<Record<TickerSymbol, string>>;
   /** Include the rounded close as an at-the-money strike. Default false. */
   includeClose: boolean;
+  /** Explicit trading-day (unix seconds) for create-markets; default = ~2h from now. */
+  tradingDayOverride?: number;
 }
 
 function required(env: Env, key: string): string {
@@ -230,6 +232,18 @@ export function loadOpsEnv(env: Env = process.env): OpsEnv {
     if (feed) feedIdsHex[sym] = normalizeFeedId(feed, sym);
   }
 
+  let tradingDayOverride: number | undefined;
+  const tdRaw = env["TRADING_DAY"]?.trim();
+  if (tdRaw) {
+    const td = Number(tdRaw);
+    if (!Number.isInteger(td) || td <= 0) {
+      throw new Error(
+        `TRADING_DAY must be a positive integer (unix seconds); got "${tdRaw}"`
+      );
+    }
+    tradingDayOverride = td;
+  }
+
   return {
     deployer,
     rpcUrl,
@@ -239,6 +253,7 @@ export function loadOpsEnv(env: Env = process.env): OpsEnv {
     mockCloses,
     feedIdsHex,
     includeClose: parseBool(env["INCLUDE_CLOSE"]),
+    tradingDayOverride,
   };
 }
 
@@ -273,5 +288,6 @@ export const OPS_ENV_KEYS = {
     "MOCK_CLOSE_<SYMBOL> (mock previous close in dollars, e.g. MOCK_CLOSE_META=680)",
     "FEED_<SYMBOL> (devnet Pyth hex feed id per ticker; absent → local test pattern)",
     "INCLUDE_CLOSE (1/true to add the at-the-money strike)",
+    "TRADING_DAY (unix seconds for create-markets; default ~2h from now)",
   ],
 } as const;

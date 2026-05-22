@@ -82,11 +82,14 @@ validator → deploy → init config + USDC → create markets → seed demo wal
   `src/manifest.ts` (secret-free deploy manifest), bins. Contract test for argv + PDA + feed
   ids + manifest schema. (AC#2 deploy leg) **Green: 19 contract tests; smoke-verified against
   a real local validator (fresh deploy → bootstrap → idempotent re-run).**
-- [ ] **Chunk 3 — Create-markets + lifecycle scripts.** `src/createMarkets.ts` (compute
-  strikes via automation `strikes.ts`; provision via SDK 3-step; idempotent),
-  `src/lifecycle.ts` (create→mint→trade(maker/taker via `buildTradeIntent`)→admin_settle→
-  redeem, asserting §7 invariants per phase; human-readable transcript), bins. Contract test
-  for strike/market-id derivation. (AC#2 create+lifecycle; AC#4 invariants)
+- [x] **Chunk 3 — Create-markets + lifecycle scripts.** `src/createMarkets.ts` (compute
+  strikes via automation `computeStrikes`; provision via the proven `Fixture.createMarket`
+  3-step; idempotent), `src/lifecycle.ts` (create→fund→mint→quote→trade(maker/taker)→
+  admin_settle→redeem, asserting §7 invariants per phase; human-readable transcript), bins.
+  Contract test for strike/market-id derivation + formatting. (AC#2 create+lifecycle; AC#4
+  invariants) **Green: 23 contract tests; full pipeline (deploy→bootstrap→create-markets→
+  lifecycle) run live against a real local validator via the bins — outcome yesWins, zero-sum
+  P&L +$1.40/−$1.40, vault drained to $0, invariants held at every phase.**
 - [ ] **Chunk 4 — `make dev` + Makefile + `.env.example`.** Makefile (`dev`, `demo`,
   `deploy-devnet`/`bootstrap-devnet`/`create-markets-devnet`/`lifecycle-devnet`, `test`,
   `lint`, `build`, `stop`, `clean`); `.env.example` (every var, grouped, safe placeholders,
@@ -156,3 +159,30 @@ validator → deploy → init config + USDC → create markets → seed demo wal
 - **Verified live:** a smoke run booted a bare `solana-test-validator`, deployed onto it
   (`wasAlreadyDeployed=false`), bootstrapped a fresh USDC mint + Config, then re-ran both and
   observed the upgrade path + config no-op. (Folded into the Chunk 5 repro test.)
+
+### Chunk 3 — create-markets + lifecycle
+
+- **`createMarkets` reuses `computeStrikes`** (the automation morning job's strike math:
+  ±3/6/9% rounded to $10, deduped) and the proven `Fixture.createMarket` 3-step provisioning
+  (`create_strike_market` → `init_order_book` → `grow_order_book`). Idempotent: an existing
+  strike is detected via `fetchMarket` and skipped. Previous closes come from
+  `MOCK_CLOSE_<SYMBOL>` — the deterministic, offline source appropriate for a reproducible
+  demo (the live price-pulling morning job is the automation service's own path).
+- **`runLifecycle` mirrors the convergence multi-user scenario** (maker mints+quotes, taker
+  crosses, admin-settle Yes-wins, both redeem, vault drains to 0, zero-sum P&L) but as a
+  *script* with a transcript, reusing `Fixture` + the SDK builders + `makerAccountsFor` — no
+  re-implementation of matching or the four-button mapping. The §7 invariants
+  (collateralization after each phase; payout completeness via the drained vault; settlement
+  timing via the admin delay) are asserted, so a green run is a real proof, not a smoke.
+- **Added `Fixture.attach(connection, admin, usdcMint)`** to the shared harness: unlike
+  `Fixture.bootstrap` (which creates a mint + inits Config), `attach` binds the
+  lifecycle/invariant helpers to an **already-bootstrapped** world. The ops scripts deploy +
+  bootstrap as separate idempotent steps (and may target devnet where Config/USDC already
+  exist), so they need to attach, not re-bootstrap. Source addition to e2e, not a fork.
+- **Environment-agnostic user funding:** demo users are funded by a **deployer→user SOL
+  transfer** + a **USDC mint from the deployer**, not a per-user airdrop. Airdrop works on a
+  local validator but is rate-limited/unreliable on devnet; a deployer transfer works on both,
+  so the identical lifecycle script runs against devnet (operator pre-funds the deployer).
+- **Settlement uses `admin_settle`** (deterministic, no live oracle) — the documented demo
+  path, exactly as the F-09 local suites. The genuine Pyth pull path is the opt-in devnet
+  smoke in the convergence suite, surfaced in the devnet runbook (Chunk 6).

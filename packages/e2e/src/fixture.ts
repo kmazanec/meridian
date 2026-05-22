@@ -143,6 +143,26 @@ export class Fixture {
     return new Fixture(connection, deployer, program, usdcMint);
   }
 
+  /**
+   * Attach to an **already-bootstrapped** world: a deployed program with an initialized
+   * Config and a known USDC mint. Unlike {@link bootstrap}, this neither creates a mint nor
+   * calls `initialize_config` — it just binds the lifecycle/invariant helpers to existing
+   * on-chain state. Used by the ops scripts, which deploy + bootstrap as separate idempotent
+   * steps (and may run against devnet, where the Config/USDC already exist) and then drive
+   * the lifecycle with this fixture.
+   */
+  static attach(
+    connection: Connection,
+    admin: Keypair,
+    usdcMint: PublicKey
+  ): Fixture {
+    const program = getProgram({
+      connection,
+      publicKey: admin.publicKey,
+    } as never);
+    return new Fixture(connection, admin, program, usdcMint);
+  }
+
   /** Build the SDK `MarketId` for a market created via this fixture. */
   marketId(opts: CreateMarketOptions): MarketId {
     return {
