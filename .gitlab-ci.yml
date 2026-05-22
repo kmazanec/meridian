@@ -28,10 +28,15 @@
 #   -e CARGO_HOME=/build/.cargo             keep the cargo cache inside the
 #                                           project dir so `cache:` can archive it
 
+# `review` is listed first and is its own stage so the cursor_code_review job
+# starts immediately and on its own track. It shares a stage with nothing, so it
+# can never gate build/check; and because no job lists it in `needs:`, it's a
+# leaf in the DAG — verify/fmt/lint-ts never wait on it. (verify→build-program is
+# the only real dependency; everything else runs as soon as its needs are met.)
 stages:
+  - review
   - build
   - check
-  - review
 
 # Automated code + security review on merge requests, via the shared
 # gitlab-cursor-review template (Cursor CLI). It runs on the dedicated
@@ -217,6 +222,10 @@ lint-ts:
 # and before_script — none of our default docker-wrapper applies here.
 cursor_code_review:
   extends: .cursor_review
+  # Own stage (`review`, listed first) so it kicks off immediately on its own
+  # track, in parallel with build/check — and shares a stage with nothing, so it
+  # can never gate them. needs: [] + no job depending on it makes it a DAG leaf:
+  # verify/fmt/lint-ts never wait on this. Separate cursor-review runner.
   stage: review
   needs: []   # independent of build/check/test; runs only on MR pipelines
   # Non-blocking: run-review.sh (in keithmazanec/gitlab-cursor-review) passes the
