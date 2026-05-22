@@ -1,6 +1,6 @@
 # Feature: Automation Service
 
-**ID:** F-07 · **Roadmap piece:** F-07 · **Status:** Not started
+**ID:** F-07 · **Roadmap piece:** F-07 · **Status:** In progress
 
 ## Description
 
@@ -63,6 +63,57 @@ Wave 4, parallel with the frontend (F-08). Off the single longest critical path
   `.env.example`, owned by F-10). Provide credentials/endpoint for the previous-close
   price source if an external API is used. Configure the alert channel (e.g. a
   webhook) for failure notifications.
+
+## Implementation plan (approved)
+
+Confirmed with the user before building:
+
+- **Prev-close source:** a pluggable `PriceSource` interface — a Pyth/Hermes-backed impl
+  + a deterministic mock, env-selectable. No new external EOD API; reuses the SDK's
+  Hermes helpers and keeps the demo runnable without market hours.
+- **Alerts:** generic webhook POST to a configurable URL; structured-log fallback when
+  unset. Failure→alert path asserted via an in-memory spy.
+- **Scheduler:** **CLI entrypoints only** (`run-morning`, `run-settlement`). No resident
+  in-process cron — external cron / the F-10 deployment layer drives the schedule; these
+  are the legs F-09 invokes.
+
+New workspace package `packages/automation` (`@meridian/automation`), mirroring
+`@meridian/sdk` conventions (TypeScript, ts-mocha + chai, `tsc --noEmit`, prettier via
+root `yarn lint`). Consumes `@meridian/sdk` exclusively — never hand-rolls chain calls.
+
+Build chunks (test-first; each ends in a tickable item):
+
+- [x] **1. Workspace scaffold** — `packages/automation` wired into the yarn workspace;
+  `@meridian/sdk` dep resolves; barrel `index.ts`; `tsc --noEmit` + import-surface smoke
+  test green.
+- [ ] **2. Strike algorithm** (`strikes.ts`) — ±3/6/9% of prev close, round to nearest
+  $10, dedupe, integer/fixed-point. Tests: META-style spread, AAPL-style collapse,
+  optional rounded-close, no floats.
+- [ ] **3. Market calendar** (`calendar.ts`) — weekend/holiday/half-day; DST-aware ET→unix;
+  `closeInstant()` = 4:00 PM ET (1:00 PM half-days) = `trading_day`. Tests across DST,
+  holiday, half-day, weekend.
+- [ ] **4. PriceSource + Alerter + logger + retry** — interfaces + impls (Pyth + mock
+  source; webhook + log alerter). Tests: mock close; webhook POST + log fallback; backoff
+  math; the wide-confidence retry-every-30s-up-to-15min-then-alert loop (injected clock).
+- [ ] **5. Morning job** (`morningJob.ts` + provisioning) — per ticker: prev close →
+  strikes → `createStrikeMarket` + `initOrderBook` + `growOrderBook`; logged, failures
+  alerted, retries; skips when calendar says no session. Mocked-SDK contract test.
+- [ ] **6. Settlement job** (`settlementJob.ts`) — discover open markets past close →
+  settle (idempotent no-op on re-settle); wide-confidence → retry loop → admin alert for
+  `admin_settle`. Mocked-chain orchestration tests.
+- [ ] **7. CLI entrypoints + keypair/secret loading** (`bin/*`, `keypair.ts`, `config.ts`)
+  — `run-morning`/`run-settlement` parse env, load the keypair from an env secret, exit
+  non-zero on failure. Tests: rejects missing/empty secret; config validation. Document
+  env vars for F-10's `.env.example`.
+- [ ] **8. Integration test (LiteSVM)** — load `meridian.so`, seed `Config`, run morning
+  to create markets, run settlement (SDK `buildPriceUpdateV2` fixture) and assert markets
+  go `Settled` with the expected outcome.
+- [ ] **9. CI wiring** — extend `.gitlab-ci.yml` `lint-ts` to typecheck + test
+  `@meridian/automation` in the same Node job (F-06 pattern; consumes the `build-program`
+  `.so`).
+- [ ] **10. Adversarial review + triage** — independent subagent (keypair handling,
+  webhook SSRF/errors, retry/clock edges, calendar correctness, idempotency). Fix
+  high/medium, re-run suite, record lows below.
 
 ## Implementation notes (filled in by the building agent)
 

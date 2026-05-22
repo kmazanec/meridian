@@ -1,0 +1,53 @@
+{
+  "name": "@meridian/automation",
+  "version": "0.1.0",
+  "description": "Off-chain automation service for Meridian: the morning job (compute strikes and create the day's markets) and the settlement job (settle open contracts after the close, with retry/backoff and admin alerting). Drives the daily lifecycle on a wall clock; trust-minimized (calls only permissioned instructions via @meridian/sdk).",
+  "license": "ISC",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "meridian-run-morning": "./dist/bin/run-morning.js",
+    "meridian-run-settlement": "./dist/bin/run-settlement.js"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "ts-mocha -p tsconfig.json --timeout 120000 'tests/**/*.test.ts'",
+    "run-morning": "ts-node src/bin/run-morning.ts",
+    "run-settlement": "ts-node src/bin/run-settlement.ts"
+  },
+  "dependencies": {
+    "@meridian/sdk": "workspace:^",
+    "@solana/web3.js": "^1.98.0",
+    "bn.js": "^5.2.1"
+  },
+  "peerDependencies": {
+    "@pythnetwork/hermes-client": "^1.0.0",
+    "@pythnetwork/pyth-solana-receiver": "^0.16.0"
+  },
+  "peerDependenciesMeta": {
+    "@pythnetwork/hermes-client": {
+      "optional": true
+    },
+    "@pythnetwork/pyth-solana-receiver": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.5",
+    "@types/chai": "^4.3.0",
+    "@types/mocha": "^9.0.0",
+    "@types/node": "^20.0.0",
+    "chai": "^4.3.4",
+    "litesvm": "^0.8.0",
+    "mocha": "^9.0.3",
+    "ts-mocha": "^10.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}
