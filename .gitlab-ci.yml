@@ -120,6 +120,14 @@ workflow:
 # produces target/deploy/meridian.so. Pass it forward so clippy/test can load it.
 build-program:
   stage: build
+  # The droplet has only ~3.8GB RAM and no swap, shared with other services.
+  # build-program, verify, and lint-ts each load the program into an in-memory VM
+  # (cargo build-sbf, cargo test→LiteSVM, and the SDK's npm litesvm). Running two
+  # at once exhausts RAM → std::bad_alloc (observed: lint-ts OOM'd while verify
+  # ran concurrently). This shared resource_group serializes them — GitLab runs at
+  # most one of these at a time, even across concurrent pipelines — so memory
+  # never doubles up. fmt (light) and the review job (separate runner) stay free.
+  resource_group: heavy-rust
   script:
     - run_in_docker_root solanafoundation/anchor:v1.0.2 'cargo build-sbf'
     - test -f target/deploy/meridian.so   # fail loudly if the artifact is missing
@@ -143,6 +151,7 @@ fmt:
 verify:
   stage: check
   needs: ["build-program"]
+  resource_group: heavy-rust   # serialize with build-program/lint-ts (see build-program: ~3.8GB RAM, no swap)
   script:
     - >-
       run_in_docker_root solanafoundation/anchor:v1.0.2
@@ -161,6 +170,7 @@ verify:
 lint-ts:
   stage: check
   needs: ["build-program"]
+  resource_group: heavy-rust   # serialize with build-program/verify — its LiteSVM tests OOM'd alongside verify
   cache:
     key:
       files:
