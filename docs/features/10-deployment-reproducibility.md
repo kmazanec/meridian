@@ -98,10 +98,14 @@ validator → deploy → init config + USDC → create markets → seed demo wal
   AC#3) **Green: 39 contract tests; `make dev` → `make demo` → `make stop` run live (full
   bring-up: deploy, USDC+Config, day's markets, seeded demo wallet, web `.env.local`;
   lifecycle green; clean teardown).**
-- [ ] **Chunk 5 — Reproducibility verification.** `tests/repro.test.ts` (validator-gated):
-  boot a real validator, run the *actual* ops scripts as subprocesses, assert exit 0 +
-  invariants. Add ops typecheck + contract tests to CI `lint-ts` (validator suite excluded,
-  mirrors e2e). (Testing requirement; AC#4)
+- [x] **Chunk 5 — Reproducibility verification.** `tests/repro.test.ts` (validator-gated):
+  boots a real validator and runs the *actual* ops bins (deploy→bootstrap→create-markets→
+  lifecycle) as subprocesses, asserting exit 0 + Config initialized + manifest secret-free
+  (lifecycle bin asserts §7 invariants internally). Added ops typecheck + `test:contract` to
+  CI `lint-ts` (validator suite excluded, mirrors e2e); documented in `.gitlab-ci.yml` +
+  `docs/local-development.md`. (Testing requirement; AC#4) **Green: repro passes against a
+  real validator (~33s); skips cleanly without a validator (1 pending); immutable install +
+  lint clean.**
 - [ ] **Chunk 6 — README + devnet runbook.** README one-command flow + Risks/Limitations
   note; `docs/devnet-deployment.md` novice runbook (install CLI, fund keypair, `.env`, the
   four make targets, explorer, live-Pyth opt-in vs admin-override, troubleshooting); update
@@ -216,3 +220,16 @@ validator → deploy → init config + USDC → create markets → seed demo wal
 - **Secrets discipline:** root `.env`, `.localnet/` (holds the demo wallet secret + local
   deployer), and `deploy-manifest.json` are gitignored; `.env.example` is the only env file
   committed. The deploy manifest itself carries only public addresses.
+
+### Chunk 5 — reproducibility verification + CI
+
+- **`tests/repro.test.ts` runs the real bins, not a copy.** It boots a validator via the
+  shared harness and `execFileSync`s the actual `deploy`/`bootstrap`/`create-markets`/
+  `lifecycle` bins (the same commands `make` and the operator invoke) as subprocesses; a
+  non-zero exit fails the test. It then confirms Config is initialized with the manifest's
+  USDC mint and the manifest is secret-free. The lifecycle bin asserts the §7 invariants
+  internally at every phase, so a zero exit *is* the invariant proof — this is what makes
+  "reproducible" a *checked* claim. Verified live (~33s); skips cleanly with no validator.
+- **CI:** ops `typecheck` + `test:contract` were added to the Node-only `lint-ts` job
+  (mirroring e2e — the validator-gated repro test stays a local/documented gate, since the
+  CI image has no Solana toolchain). The lockfile was synced for `--immutable`.

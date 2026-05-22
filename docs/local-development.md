@@ -121,8 +121,46 @@ solana balance
 # if rate-limited, use https://faucet.solana.com with your devnet address
 ```
 
+## One-command local stack (`make dev`)
+
+The fastest way to a running, trade-against-able stack is the root `Makefile`:
+
+```bash
+make dev    # build/boot validator → deploy → init Config+USDC → create the day's
+            # markets → seed a demo wallet → write packages/web/.env.local
+make demo   # run the headless lifecycle (create → mint → trade → settle → redeem)
+make stop   # tear it all down and remove local state
+make help   # list every target
+```
+
+`make dev` leaves a local validator running and writes `packages/web/.env.local`, so
+`yarn workspace @meridian/web dev` immediately points the frontend at the local stack
+(with a pre-seeded demo wallet — its secret is in the gitignored `.localnet/dev.json`).
+
+These targets are powered by the **`@meridian/ops`** package — environment-agnostic,
+`RPC_URL`-driven scripts (`deploy`, `bootstrap`, `create-markets`, `lifecycle`) that run the
+same way against a local validator and against devnet. In a git worktree whose `target/` is
+empty, point them at a `.so` built elsewhere via `MERIDIAN_SO` / `MERIDIAN_PROGRAM_KEYPAIR`
+(the same overrides the convergence harness honors).
+
+### Ops reproducibility test
+
+`@meridian/ops` has a **validator-gated** test that runs the *actual* deploy → bootstrap →
+create-markets → lifecycle bins as subprocesses against a real validator and asserts the
+on-chain invariants — so "reproducible" is verified, not assumed. Like the convergence suite
+it **skips** cleanly without a validator/`.so`; CI runs only the package's typecheck + pure
+`*.contract` tests.
+
+```bash
+# Build the program first (or set MERIDIAN_SO), then:
+yarn workspace @meridian/ops test            # full (boots a validator; runs the real bins)
+yarn workspace @meridian/ops test:contract   # pure contract tests only (no validator)
+```
+
 ## Devnet deployment
 
-A reproducible devnet deploy + market-creation + end-to-end lifecycle workflow is
-scoped as a separate deliverable (see `docs/features/10-deployment-reproducibility.md`)
-and is not part of the current local dev loop.
+The **same** ops scripts deploy and run the lifecycle on real devnet — you supply a funded
+keypair and an RPC endpoint. See **[`devnet-deployment.md`](devnet-deployment.md)** for the
+step-by-step runbook (`make deploy-devnet` / `bootstrap-devnet` / `create-markets-devnet` /
+`lifecycle-devnet`), including how to fund a devnet wallet and the live-Pyth vs admin-override
+settlement choice.

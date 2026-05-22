@@ -515,6 +515,7 @@ __metadata:
     meridian-bootstrap: ./src/bin/bootstrap.ts
     meridian-create-markets: ./src/bin/create-markets.ts
     meridian-deploy: ./src/bin/deploy.ts
+    meridian-dev-up: ./src/bin/dev-up.ts
     meridian-lifecycle: ./src/bin/lifecycle.ts
   languageName: unknown
   linkType: soft
