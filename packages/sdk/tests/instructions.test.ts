@@ -393,7 +393,14 @@ describeOnChain("instruction builders (against the real program)", () => {
   });
 
   describe("placeOrder client-side validation (fail fast, no wasted round-trip)", () => {
-    const h = Harness.create();
+    // Create the harness in a hook, not the describe body: a skipped suite
+    // (describeOnChain → describe.skip when SDK_SKIP_LITESVM) still *executes*
+    // the body to register tests, so a body-level Harness.create() would run —
+    // and fail — even when skipped (no .so in that CI job).
+    let h: Harness;
+    before(() => {
+      h = Harness.create();
+    });
     const user = Keypair.generate().publicKey;
     const usdc = PublicKey.unique();
     const id = {
