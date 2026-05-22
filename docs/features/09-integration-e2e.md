@@ -95,9 +95,12 @@ opt-in env-gated live-devnet settlement smoke test (real Pyth Hermes→Receiver 
   `runSettlementJob` (real `getProgramAccounts` discovery + injected admin settler);
   created/settled counts, on-chain outcomes, both jobs idempotent. (AC#6,#5)
   **Green: 1 passing.**
-- [ ] **Chunk 6 — Live-devnet settle smoke (opt-in).** `tests/devnet-settle.smoke.test.ts`:
-  env-gated real Hermes→Receiver→`settleMarket`; skipped without creds/market-hours;
-  fallback ladder documented. (AC#5)
+- [x] **Chunk 6 — Live-devnet settle smoke (opt-in).** `tests/devnet-settle.smoke.test.ts`:
+  env-gated real Hermes→Receiver→`settleMarket` via `settleWithPyth`; cleanly **skips**
+  (`describe.skip`) without `E2E_DEVNET`/creds/market-hours (verified: 1 pending);
+  fallback ladder documented in-file. (AC#5) **Code green; the live assertion is the
+  manual gate below — it cannot be executed in CI/this session (no devnet keypair, and
+  equity feeds need US market hours).**
 - [ ] **Chunk 7 — Wiring + docs.** Workspace wiring; keep validator suite out of the
   Node-only CI `lint-ts` job (mirror Playwright); note in `.gitlab-ci.yml` + docs.
 - [ ] **Adversarial review** — robustness/efficiency/security-integrity; fix high/medium.
@@ -111,6 +114,26 @@ four-buttons→one-book in the SDK (`buildTradeIntent`, not reimplemented), sett
 timing (`trading_day` = 4:00 PM ET close instant; gate `now >= trading_day`). Any
 mismatch forcing a contract change is fixed at source and propagated to
 ROADMAP.md/ARCHITECTURE.md, not patched locally.
+
+## Manual gate (cannot be automated here)
+
+The live-devnet settlement assertion (Chunk 6) proves the genuine Pyth pull-oracle path
+on a cluster where the Receiver is deployed. It is the one acceptance item that cannot run
+in this session or in CI — it needs a funded devnet keypair and a fresh price (US market
+hours for an equity feed; a 24/7 crypto feed works any time as a stand-in). To run it:
+
+```
+E2E_DEVNET=1 \
+RPC_URL=https://api.devnet.solana.com \
+SOLANA_KEYPAIR=~/.config/solana/id.json \
+FEED_META=<devnet hex feed id> \
+  yarn workspace @meridian/e2e test
+```
+
+Prerequisite: `Config` initialized on that cluster with the matching `feed_id` and the
+keypair as admin. The admin-override settlement path (proven by the local lifecycle,
+trade-paths, multi-user, and automation suites) is the guaranteed demo fallback, so the
+end-to-end lifecycle is fully proven without the live feed.
 
 ## Implementation notes (filled in by the building agent)
 
