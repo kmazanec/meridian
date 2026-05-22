@@ -280,3 +280,40 @@ Noted as a known constraint rather than a new vulnerability.
 - **CI:** ops `typecheck` + `test:contract` were added to the Node-only `lint-ts` job
   (mirroring e2e — the validator-gated repro test stays a local/documented gate, since the
   CI image has no Solana toolchain). The lockfile was synced for `--immutable`.
+
+### MR !10 review (automated cursor-review bot) — fixes
+
+The MR's automated review flagged 1 high / 5 medium / 2 low. Fixed (high/medium + a tied low):
+
+- **Lifecycle USDC funding failed on a mint the deployer doesn't control (HIGH).** `fundUser`
+  always `mintTo`'d, so `lifecycle-devnet` against a pre-existing devnet USDC mint (deployer
+  not the authority) would fail after a successful bootstrap. Now it checks the mint authority:
+  `mintTo` when the deployer controls the mint (mock/local), else **SPL-transfer from the
+  deployer's own USDC** (with a clear error if the deployer's balance is short). Works for both
+  mock and real collateral mints.
+- **`make dev` airdrop swallowed failure (MEDIUM).** The `|| true` left an unfunded deployer →
+  opaque insufficient-lamports errors later. Now retries (3×) and **verifies the balance**,
+  failing loudly with a pointer to the validator log if still unfunded.
+- **Demo-wallet secret written world-readable (MEDIUM).** `.localnet/dev.json` holds an ed25519
+  secret; now written `0600` and `.localnet/` created `0700` (Makefile `chmod 700` + devStack
+  `mkdir mode`), so other local users can't read it.
+- **Bootstrap silently ignored a differing `USDC_MINT` when Config existed (MEDIUM).** Now
+  **fails fast** if `USDC_MINT` is set and differs from the on-chain Config mint (Config's mint
+  is immutable), instead of letting the operator believe a different mint is in use.
+- **`seedDevStack` re-created fixed demo markets (MEDIUM).** A second `make dev` over a running
+  validator hit already-initialized markets. Now **skips creation when the market exists**
+  (`fetchMarket`), and the lifecycle demo market uses an explicitly **unique past-dated
+  `tradingDay`** (LOW finding, same root) so rapid re-runs don't collide on the market PDA.
+- **Deprecated airdrop confirm in the shared harness (MEDIUM, e2e).**
+  `localValidator.startLocalValidator` now confirms with the `{ blockhash,
+  lastValidBlockHeight }` form (the bare-signature form can resolve before finalization on a
+  busy validator → intermittent boot flakes).
+
+**Not changed (responded on the thread):** the LOW that the validator-gated `repro.test.ts`
+isn't in CI. That is deliberate and matches the convergence-suite precedent — the CI runner
+has no Solana toolchain; the real deploy→lifecycle run is a local/documented gate, while CI
+runs the package's typecheck + pure contract tests (which pin the deploy argv / env / manifest
+contracts). A scheduled validator CI job is reasonable future infra but out of scope for F-10.
+
+Re-verified after fixes: 43 ops tests (incl. the validator-backed repro), `make dev` →
+`make demo` → `make stop` green, `dev.json` is `0600`, typecheck + prettier clean.

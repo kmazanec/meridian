@@ -368,12 +368,22 @@ export async function startLocalValidator(
       "validator RPC"
     );
 
-    // Fund the deployer (airdrop, confirmed).
+    // Fund the deployer (airdrop, confirmed). Use the blockhash form of confirmTransaction —
+    // the deprecated signature-only form can resolve before the airdrop is finalized on a
+    // busy validator, causing intermittent boot failures in the repro/convergence suites.
     const sig = await connection.requestAirdrop(
       deployer.publicKey,
       deployerSol * LAMPORTS_PER_SOL
     );
-    await connection.confirmTransaction(sig, "confirmed");
+    const bh = await connection.getLatestBlockhash("confirmed");
+    await connection.confirmTransaction(
+      {
+        signature: sig,
+        blockhash: bh.blockhash,
+        lastValidBlockHeight: bh.lastValidBlockHeight,
+      },
+      "confirmed"
+    );
 
     // Upgradeable deploy with our program keypair. --keypair/--url are GLOBAL flags
     // (before the subcommand); the deployer is also the explicit fee payer and upgrade

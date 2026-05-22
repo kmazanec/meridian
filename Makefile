@@ -55,7 +55,7 @@ dev: _validator-up ## Bring up the full LOCAL stack (validator + deploy + market
 	@echo "  Stop:      make stop"
 
 _validator-up: ## (internal) Ensure a local validator is running + an ephemeral funded deployer exists.
-	@mkdir -p $(LOCALNET_DIR)
+	@mkdir -p $(LOCALNET_DIR) && chmod 700 $(LOCALNET_DIR)   # holds the local deployer + demo-wallet secrets
 	@if [ -f $(VALIDATOR_PID) ] && kill -0 $$(cat $(VALIDATOR_PID)) 2>/dev/null; then \
 	  echo "▶ Local validator already running (pid $$(cat $(VALIDATOR_PID)))."; \
 	else \
@@ -76,7 +76,19 @@ _validator-up: ## (internal) Ensure a local validator is running + an ephemeral 
 	  solana-keygen new --no-bip39-passphrase --silent --force --outfile $(LOCAL_DEPLOYER) >/dev/null; \
 	fi
 	@echo "▶ Funding the local deployer..."
-	@solana --url $(LOCAL_RPC) airdrop 100 $$(solana-keygen pubkey $(LOCAL_DEPLOYER)) >/dev/null 2>&1 || true
+	@DEPLOYER_PUBKEY=$$(solana-keygen pubkey $(LOCAL_DEPLOYER)); \
+	  for i in 1 2 3; do \
+	    solana --url $(LOCAL_RPC) airdrop 100 $$DEPLOYER_PUBKEY >/dev/null 2>&1 && break; \
+	    echo "  airdrop attempt $$i failed; retrying..."; sleep 1; \
+	  done; \
+	  BAL=$$(solana --url $(LOCAL_RPC) balance $$DEPLOYER_PUBKEY 2>/dev/null | awk '{print $$1}'); \
+	  if [ -z "$$BAL" ] || [ "$${BAL%%.*}" -lt 1 ] 2>/dev/null; then \
+	    echo "✗ Local deployer is unfunded (balance: $${BAL:-unknown}). The validator airdrop failed —"; \
+	    echo "  later deploy/bootstrap steps would fail with opaque insufficient-lamports errors."; \
+	    echo "  Check $(LOCALNET_DIR)/validator.log, then re-run 'make dev'."; \
+	    exit 1; \
+	  fi; \
+	  echo "  deployer funded ($$BAL SOL)"
 
 stop: ## Stop the local validator and remove local-stack state.
 	@if [ -f $(VALIDATOR_PID) ] && kill -0 $$(cat $(VALIDATOR_PID)) 2>/dev/null; then \

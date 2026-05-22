@@ -31,7 +31,12 @@ import {
   sendAndConfirmTransaction,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
-import { getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
+import {
+  getOrCreateAssociatedTokenAccount,
+  getMint,
+  mintTo,
+  createTransferInstruction,
+} from "@solana/spl-token";
 import {
   OrderSide,
   RedeemSide,
@@ -51,6 +56,7 @@ import {
   Fixture,
   sendTx,
   makerAccountsFor,
+  ADMIN_OVERRIDE_DELAY_SECONDS,
   type TestUser,
 } from "@meridian/e2e";
 import type { ConsoleLog } from "./log";
@@ -95,8 +101,18 @@ export async function runLifecycle(
   // ── create ────────────────────────────────────────────────────────────────
   log?.section("Lifecycle: create");
   // Past-dated so admin_settle is callable immediately (the program gates trading on
-  // state==Open, not the clock, so the market is still fully tradable).
-  const market = await fx.createMarket({ ticker, strike });
+  // state==Open, not the clock, so the market is still fully tradable). We pick an
+  // explicitly UNIQUE tradingDay rather than the fixture default (which is derived from the
+  // current second): the bin promises a *fresh* demo market on every run, and two invocations
+  // in the same second would otherwise derive the same market PDA and fail with
+  // MarketAlreadyExists. A small random offset further into the past keeps each run distinct
+  // while staying comfortably past the admin-override delay so settlement is callable.
+  const tradingDay =
+    Math.floor(Date.now() / 1000) -
+    ADMIN_OVERRIDE_DELAY_SECONDS -
+    60 -
+    Math.floor(Math.random() * 86_400);
+  const market = await fx.createMarket({ ticker, strike, tradingDay });
   const addr = marketPda(market.ticker, market.strike, market.tradingDay);
   log?.step(`Created market ${addr.toBase58()}`);
   log?.detail("ticker/strike", `${Ticker[ticker]} @ $${dollars(strike)}`);
@@ -315,14 +331,54 @@ async function fundUser(
     keypair.publicKey
   );
   if (usdcDollars > 0) {
-    await mintTo(
+    const amount = BigInt(usdcDollars) * BigInt(PAYOFF_UNIT.toString());
+    // Fund USDC the right way for the mint we're actually using. On a mock mint (local, or a
+    // bootstrap-created devnet mint) the deployer is the mint authority, so mint fresh. On a
+    // pre-existing mint the deployer does NOT control (e.g. a real devnet USDC), minting would
+    // fail — so transfer from the deployer's own USDC balance instead. This keeps
+    // `lifecycle` working against both kinds of collateral mint.
+    const deployerIsMintAuthority = await isMintAuthority(
       connection,
-      deployer,
       usdcMint,
-      usdcAcc.address,
-      deployer,
-      BigInt(usdcDollars) * BigInt(PAYOFF_UNIT.toString())
+      deployer.publicKey
     );
+    if (deployerIsMintAuthority) {
+      await mintTo(
+        connection,
+        deployer,
+        usdcMint,
+        usdcAcc.address,
+        deployer,
+        amount
+      );
+    } else {
+      const deployerUsdc = await getOrCreateAssociatedTokenAccount(
+        connection,
+        deployer,
+        usdcMint,
+        deployer.publicKey
+      );
+      if (BigInt(deployerUsdc.amount) < amount) {
+        throw new Error(
+          `Deployer is not the authority for USDC mint ${usdcMint.toBase58()} and holds ` +
+            `${deployerUsdc.amount} base units (< ${amount} needed to fund ${label}). ` +
+            `Pre-fund the deployer's USDC ATA, or run against a bootstrap-created mock mint.`
+        );
+      }
+      await sendAndConfirmTransaction(
+        connection,
+        new Transaction().add(
+          createTransferInstruction(
+            deployerUsdc.address,
+            usdcAcc.address,
+            deployer.publicKey,
+            amount
+          )
+        ),
+        [deployer],
+        { commitment: "confirmed" }
+      );
+    }
   }
   log?.step(
     `Funded ${label} ${keypair.publicKey.toBase58()} (${sol} SOL, ${usdcDollars} USDC)`
@@ -359,6 +415,16 @@ function yesMintOf(market: MarketId): PublicKey {
     market.strike,
     market.tradingDay
   ).yesMint;
+}
+
+/** True iff `who` is the current mint authority of `mint` (so it can `mintTo`). */
+async function isMintAuthority(
+  connection: Connection,
+  mint: PublicKey,
+  who: PublicKey
+): Promise<boolean> {
+  const info = await getMint(connection, mint);
+  return info.mintAuthority?.equals(who) ?? false;
 }
 
 /** USDC base units (6 dp) → dollar string. */

@@ -40,6 +40,7 @@ import {
   yesMintPda,
   noMintPda,
   marketPda,
+  fetchMarket,
   type MarketId,
 } from "@meridian/sdk";
 import { Fixture, sendTx, type TestUser } from "@meridian/e2e";
@@ -104,6 +105,15 @@ export async function seedDevStack(
 
   log?.section("Dev stack: provision demo markets");
   for (const m of [yesMarket, noMarket, settledMarket]) {
+    // Skip if it already exists. `make dev` reuses a running validator, so a second `make dev`
+    // (without `make stop`) hits the same fixed demo-market identities; creating again would
+    // fail. Re-seeding a fresh demo wallet into existing markets below is harmless.
+    const marketAddr = marketPda(m.ticker, m.strike, m.tradingDay);
+    const exists = (await fetchMarket(fx.program, marketAddr)) !== null;
+    if (exists) {
+      log?.detail(`market ${Ticker[m.ticker]}`, "exists — reusing");
+      continue;
+    }
     await fx.createMarket({
       ticker: m.ticker,
       strike: m.strike,
@@ -214,12 +224,17 @@ function writeWebEnv(info: DevStackInfo, log?: ConsoleLog): void {
   log?.detail("web env", path);
 }
 
-/** Write `.localnet/dev.json` (addresses + demo wallet secret) for inspection. */
+/**
+ * Write `.localnet/dev.json` (addresses + the demo wallet secret) for inspection. This file
+ * contains an ed25519 secret key, so it is written **owner-only**: the dir is 0700 and the
+ * file 0600, so other local users on a shared machine can't read it and drain the funded demo
+ * wallet. (It is also gitignored; this is the on-disk hardening.)
+ */
 function writeDevJson(info: DevStackInfo, log?: ConsoleLog): void {
   const dir = resolve(repoRoot(), ".localnet");
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
   const path = resolve(dir, "dev.json");
-  writeFileSync(path, JSON.stringify(info, null, 2) + "\n");
+  writeFileSync(path, JSON.stringify(info, null, 2) + "\n", { mode: 0o600 });
   log?.detail("dev info", path);
 }
 

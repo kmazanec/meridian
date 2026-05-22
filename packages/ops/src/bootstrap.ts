@@ -100,6 +100,17 @@ export async function bootstrap(
 
   const existing = await fetchConfig(program);
   if (existing) {
+    // Fail fast on a misleading config: if the operator passed USDC_MINT but Config already
+    // pins a *different* collateral mint, leaving it untouched would let them believe markets
+    // use their mint while everything actually uses the old one. Surface it instead of
+    // silently diverging. (Config is immutable here; re-pointing means a fresh deployment.)
+    if (opts.usdcMint && !opts.usdcMint.equals(existing.usdcMint)) {
+      throw new Error(
+        `USDC_MINT=${opts.usdcMint.toBase58()} but Config is already initialized with a ` +
+          `different mint (${existing.usdcMint.toBase58()}). Config's USDC mint is immutable; ` +
+          `unset USDC_MINT to use the existing mint, or deploy a fresh program to use a new one.`
+      );
+    }
     opts.log?.warn(
       `Config already initialized (admin ${existing.admin.toBase58()}, ` +
         `USDC ${existing.usdcMint.toBase58()}) — leaving it untouched.`
