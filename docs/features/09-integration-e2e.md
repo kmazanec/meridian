@@ -1,6 +1,6 @@
 # Feature: Integration & E2E
 
-**ID:** F-09 · **Roadmap piece:** F-09 · **Status:** Not started
+**ID:** F-09 · **Roadmap piece:** F-09 · **Status:** In progress
 
 ## Description
 
@@ -62,12 +62,86 @@ everything and is the highest-coordination moment in the plan. It unblocks deplo
   USDC; for the oracle leg, whatever the F-04 spike concluded (live devnet feeds
   during market hours, or the fallback path).
 
+## Build plan (approved)
+
+Delivered as a new private workspace package **`@meridian/e2e`** (`packages/e2e`) — the
+convergence suite that uses `@meridian/sdk` (and `@meridian/automation`) to drive a
+**real `solana-test-validator`** end-to-end. A new package because the SDK's `Harness`
+is LiteSVM-only (no `getProgramAccounts`, native leak, skipped in CI) and F-09 needs a
+real validator + must import both sdk and automation. Test runner: ts-mocha (matches
+sdk/automation).
+
+**Decisions taken with the user:** (1) deterministic suite vs a local validator, plus an
+opt-in env-gated live-devnet settlement smoke test (real Pyth Hermes→Receiver path);
+(2) suite shape = TS driving a real validator, reusing the F-08 localnet harness pattern.
+
+- [x] **Chunk 1 — Scaffold + local-validator harness.** `packages/e2e` package.json/
+  tsconfig; `src/localValidator.ts` (boot validator, upgradeable deploy so ProgramData
+  exists, `MERIDIAN_SO`/program-keypair overrides, `describeOnValidator` skip-guard,
+  teardown); `src/fixture.ts` (bootstrap config+USDC, createMarket, newUser, mintPairs,
+  trade, settleAdmin, invariant-assert helpers); `src/crossing.ts` (maker-account +
+  four-button mapping); smoke `tests/harness.test.ts`. **Green: 3 passing.**
+- [x] **Chunk 2 — Full lifecycle.** `tests/lifecycle.test.ts`: create→mint→place+match
+  crossing→settle→redeem; invariants asserted after each phase. (AC#1, AC#4)
+  **Green: 1 passing.**
+- [ ] **Chunk 3 — Four trade paths.** `tests/trade-paths.test.ts`: Buy/Sell Yes, Buy/Sell
+  No via `buildTradeIntent` vs maker liquidity; partial-fill + at-strike boundary. (AC#2)
+- [ ] **Chunk 4 — Multi-user.** `tests/multi-user.test.ts`: maker mints+quotes, taker
+  fills, settle, both redeem correctly; collateralization across both + vault drains. (AC#3,#4,#5)
+- [ ] **Chunk 5 — Automation vs real validator.** `tests/automation.test.ts`:
+  `runMorningJob` (Mock price → strikes → provision via real `RpcChainClient`) then
+  `runSettlementJob` (discovery + injected settler); created/settled counts + outcomes. (AC#6,#5)
+- [ ] **Chunk 6 — Live-devnet settle smoke (opt-in).** `tests/devnet-settle.smoke.test.ts`:
+  env-gated real Hermes→Receiver→`settleMarket`; skipped without creds/market-hours;
+  fallback ladder documented. (AC#5)
+- [ ] **Chunk 7 — Wiring + docs.** Workspace wiring; keep validator suite out of the
+  Node-only CI `lint-ts` job (mirror Playwright); note in `.gitlab-ci.yml` + docs.
+- [ ] **Adversarial review** — robustness/efficiency/security-integrity; fix high/medium.
+- [ ] **Rebase, push, open MR.**
+
+## Cross-cutting contracts obeyed
+
+Fixed-point/units (PAYOFF_UNIT=PRICE_SCALE=1e6, no floats; SDK constants), frozen PDA
+seeds (SDK derivation only), IDL-as-interface (no hand-rolled serialization),
+four-buttons→one-book in the SDK (`buildTradeIntent`, not reimplemented), settlement
+timing (`trading_day` = 4:00 PM ET close instant; gate `now >= trading_day`). Any
+mismatch forcing a contract change is fixed at source and propagated to
+ROADMAP.md/ARCHITECTURE.md, not patched locally.
+
 ## Implementation notes (filled in by the building agent)
 
-> The agent implementing this feature records its implementation decisions and
-> rationale here as it builds — chosen libraries/patterns within the architecture's
-> constraints, trade-offs made, deviations from assumptions and why, and anything the
-> next agent or the integrator needs to know. This section starts empty and is owned
-> by the builder, not the planner. Cross-cutting discoveries that affect other
-> features must also be propagated to ROADMAP.md or the architecture doc, not just
-> left here.
+> Decisions and rationale recorded as the build progresses.
+
+- **New `@meridian/e2e` workspace package** (private, no build/publish, ts-mocha runner)
+  is the home for the convergence suite. Reasons: (a) the SDK's `Harness` is LiteSVM-only
+  (no real `getProgramAccounts`, native-memory leak → skipped in CI) and F-09 needs a
+  *real* validator so discovery, ATAs, and the automation `RpcChainClient` run for real;
+  (b) F-09 is the only place that imports **both** sdk and automation. Test timeout is
+  600s (a validator boot + upgradeable deploy is tens of seconds).
+
+- **Local settlement uses `admin_settle`, not `settle_market`.** The program's
+  `settle_market` requires the price-update account to be **owned by the Pyth Receiver
+  program** (`rec5EK…`). On a fresh local validator the Receiver isn't deployed, and a
+  live validator has no `set_account` RPC to forge a Receiver-*owned* data account
+  (only the owning program may write an account's data after creation). The real
+  Hermes→Receiver→`settle_market` pull-oracle path is therefore exercised in the opt-in
+  **devnet** smoke test (Chunk 6), where the Receiver is actually deployed. The on-chain
+  oracle parsing/staleness/confidence checks are already proven by the program's Rust
+  LiteSVM tests (`test_settlement.rs`, `test_invariants.rs` real-`settle_market` sweep);
+  F-09's job is cross-stack convergence, and `admin_settle` gives deterministic,
+  time-gated settlement to drive the integrated lifecycle. The settlement-timing
+  invariant (#5) is still asserted (admin delay enforced).
+
+- **Worktree `target/`:** this branch is built in a git worktree whose `target/` is
+  empty; the harness honors `MERIDIAN_SO` / `MERIDIAN_PROGRAM_KEYPAIR` env overrides to
+  point at a `.so` built in the main checkout for the same program source.
+
+### Convergence findings (surfaced by the integrated run)
+
+- **Raw `placeOrder` does not create the caller's outcome-token ATA.** A taker buying Yes
+  for the first time has no Yes ATA, and `place_order` requires `user_yes` to be
+  initialized (`AccountNotInitialized`/0xbc4). Only the SDK's `buildTradeIntent` prepends
+  the idempotent ATA-creation; callers using the low-level builder directly must create it
+  themselves (the frontend always goes through `buildTradeIntent`, so it is unaffected).
+  This is a *usage* contract, not a bug — documented here and handled in the suite by
+  prepending `createAtaIfNeeded` (the same instruction the intent uses). No source change.
