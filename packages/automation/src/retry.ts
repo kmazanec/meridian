@@ -73,6 +73,12 @@ export interface RetryEveryOptions {
    * failure, distinct from the soft "not ready yet" the boolean expresses).
    */
   retryOnError?: boolean;
+  /**
+   * If true, sleep one interval *before* the first attempt. Used when the caller already
+   * made an immediate attempt (so this loop should not re-run it back-to-back). Default
+   * false.
+   */
+  sleepFirst?: boolean;
 }
 
 /**
@@ -80,18 +86,36 @@ export interface RetryEveryOptions {
  * budget elapses. Returns `true` on success; throws {@link RetryGaveUp} if the window is
  * exhausted. Used for the settlement wide-confidence retry-then-alert path.
  *
- * The window check is inclusive of the boundary (`elapsed <= maxDuration`), so a 15-min
- * budget at a 30s interval makes its final attempt at the 15-min mark before giving up.
+ * The window check is boundary-aware: the loop gives up once the *next* sleep would push
+ * elapsed time past `maxDurationMs`, so it never sleeps beyond the budget.
  */
 export async function retryEvery(
   attempt: () => Promise<boolean>,
   opts: RetryEveryOptions
 ): Promise<boolean> {
+  if (opts.intervalMs <= 0) {
+    // A non-positive interval would busy-loop without advancing time — reject the misconfig
+    // loudly rather than spin and hammer whatever the attempt calls.
+    throw new Error(
+      `retryEvery intervalMs must be > 0 (got ${opts.intervalMs})`
+    );
+  }
   const now = opts.now ?? Date.now;
   const sleep = opts.sleep ?? realSleep;
   const start = now();
+  let first = true;
 
   for (;;) {
+    if (!(first && !opts.sleepFirst)) {
+      // Before any attempt except an eager first one, check the budget then sleep.
+      const elapsed = now() - start;
+      if (elapsed + opts.intervalMs > opts.maxDurationMs) {
+        throw new RetryGaveUp();
+      }
+      await sleep(opts.intervalMs);
+    }
+    first = false;
+
     let ok = false;
     try {
       ok = await attempt();
@@ -100,12 +124,5 @@ export async function retryEvery(
       ok = false;
     }
     if (ok) return true;
-
-    const elapsed = now() - start;
-    if (elapsed + opts.intervalMs > opts.maxDurationMs) {
-      // The next sleep would push us past the budget — stop now.
-      throw new RetryGaveUp();
-    }
-    await sleep(opts.intervalMs);
   }
 }

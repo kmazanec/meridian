@@ -170,4 +170,38 @@ describe("retryEvery (wide-confidence settlement loop)", () => {
     expect(ok).to.be.true;
     expect(attempts).to.equal(3);
   });
+
+  it("rejects a non-positive interval rather than busy-looping", async () => {
+    const clock = virtualClock();
+    let err: unknown;
+    try {
+      await retryEvery(async () => false, {
+        intervalMs: 0,
+        maxDurationMs: 15 * 60_000,
+        ...clock,
+      });
+    } catch (e) {
+      err = e;
+    }
+    expect((err as Error).message).to.match(/intervalMs must be > 0/);
+  });
+
+  it("sleeps before the first attempt when sleepFirst is set", async () => {
+    const clock = virtualClock();
+    const attemptClocks: number[] = [];
+    const ok = await retryEvery(
+      async () => {
+        attemptClocks.push(clock.now());
+        return true; // settles on the first (post-sleep) attempt
+      },
+      {
+        intervalMs: 30_000,
+        maxDurationMs: 15 * 60_000,
+        ...clock,
+        sleepFirst: true,
+      }
+    );
+    expect(ok).to.be.true;
+    expect(attemptClocks).to.deep.equal([30_000]); // attempted only after one sleep
+  });
 });

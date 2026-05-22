@@ -274,4 +274,76 @@ describe("runSettlementJob", () => {
     expect(summary.settled).to.equal(1);
     expect(summary.alerted).to.equal(1);
   });
+
+  it("does not let one wide-confidence market block a ready market (concurrent)", async () => {
+    const { logger } = captureLogger();
+    const alerter = new RecordingAlerter();
+    const stuck = freshMarket(); // stays wide-confidence the whole window
+    const ready = freshMarket(); // settles on the first attempt
+    const clock = virtualClock();
+
+    let readySettledAtClock = -1;
+    const settler: Settler = {
+      settle: async (m) => {
+        if (m.address.equals(stuck.address)) {
+          return { status: SettleStatus.WideConfidence };
+        }
+        readySettledAtClock = clock.now();
+        return { status: SettleStatus.Settled };
+      },
+    };
+
+    const summary = await runSettlementJob({
+      discovery: discoveryOf([stuck, ready]),
+      settler,
+      alerter,
+      logger,
+      nowSeconds: () => NOW_SECONDS,
+      retryIntervalMs: 30_000,
+      retryMaxMs: 15 * 60_000,
+      now: clock.now,
+      sleep: clock.sleep,
+    });
+
+    // The ready market settled in phase 1 — at virtual time 0 — NOT after the stuck
+    // market's 15-minute window. That is the anti-blocking guarantee.
+    expect(readySettledAtClock).to.equal(0);
+    expect(summary.settled).to.equal(1); // ready
+    expect(summary.alerted).to.equal(1); // stuck → admin_settle alert
+  });
+
+  it("starts the wide-confidence retry with a sleep (no immediate double-crank)", async () => {
+    const { logger } = captureLogger();
+    const alerter = new RecordingAlerter();
+    const market = freshMarket();
+    const clock = virtualClock();
+    const attemptClocks: number[] = [];
+    let attempts = 0;
+    const settler: Settler = {
+      settle: async () => {
+        attemptClocks.push(clock.now());
+        attempts++;
+        // first (phase 1) wide, second (phase 2, after a sleep) settles.
+        return attempts < 2
+          ? { status: SettleStatus.WideConfidence }
+          : { status: SettleStatus.Settled };
+      },
+    };
+
+    await runSettlementJob({
+      discovery: discoveryOf([market]),
+      settler,
+      alerter,
+      logger,
+      nowSeconds: () => NOW_SECONDS,
+      retryIntervalMs: 30_000,
+      retryMaxMs: 15 * 60_000,
+      now: clock.now,
+      sleep: clock.sleep,
+    });
+
+    // Phase-1 attempt at t=0; the retry attempt happens AFTER a 30s sleep (t=30000),
+    // not back-to-back at t=0.
+    expect(attemptClocks).to.deep.equal([0, 30_000]);
+  });
 });

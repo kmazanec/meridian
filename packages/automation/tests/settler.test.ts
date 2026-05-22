@@ -69,6 +69,35 @@ describe("PythSettler classification", () => {
     expect(r.status).to.equal(SettleStatus.WideConfidence);
   });
 
+  it("maps a logs-less WideConfidence (numeric code only) to retryable", async () => {
+    // Some RPCs return only `custom program error: 0x<code>` without the program logs/name.
+    // 0x1781 = 6017 = WideConfidence. Must still be classified as retryable, not a hard error.
+    const settler = new PythSettler({
+      chain: fakeChain,
+      feedIds: { [Ticker.Meta]: "0xmeta" },
+      settleFn: async () => {
+        throw new Error(
+          "failed to send transaction: custom program error: 0x1781"
+        );
+      },
+    });
+    const r = await settler.settle(market());
+    expect(r.status).to.equal(SettleStatus.WideConfidence);
+  });
+
+  it("does not false-match WideConfidence on an unrelated number in the message", async () => {
+    // A slot/timestamp containing '6017' must NOT be read as the WideConfidence code.
+    const settler = new PythSettler({
+      chain: fakeChain,
+      feedIds: { [Ticker.Meta]: "0xmeta" },
+      settleFn: async () => {
+        throw new Error("RPC error at slot 260175 while confirming");
+      },
+    });
+    const r = await settler.settle(market());
+    expect(r.status).to.equal(SettleStatus.Error);
+  });
+
   it("treats an already-settled race as success (idempotent)", async () => {
     const settler = new PythSettler({
       chain: fakeChain,

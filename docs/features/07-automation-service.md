@@ -137,9 +137,9 @@ Build chunks (test-first; each ends in a tickable item):
 - [x] **9. CI wiring** — extend `.gitlab-ci.yml` `lint-ts` to typecheck + test
   `@meridian/automation` in the same Node job (F-06 pattern; consumes the `build-program`
   `.so`).
-- [ ] **10. Adversarial review + triage** — independent subagent (keypair handling,
-  webhook SSRF/errors, retry/clock edges, calendar correctness, idempotency). Fix
-  high/medium, re-run suite, record lows below.
+- [x] **10. Adversarial review + triage** — independent subagent (keypair handling,
+  webhook SSRF/errors, retry/clock edges, calendar correctness, idempotency). Fixed
+  H1 + M2–M5 (+ L1/L2); documented M1; recorded L3/L4/L6 below.
 
 ## Implementation notes (filled in by the building agent)
 
@@ -294,6 +294,72 @@ Build chunks (test-first; each ends in a tickable item):
   by relative path (`../../sdk/tests/harness`) since it is a test helper, not part of the
   SDK's published export map. The test needs `target/deploy/meridian.so` present (CI's
   `build-program` job provides it, as for the SDK's LiteSVM tests).
+
+### Chunk 10 — adversarial review + triage
+
+An independent review subagent attacked the service for robustness, efficiency, and security
+(keypair handling, webhook SSRF, retry/clock edges, calendar correctness, settlement
+classification, provisioning idempotency, the trust boundary). It confirmed the trust
+boundary holds (the service only ever calls the permissionless `settle_market`; `admin_settle`
+is only ever an *alert*, never an automatic call) and the keypair secret is never logged or
+placed in any alert/log payload. **All high and medium findings were fixed; tests added.
+Full suite green (96 passing).**
+
+**Fixed:**
+- **H1 — one wide-confidence market blocked all others for 15 min.** `runSettlementJob` was a
+  sequential `for...await`, so a market parked in its 30s/15min retry window starved markets
+  ready to settle now. Restructured into two **concurrent** phases: phase 1 attempts every
+  due market once in parallel; phase 2 runs the wide-confidence retry loops in parallel.
+  Tested: a stuck market no longer delays a ready one (it settles at virtual t=0).
+- **M2 — wide-confidence classification depended on RPC returning program logs.** Some RPCs
+  return only `custom program error: 0x…` with no name/msg, which would misclassify a
+  retryable `WideConfidence` as a hard error and prematurely alert the admin. Added the Anchor
+  numeric-code fallback (hex `0x1781` and `Error Number: 6017`), written specifically so a
+  stray digit run (slot/timestamp) can't false-match. Tested both the logs-less hit and the
+  no-false-match case.
+- **M3 — provisioning was not race/retry-safe.** A concurrent runner or a confirmation-timeout
+  retry could revert `MarketAlreadyExists` (or "already initialized" on the book steps),
+  failing+alerting a market that is in fact provisioned. `provisionMarket` now swallows those
+  "already done" reverts as idempotent no-ops (by name, msg, and code) while still propagating
+  real errors (e.g. `Unauthorized`). Tested.
+- **M4 — no off-chain feed-id validation.** `FEED_<SYMBOL>` is now validated as 32-byte hex at
+  config load (catches a transposed/garbage id before it silently reads the wrong stock's
+  prev-close — which the on-chain `WrongFeed` check does *not* protect). A `pyth` run with a
+  missing feed for a run-ticker now fails fast at load (also resolves review L5). Tested.
+- **M5 — webhook SSRF hardening.** `ALERT_WEBHOOK_URL` is now required to be http(s) and is
+  refused if it points at loopback / private / link-local / cloud-metadata (`169.254.169.254`)
+  hosts. (The URL is operator-supplied/trusted, so this is defense-in-depth.) Tested.
+- **L1 (fixed, trivial) — `retryEvery` busy-loop on `intervalMs <= 0`.** Now throws on a
+  non-positive interval instead of spinning. Tested.
+- **L2 (fixed) — wide-confidence path double-cranked the market.** The retry loop now uses a
+  `sleepFirst` flag so phase 2 starts with a sleep (the immediate attempt already happened in
+  phase 1) — no back-to-back redundant settle. Tested.
+
+**Documented (intended behavior / bounded limitation, not changed):**
+- **M1 — settlement posts the *latest* Hermes price, not a price stamped exactly at the
+  4:00 PM ET close.** The SDK's `fetchPriceUpdate` exposes `getLatestPriceUpdates` (price
+  *now*); the on-chain `DEFAULT_MAX_STALENESS` (120s) bounds how stale the posted price may be
+  vs. the settle call. In practice equity feeds freeze at the close, so "latest after close" is
+  the close print — but this is a reliance, not a guarantee. A timestamped Hermes query would
+  be the precise fix; it requires extending the **F-06 SDK** Pyth surface (a frozen
+  cross-cutting contract), so it is deliberately *not* forked here. Flagged for the integrator:
+  run settlement promptly after the close, and if precise close-instant pricing is required,
+  add a timestamped fetch to the SDK and propagate it. The `admin_settle` fallback covers a
+  contested price regardless.
+
+**Low-severity findings recorded for your decision (not actioned):**
+- **L3 — `listMarkets` does an N+1 re-fetch.** `RpcChainClient.listMarkets` calls
+  `program.account.market.all()` (already decoded) then re-`fetchMarket`s each address. The
+  re-fetch is redundant; mapping `.all()` results through the same normalization would halve
+  the read load. Deferred — correctness is fine; worth doing if a settlement run reads many
+  markets on a hot path.
+- **L4 — `PythPriceSource` returns the current live price as "previous close."** During market
+  hours this is the live/last price, not yesterday's official close (acknowledged in the code;
+  the demo defaults to the mock source). A real EOD source would replace it behind the same
+  interface.
+- **L6 — the `created` summary counter** counts every successfully provisioned market
+  (including idempotent re-runs where nothing new was created). The field is documented as
+  "provisioned," but the name could read as "newly created." Cosmetic.
 
 ### Chunk 9 — CI wiring
 

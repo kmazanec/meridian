@@ -33,24 +33,45 @@ export interface PythSettlerOptions {
   settleFn?: SettleWithPythFn;
 }
 
+// Anchor offsets custom error codes by 6000; these are the deployed program's ordinals
+// (see programs/meridian/src/error.rs — counted from AlreadyInitialized = 6000). Matching
+// the *code* in addition to the name/msg makes classification robust to an RPC that returns
+// only a numeric `custom program error` without the program logs (some providers do), where
+// a name/msg-only match would misclassify a retryable WideConfidence as a hard error and
+// alert the admin prematurely.
+const WIDE_CONFIDENCE_CODE = 6000 + 17; // WideConfidence
+const MARKET_SETTLED_CODE = 6000 + 3; // MarketSettled
+
 /**
- * Patterns in a thrown settle error that map to the on-chain `WideConfidence` rejection
- * (the only retryable settlement error). Matched on the Anchor error *name* and its
- * human-readable `#[msg]` ("Oracle confidence band is too wide"), both of which surface in
- * the thrown error / transaction logs — not the numeric code (which is offset by Anchor's
- * 6000 base and is brittle to reorderings).
+ * Code markers, written in the *specific* forms Anchor/web3.js actually emit so a bare digit
+ * run elsewhere in the message (a slot, a timestamp) can't false-match: the hex
+ * `custom program error: 0x…` form and the `Error Number: …` (decimal) form.
+ */
+function codeMarkers(code: number): string[] {
+  return [`0x${code.toString(16)}`, `Error Number: ${code}`];
+}
+
+/**
+ * Markers that map a thrown settle error to the on-chain `WideConfidence` rejection (the
+ * only retryable settlement error): the Anchor error *name*, its `#[msg]` text, and the
+ * numeric error code (hex + `Error Number:`) as a fallback for logs-less RPC errors.
  */
 const WIDE_CONFIDENCE_MARKERS = [
   "WideConfidence",
   "confidence band is too wide",
+  ...codeMarkers(WIDE_CONFIDENCE_CODE),
 ];
 
 /**
- * Patterns indicating the market is already settled — an idempotent success. `settle_market`
+ * Markers indicating the market is already settled — an idempotent success. `settle_market`
  * itself is a no-op on a settled market (so it won't error), but a concurrent cranker can
- * win the race and surface `MarketSettled` ("Market is already settled"); treat that as done.
+ * win the race and surface `MarketSettled`; treat that (by name, msg, or code) as done.
  */
-const ALREADY_SETTLED_MARKERS = ["MarketSettled", "Market is already settled"];
+const ALREADY_SETTLED_MARKERS = [
+  "MarketSettled",
+  "Market is already settled",
+  ...codeMarkers(MARKET_SETTLED_CODE),
+];
 
 export class PythSettler implements Settler {
   private readonly chain: ChainClient;

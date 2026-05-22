@@ -91,7 +91,7 @@ export function loadConfig(env: Env = process.env): AutomationConfig {
   for (const sym of TICKER_SYMBOLS) {
     const ticker = symbolToTicker(sym);
     const feed = env[`FEED_${sym}`]?.trim();
-    if (feed) feedIds[ticker] = feed;
+    if (feed) feedIds[ticker] = normalizeFeedId(feed, sym);
     const mock = env[`MOCK_CLOSE_${sym}`]?.trim();
     if (mock) {
       const dollars = Number(mock);
@@ -106,6 +106,26 @@ export function loadConfig(env: Env = process.env): AutomationConfig {
     }
   }
 
+  // Fail fast if a Pyth run has no feeds for the tickers it will operate on — otherwise the
+  // service would emit one runtime "no feed id" alert per ticker instead of one clear config
+  // error up front. (The mock source needs no feeds.)
+  if (priceSourceKind === PriceSourceKind.Pyth) {
+    const missing = tickers
+      .filter((t) => !feedIds[t])
+      .map((t) => TICKER_SYMBOLS[t]);
+    if (missing.length > 0) {
+      throw new Error(
+        `PRICE_SOURCE=pyth but no feed id configured for: ${missing.join(
+          ", "
+        )} ` +
+          `(set FEED_<SYMBOL> for each, matching Config.tickers[].feed_id).`
+      );
+    }
+  }
+
+  const alertWebhookUrl = env["ALERT_WEBHOOK_URL"]?.trim() || undefined;
+  if (alertWebhookUrl) assertSafeWebhookUrl(alertWebhookUrl);
+
   return {
     keypair,
     rpcUrl,
@@ -114,10 +134,62 @@ export function loadConfig(env: Env = process.env): AutomationConfig {
     priceSourceKind,
     feedIds,
     mockPrices,
-    alertWebhookUrl: env["ALERT_WEBHOOK_URL"]?.trim() || undefined,
+    alertWebhookUrl,
     hermesUrl: env["HERMES_URL"]?.trim() || undefined,
     includeClose: parseBool(env["INCLUDE_CLOSE"]),
   };
+}
+
+/**
+ * Validate + normalize a Pyth feed id: a 32-byte (64 hex char) value, optional `0x` prefix.
+ * Catches transposed/garbage ids at config load rather than wasting an on-chain round-trip
+ * (settlement) or silently reading the wrong stock's price (the morning prev-close, which
+ * the on-chain WrongFeed check does *not* protect). Returns the id with its original prefix
+ * preserved (the SDK's Hermes helper accepts either form).
+ */
+function normalizeFeedId(value: string, sym: string): string {
+  const hex = value.startsWith("0x") ? value.slice(2) : value;
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+    throw new Error(
+      `FEED_${sym} must be a 32-byte hex feed id (64 hex chars, optional 0x prefix); got "${value}"`
+    );
+  }
+  return value;
+}
+
+/**
+ * Reject an obviously-unsafe alert webhook URL. The URL is operator-supplied (trusted), so
+ * this is hardening, not a hard security boundary: require http(s) and refuse loopback /
+ * link-local / cloud-metadata hosts so a misconfigured env can't turn the alerter into an
+ * SSRF vector against internal services.
+ */
+function assertSafeWebhookUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`ALERT_WEBHOOK_URL is not a valid URL: ${url}`);
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(
+      `ALERT_WEBHOOK_URL must be http(s) (got "${parsed.protocol}")`
+    );
+  }
+  const host = parsed.hostname.toLowerCase();
+  const blocked =
+    host === "localhost" ||
+    host === "0.0.0.0" ||
+    host === "169.254.169.254" || // cloud instance metadata
+    host.startsWith("127.") ||
+    host.startsWith("10.") ||
+    host.startsWith("192.168.") ||
+    host.startsWith("169.254.") ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host); // 172.16/12 private range
+  if (blocked) {
+    throw new Error(
+      `ALERT_WEBHOOK_URL points at a private/loopback/metadata host ("${host}"); refusing to avoid SSRF.`
+    );
+  }
 }
 
 /** Parse a comma-separated TICKERS list (symbols) into ordinals; default = full MAG7. */

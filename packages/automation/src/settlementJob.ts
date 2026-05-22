@@ -73,7 +73,19 @@ export interface SettlementJobSummary {
   alerted: number;
 }
 
-/** Run the settlement job over all discovered markets. Never rejects on one market's failure. */
+type Market = { address: PublicKey; account: MarketAccount };
+
+/**
+ * Run the settlement job over all discovered markets. Never rejects on one market's failure.
+ *
+ * Markets are settled **concurrently**, in two phases, so one market stuck in its
+ * wide-confidence retry window never delays another market that is ready to settle now
+ * (settlement is time-sensitive — users redeem only after a market settles):
+ *   1. attempt every due, open market once, in parallel;
+ *   2. for those that came back wide-confidence, run their 30s/15min retry loops in
+ *      parallel; a market that settles in this phase succeeds, one whose band stays wide
+ *      for the whole window alerts the admin to run `admin_settle`.
+ */
 export async function runSettlementJob(
   opts: SettlementJobOptions
 ): Promise<SettlementJobSummary> {
@@ -90,69 +102,90 @@ export async function runSettlementJob(
     alerted: 0,
   };
 
+  // Partition: settled (skip), not-yet-due (skip), and the due+open set to attempt.
+  const due: Market[] = [];
   for (const m of markets) {
-    const id = m.address.toBase58();
-
-    // Idempotent: never re-settle a settled market.
     if (m.account.state === "settled") {
       summary.skipped++;
-      continue;
-    }
-
-    // Timing: only attempt markets whose close instant has passed (the program would
-    // reject earlier ones with TooEarlyToSettle anyway; skip the wasted round-trip).
-    if (opts.nowSeconds() < m.account.tradingDay.toNumber()) {
+    } else if (opts.nowSeconds() < m.account.tradingDay.toNumber()) {
+      // Timing: the program would reject with TooEarlyToSettle anyway; skip the round-trip.
       summary.notDue++;
-      continue;
+    } else {
+      due.push(m);
     }
+  }
 
-    await settleOne(m, opts, retryIntervalMs, retryMaxMs, summary);
+  // Phase 1: one settle attempt per due market, all in parallel.
+  const firstResults = await Promise.all(
+    due.map(async (m) => ({ m, result: await firstAttempt(m, opts) }))
+  );
+
+  const needRetry: Market[] = [];
+  for (const { m, result } of firstResults) {
+    const id = m.address.toBase58();
+    if (result.status === SettleStatus.Settled) {
+      summary.settled++;
+      opts.logger.info("market settled", { market: id });
+    } else if (result.status === SettleStatus.WideConfidence) {
+      opts.logger.warn("wide oracle confidence; entering retry window", {
+        market: id,
+        intervalMs: retryIntervalMs,
+        maxMs: retryMaxMs,
+      });
+      needRetry.push(m);
+    } else {
+      summary.alerted++;
+      await alertHardError(m, result.error, opts);
+    }
+  }
+
+  // Phase 2: wide-confidence retry loops, all in parallel (no market blocks another).
+  const retryResults = await Promise.all(
+    needRetry.map(async (m) => ({
+      m,
+      settled: await retryWideConfidence(m, opts, retryIntervalMs, retryMaxMs),
+    }))
+  );
+  for (const { m, settled } of retryResults) {
+    if (settled) {
+      summary.settled++;
+      opts.logger.info("market settled after retry", {
+        market: m.address.toBase58(),
+      });
+    } else {
+      summary.alerted++;
+    }
   }
 
   opts.logger.info("settlement job complete", { ...summary });
   return summary;
 }
 
-async function settleOne(
-  m: { address: PublicKey; account: MarketAccount },
+/** One settle attempt, normalizing a thrown error into a `SettleResult`. */
+async function firstAttempt(
+  m: Market,
+  opts: SettlementJobOptions
+): Promise<SettleResult> {
+  try {
+    return await opts.settler.settle(m);
+  } catch (err) {
+    return { status: SettleStatus.Error, error: errMessage(err) };
+  }
+}
+
+/**
+ * Run the wide-confidence retry loop for one market. Resolves `true` if it settled, `false`
+ * if it gave up (and alerts the admin for `admin_settle`) or hit a hard error mid-retry
+ * (and alerts). Never rejects. The loop starts with a sleep (the immediate attempt already
+ * happened in phase 1), so it does not double-crank the market.
+ */
+async function retryWideConfidence(
+  m: Market,
   opts: SettlementJobOptions,
   retryIntervalMs: number,
-  retryMaxMs: number,
-  summary: SettlementJobSummary
-): Promise<void> {
+  retryMaxMs: number
+): Promise<boolean> {
   const id = m.address.toBase58();
-
-  // First attempt.
-  let result: SettleResult;
-  try {
-    result = await opts.settler.settle(m);
-  } catch (err) {
-    result = { status: SettleStatus.Error, error: errMessage(err) };
-  }
-
-  if (result.status === SettleStatus.Settled) {
-    summary.settled++;
-    opts.logger.info("market settled", { market: id });
-    return;
-  }
-
-  if (result.status === SettleStatus.Error) {
-    summary.alerted++;
-    await opts.alerter.alert({
-      severity: "critical",
-      title: `settlement failed for ${id}`,
-      detail: result.error ?? "unknown error",
-      context: { market: id, error: result.error },
-    });
-    return;
-  }
-
-  // Wide confidence: retry every interval within the budget; succeed → settled, else alert.
-  opts.logger.warn("wide oracle confidence; entering retry window", {
-    market: id,
-    intervalMs: retryIntervalMs,
-    maxMs: retryMaxMs,
-  });
   try {
     await retryEvery(
       async () => {
@@ -168,12 +201,11 @@ async function settleOne(
         now: opts.now,
         sleep: opts.sleep,
         retryOnError: false,
+        sleepFirst: true,
       }
     );
-    summary.settled++;
-    opts.logger.info("market settled after retry", { market: id });
+    return true;
   } catch (err) {
-    summary.alerted++;
     const gaveUp = err instanceof RetryGaveUp;
     await opts.alerter.alert({
       severity: "critical",
@@ -191,7 +223,23 @@ async function settleOne(
         error: gaveUp ? "WideConfidence" : errMessage(err),
       },
     });
+    return false;
   }
+}
+
+/** Alert a hard (non-retryable) settlement failure. */
+async function alertHardError(
+  m: Market,
+  error: string | undefined,
+  opts: SettlementJobOptions
+): Promise<void> {
+  const id = m.address.toBase58();
+  await opts.alerter.alert({
+    severity: "critical",
+    title: `settlement failed for ${id}`,
+    detail: error ?? "unknown error",
+    context: { market: id, error },
+  });
 }
 
 function errMessage(err: unknown): string {

@@ -72,16 +72,54 @@ describe("loadConfig", () => {
     expect(cfg.keypair).to.be.instanceOf(Keypair);
   });
 
+  // A valid 32-byte (64 hex char) feed id for the tests.
+  const FEED = "0x" + "a".repeat(64);
+  const FEED2 = "b".repeat(64); // no 0x prefix — also valid
+
   it("selects the Pyth price source and parses feed ids", () => {
     const cfg = loadConfig({
       ...base,
       PRICE_SOURCE: "pyth",
-      FEED_META: "0xmeta-feed",
-      FEED_AAPL: "0xaapl-feed",
+      TICKERS: "META,AAPL",
+      FEED_META: FEED,
+      FEED_AAPL: FEED2,
     });
     expect(cfg.priceSourceKind).to.equal(PriceSourceKind.Pyth);
-    expect(cfg.feedIds[Ticker.Meta]).to.equal("0xmeta-feed");
-    expect(cfg.feedIds[Ticker.Aapl]).to.equal("0xaapl-feed");
+    expect(cfg.feedIds[Ticker.Meta]).to.equal(FEED);
+    expect(cfg.feedIds[Ticker.Aapl]).to.equal(FEED2);
+  });
+
+  it("rejects a malformed feed id (not 32-byte hex)", () => {
+    expect(() => loadConfig({ ...base, FEED_META: "0xnot-hex" })).to.throw(
+      /FEED_META/
+    );
+  });
+
+  it("throws when PRICE_SOURCE=pyth but a run ticker has no feed id", () => {
+    expect(() =>
+      loadConfig({ ...base, PRICE_SOURCE: "pyth", TICKERS: "META" })
+    ).to.throw(/no feed id configured/i);
+  });
+
+  it("rejects an SSRF-prone webhook host (cloud metadata / loopback / private)", () => {
+    expect(() =>
+      loadConfig({
+        ...base,
+        ALERT_WEBHOOK_URL: "http://169.254.169.254/latest",
+      })
+    ).to.throw(/SSRF|private|loopback|metadata/i);
+    expect(() =>
+      loadConfig({ ...base, ALERT_WEBHOOK_URL: "http://127.0.0.1:9000/x" })
+    ).to.throw();
+    expect(() =>
+      loadConfig({ ...base, ALERT_WEBHOOK_URL: "http://10.0.0.5/x" })
+    ).to.throw();
+  });
+
+  it("rejects a non-http(s) webhook scheme", () => {
+    expect(() =>
+      loadConfig({ ...base, ALERT_WEBHOOK_URL: "file:///etc/passwd" })
+    ).to.throw(/http/i);
   });
 
   it("parses mock prices (dollar values) into the mock map", () => {

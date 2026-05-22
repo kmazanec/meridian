@@ -63,12 +63,16 @@ export class SdkMarketProvisioner implements MarketProvisioner {
         usdcMint: this.usdcMint,
         market,
       });
-      await this.chain.send([createIx]);
-      created = true;
+      // Idempotent under a race / confirmation-timeout retry: if a concurrent runner (or a
+      // prior attempt whose confirmation we missed) already created the market, the create
+      // reverts MarketAlreadyExists — treat that as success and continue, rather than
+      // failing+alerting a market that is in fact provisioned.
+      created = await this.sendIdempotent([createIx]);
     }
 
-    // Ensure the order book exists (idempotent: init/grow only when absent). A market
-    // whose book is already wired (Market.order_book set) needs neither step.
+    // Ensure the order book exists (idempotent: init/grow only when not yet wired). A market
+    // whose book is already wired (Market.order_book set) needs neither step. The init/grow
+    // sends are likewise tolerant of an "already done" revert from a concurrent runner.
     const refreshed = await this.chain.fetchMarket(address);
     const bookWired =
       refreshed?.orderBook && !refreshed.orderBook.equals(PublicKey.default);
@@ -78,16 +82,51 @@ export class SdkMarketProvisioner implements MarketProvisioner {
         usdcMint: this.usdcMint,
         market,
       });
-      await this.chain.send([initIx]);
+      await this.sendIdempotent([initIx]);
       const growIx = await growOrderBook(this.chain.program, {
         payer: this.chain.payer,
         market,
       });
-      await this.chain.send([growIx]);
+      await this.sendIdempotent([growIx]);
     }
 
     return { market, created };
   }
+
+  /**
+   * Send instructions, swallowing an "already exists / already initialized" revert as an
+   * idempotent no-op. Returns true if the send actually applied, false if it was a no-op
+   * because the target already existed. Any other error propagates.
+   */
+  private async sendIdempotent(
+    instructions: Parameters<ChainClient["send"]>[0]
+  ): Promise<boolean> {
+    try {
+      await this.chain.send(instructions);
+      return true;
+    } catch (err) {
+      if (isAlreadyProvisioned(err)) return false;
+      throw err;
+    }
+  }
+}
+
+// Anchor custom-error codes (6000 + ordinal, see programs/meridian/src/error.rs):
+//   MarketAlreadyExists = 6005. Plus the SPL/Anchor "already initialized" account error a
+//   racing init_order_book surfaces. Matched by name, msg, and the specific code forms.
+const ALREADY_PROVISIONED_MARKERS = [
+  "MarketAlreadyExists",
+  "Market with these parameters already exists",
+  "0x1775", // 6005 hex
+  "Error Number: 6005",
+  "already in use", // system program: account already initialized (init_order_book race)
+  "AccountAlreadyInitialized",
+];
+
+/** True if a failed provisioning send means the target already exists (a safe no-op). */
+function isAlreadyProvisioned(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return ALREADY_PROVISIONED_MARKERS.some((m) => msg.includes(m));
 }
 
 /** SDK-backed discovery: list `Market` accounts through the chain client. */
