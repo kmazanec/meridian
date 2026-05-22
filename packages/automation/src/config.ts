@@ -13,7 +13,12 @@
 
 import BN from "bn.js";
 import { PublicKey } from "@solana/web3.js";
-import { Ticker, symbolToTicker, TICKER_SYMBOLS, PAYOFF_UNIT } from "@meridian/sdk";
+import {
+  Ticker,
+  symbolToTicker,
+  TICKER_SYMBOLS,
+  PAYOFF_UNIT,
+} from "@meridian/sdk";
 import { loadKeypairFromEnv, AUTOMATION_KEYPAIR_ENV } from "./keypair";
 import { dollarsToBaseUnits } from "./strikes";
 import type { Keypair } from "@solana/web3.js";
@@ -91,7 +96,9 @@ export function loadConfig(env: Env = process.env): AutomationConfig {
     if (mock) {
       const dollars = Number(mock);
       if (!Number.isFinite(dollars) || dollars <= 0) {
-        throw new Error(`MOCK_CLOSE_${sym} must be a positive number (got "${mock}")`);
+        throw new Error(
+          `MOCK_CLOSE_${sym} must be a positive number (got "${mock}")`
+        );
       }
       // Store the *exact* dollar value in base units (not snapped to $10 — the strike
       // rounding happens later in computeStrikes). $214.5 → 214_500000.

@@ -50,10 +50,7 @@ const WIDE_CONFIDENCE_MARKERS = [
  * itself is a no-op on a settled market (so it won't error), but a concurrent cranker can
  * win the race and surface `MarketSettled` ("Market is already settled"); treat that as done.
  */
-const ALREADY_SETTLED_MARKERS = [
-  "MarketSettled",
-  "Market is already settled",
-];
+const ALREADY_SETTLED_MARKERS = ["MarketSettled", "Market is already settled"];
 
 export class PythSettler implements Settler {
   private readonly chain: ChainClient;

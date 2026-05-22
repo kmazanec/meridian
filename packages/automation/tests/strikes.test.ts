@@ -54,8 +54,8 @@ describe("computeStrikes", () => {
     const nums = strikes.map((s) => s.toString());
     // strictly ascending
     for (let i = 1; i < strikes.length; i++) {
-      expect(strikes[i].gt(strikes[i - 1]), `strike[${i}] > strike[${i - 1}]`).to
-        .be.true;
+      expect(strikes[i].gt(strikes[i - 1]), `strike[${i}] > strike[${i - 1}]`)
+        .to.be.true;
     }
     // unique
     expect(new Set(nums).size).to.equal(nums.length);
@@ -67,8 +67,8 @@ describe("computeStrikes", () => {
     // A price so small that a -9% rounded-to-$10 leg would be 0 must be dropped, not
     // emitted as a 0 strike (a $0 strike is meaningless and the program forbids it).
     const strikes = computeStrikes(usd(4), { includeClose: true });
-    for (const s of strikes) expect(s.gtn(0), "no zero/negative strike").to.be
-      .true;
+    for (const s of strikes)
+      expect(s.gtn(0), "no zero/negative strike").to.be.true;
   });
 
   it("rejects a non-positive previous close", () => {

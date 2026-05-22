@@ -57,7 +57,9 @@ describe("loadKeypairFromEnv", () => {
 
 describe("loadConfig", () => {
   const base = {
-    AUTOMATION_KEYPAIR: JSON.stringify(Array.from(Keypair.generate().secretKey)),
+    AUTOMATION_KEYPAIR: JSON.stringify(
+      Array.from(Keypair.generate().secretKey)
+    ),
     RPC_URL: "https://api.devnet.solana.com",
     USDC_MINT: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
   };

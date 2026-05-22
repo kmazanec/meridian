@@ -47,8 +47,7 @@ const etDateFormat = new Intl.DateTimeFormat("en-US", {
 /** Decompose an instant into ET calendar parts (the date *in New York*). */
 export function etParts(date: Date): EtParts {
   const parts = etDateFormat.formatToParts(date);
-  const get = (type: string) =>
-    parts.find((p) => p.type === type)?.value ?? "";
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   return {
     year: Number(get("year")),
     month: Number(get("month")),
@@ -173,7 +172,10 @@ function holidayKeys(year: number): Set<string> {
 }
 
 function mmddKey(p: EtParts): string {
-  return `${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+  return `${String(p.month).padStart(2, "0")}-${String(p.day).padStart(
+    2,
+    "0"
+  )}`;
 }
 
 /** True if the date is a full NYSE closure (weekend handled separately). */
@@ -247,11 +249,7 @@ function etOffsetMinutes(date: Date): number {
  * close (13:00 / 16:00 ET) is never within the 2 AM DST transition window, so the offset
  * is stable across the correction.
  */
-function etWallClockToUnix(
-  p: EtParts,
-  hour: number,
-  minute: number
-): number {
+function etWallClockToUnix(p: EtParts, hour: number, minute: number): number {
   const guessUtcMs = Date.UTC(p.year, p.month - 1, p.day, hour, minute, 0);
   const offsetMin = etOffsetMinutes(new Date(guessUtcMs));
   // Wall time is offset behind UTC: utc = wall - offset (offset is negative for ET).
@@ -267,7 +265,9 @@ function etWallClockToUnix(
 export function closeInstant(date: Date): number {
   if (!isTradingDay(date)) {
     throw new Error(
-      `${etParts(date).year}-${etParts(date).month}-${etParts(date).day} is not a trading session`
+      `${etParts(date).year}-${etParts(date).month}-${
+        etParts(date).day
+      } is not a trading session`
     );
   }
   const p = etParts(date);
@@ -291,7 +291,9 @@ export function sessionForDate(date: Date): SessionInfo {
   const trading = isTradingDay(date);
   const half = trading && isHalfDay(date);
   return {
-    date: `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`,
+    date: `${p.year}-${String(p.month).padStart(2, "0")}-${String(
+      p.day
+    ).padStart(2, "0")}`,
     isTradingDay: trading,
     isHalfDay: half,
     closeInstant: trading ? closeInstant(date) : null,

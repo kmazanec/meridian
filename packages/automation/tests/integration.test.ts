@@ -31,10 +31,17 @@ import {
   type MarketId,
 } from "@meridian/sdk";
 // The SDK's LiteSVM harness is a test helper (not part of the package's public export map);
-// import it by relative path from the sibling package in this workspace.
-import { Harness } from "../../sdk/tests/harness";
+// import it by relative path from the sibling package in this workspace. `describeOnChain`
+// is a `describe` that becomes `describe.skip` when SDK_SKIP_LITESVM=1 — CI sets that flag
+// because litesvm's Node binding leaks native memory and OOMs the low-RAM shared runner, so
+// this on-chain suite (like the SDK's own) is skipped in CI and runs in full locally.
+import { Harness, describeOnChain } from "../../sdk/tests/harness";
 import { runMorningJob } from "../src/morningJob";
-import { runSettlementJob, SettleStatus, type Settler } from "../src/settlementJob";
+import {
+  runSettlementJob,
+  SettleStatus,
+  type Settler,
+} from "../src/settlementJob";
 import { SdkMarketProvisioner } from "../src/markets";
 import { MockPriceSource } from "../src/priceSource";
 import { createLogger } from "../src/logger";
@@ -96,8 +103,8 @@ function decodeMarket(h: Harness, address: PublicKey): MarketAccount {
     enumKey(raw.outcome) === "yesWins"
       ? Outcome.YesWins
       : enumKey(raw.outcome) === "noWins"
-        ? Outcome.NoWins
-        : Outcome.Unsettled;
+      ? Outcome.NoWins
+      : Outcome.Unsettled;
   return {
     ticker: raw.ticker as Ticker, // not used by the assertions below
     strike: raw.strike as BN,
@@ -118,7 +125,7 @@ function decodeMarket(h: Harness, address: PublicKey): MarketAccount {
   };
 }
 
-describe("automation integration (LiteSVM, real program)", () => {
+describeOnChain("automation integration (LiteSVM, real program)", () => {
   let h: Harness;
   let usdc: PublicKey;
   let chain: LiteSvmChainClient;
@@ -145,9 +152,7 @@ describe("automation integration (LiteSVM, real program)", () => {
       provisioner: {
         provisionMarket: async (m: MarketId) => {
           const r = await provisioner.provisionMarket(m);
-          chain.knownMarkets.push(
-            marketPda(m.ticker, m.strike, m.tradingDay)
-          );
+          chain.knownMarkets.push(marketPda(m.ticker, m.strike, m.tradingDay));
           return r;
         },
       },

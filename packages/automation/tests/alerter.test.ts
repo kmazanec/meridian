@@ -87,7 +87,7 @@ describe("WebhookAlerter", () => {
 
   it("logs an error when the webhook returns a non-2xx status", async () => {
     const fetchSpy = async () =>
-      ({ ok: false, status: 500, text: async () => "boom" }) as Response;
+      ({ ok: false, status: 500, text: async () => "boom" } as Response);
     const { logger, lines } = captureLogger();
     const alerter = new WebhookAlerter("https://hooks.example/abc", {
       fetchImpl: fetchSpy as unknown as typeof fetch,

@@ -16,7 +16,11 @@ import { expect } from "chai";
 import BN from "bn.js";
 import { Ticker, Outcome, type MarketAccount } from "@meridian/sdk";
 import { PublicKey } from "@solana/web3.js";
-import { runSettlementJob, type Settler, SettleStatus } from "../src/settlementJob";
+import {
+  runSettlementJob,
+  type Settler,
+  SettleStatus,
+} from "../src/settlementJob";
 import { createLogger, type LogLine } from "../src/logger";
 import type { Alerter, AlertPayload } from "../src/alerter";
 import type { MarketDiscovery } from "../src/markets";

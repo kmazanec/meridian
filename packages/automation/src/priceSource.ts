@@ -51,7 +51,9 @@ export class MockPriceSource implements PriceSource {
   async previousClose(ticker: Ticker): Promise<BN> {
     const p = this.prices[ticker];
     if (!p) {
-      throw new Error(`MockPriceSource has no price configured for ticker ${ticker}`);
+      throw new Error(
+        `MockPriceSource has no price configured for ticker ${ticker}`
+      );
     }
     return p;
   }

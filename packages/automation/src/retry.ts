@@ -42,7 +42,8 @@ export async function withBackoff<T>(
       lastError = err;
       if (attempt === opts.retries) break;
       let delay = opts.baseDelayMs * 2 ** attempt;
-      if (opts.maxDelayMs !== undefined) delay = Math.min(delay, opts.maxDelayMs);
+      if (opts.maxDelayMs !== undefined)
+        delay = Math.min(delay, opts.maxDelayMs);
       await sleep(delay);
     }
   }

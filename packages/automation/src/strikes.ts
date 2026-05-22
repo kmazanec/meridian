@@ -97,6 +97,8 @@ export function dollarsToBaseUnits(dollars: number): BN {
     throw new Error(`dollars must be a finite number (got ${dollars})`);
   }
   // Quantize to 6-dp base units first (Math.round on the smallest unit), then snap to $10.
-  const baseUnits = new BN(Math.round(dollars * Number(PAYOFF_UNIT.toString())));
+  const baseUnits = new BN(
+    Math.round(dollars * Number(PAYOFF_UNIT.toString()))
+  );
   return roundToStep(baseUnits);
 }

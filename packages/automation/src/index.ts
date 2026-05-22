@@ -55,10 +55,7 @@ export {
   type BackoffOptions,
   type RetryEveryOptions,
 } from "./retry";
-export {
-  RpcChainClient,
-  type ChainClient,
-} from "./chain";
+export { RpcChainClient, type ChainClient } from "./chain";
 export {
   SdkMarketProvisioner,
   SdkMarketDiscovery,

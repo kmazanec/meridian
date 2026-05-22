@@ -148,8 +148,11 @@ describe("runMorningJob", () => {
 
     expect(summary.skipped).to.be.true;
     expect(provisioner.created).to.have.length(0);
-    expect(lines.some((l) => l.level === LogLevel.Info && /no session|skip/i.test(l.msg))).to
-      .be.true;
+    expect(
+      lines.some(
+        (l) => l.level === LogLevel.Info && /no session|skip/i.test(l.msg)
+      )
+    ).to.be.true;
   });
 
   it("derives trading_day from the date's close instant when no explicit value is given", async () => {

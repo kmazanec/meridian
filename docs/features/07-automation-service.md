@@ -134,7 +134,7 @@ Build chunks (test-first; each ends in a tickable item):
 - [x] **8. Integration test (LiteSVM)** — load `meridian.so`, seed `Config`, run morning
   to create markets, run settlement (SDK `buildPriceUpdateV2` fixture) and assert markets
   go `Settled` with the expected outcome.
-- [ ] **9. CI wiring** — extend `.gitlab-ci.yml` `lint-ts` to typecheck + test
+- [x] **9. CI wiring** — extend `.gitlab-ci.yml` `lint-ts` to typecheck + test
   `@meridian/automation` in the same Node job (F-06 pattern; consumes the `build-program`
   `.so`).
 - [ ] **10. Adversarial review + triage** — independent subagent (keypair handling,
@@ -294,3 +294,13 @@ Build chunks (test-first; each ends in a tickable item):
   by relative path (`../../sdk/tests/harness`) since it is a test helper, not part of the
   SDK's published export map. The test needs `target/deploy/meridian.so` present (CI's
   `build-program` job provides it, as for the SDK's LiteSVM tests).
+
+### Chunk 9 — CI wiring
+
+- The single `lint-ts` Node job now also runs `@meridian/automation` typecheck + tests,
+  after building `@meridian/sdk` (the automation package imports the SDK's `dist/`). One
+  `yarn install`, one job — no duplicate install. It consumes the `build-program` `.so`
+  artifact (the automation integration test loads it via `litesvm`, like the SDK tests) and
+  inherits the `resource_group: heavy-rust` serialization (the box is ~3.8 GB, no swap, and
+  the LiteSVM suites OOM if run concurrently with the Rust `verify` job). Root `yarn test`
+  now runs both workspaces.

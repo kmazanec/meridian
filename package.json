@@ -7,7 +7,7 @@
   "scripts": {
     "lint:fix": "prettier \"packages/**/*.ts\" \"migrations/**/*.ts\" \"scripts/**/*.{js,mjs}\" -w",
     "lint": "prettier \"packages/**/*.ts\" \"migrations/**/*.ts\" \"scripts/**/*.{js,mjs}\" --check",
-    "test": "yarn workspace @meridian/sdk test"
+    "test": "yarn workspace @meridian/sdk test && yarn workspace @meridian/automation test"
   },
   "devDependencies": {
     "prettier": "^2.6.2",

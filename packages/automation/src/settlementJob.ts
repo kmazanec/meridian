@@ -181,10 +181,15 @@ async function settleOne(
         ? `settlement: wide confidence persisted — run admin_settle for ${id}`
         : `settlement failed during retry for ${id}`,
       detail: gaveUp
-        ? `Oracle confidence stayed wide for ${Math.round(retryMaxMs / 60_000)} minutes. ` +
+        ? `Oracle confidence stayed wide for ${Math.round(
+            retryMaxMs / 60_000
+          )} minutes. ` +
           `Settle manually via admin_settle after the override delay.`
         : errMessage(err),
-      context: { market: id, error: gaveUp ? "WideConfidence" : errMessage(err) },
+      context: {
+        market: id,
+        error: gaveUp ? "WideConfidence" : errMessage(err),
+      },
     });
   }
 }
