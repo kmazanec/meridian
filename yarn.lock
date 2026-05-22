@@ -496,6 +496,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@meridian/web@workspace:packages/web"
   dependencies:
+    "@anchor-lang/core": "npm:^1.0.2"
     "@meridian/sdk": "workspace:^"
     "@playwright/test": "npm:^1.47.0"
     "@solana/spl-token": "npm:^0.4.9"

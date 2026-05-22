@@ -117,7 +117,7 @@ Build chunks (test-first; each ends in a tickable item):
   settled outcomes via `payoutFor`, redeem button building+signing the SDK `redeem`
   ix (USDC to wallet). Entry price from a local trade store. Tests: P&L, payout
   display, redeem ix + post-redeem balance.
-- [ ] **7. History page (trade execution log)** — log for the connected wallet from
+- [x] **7. History page (trade execution log)** — log for the connected wallet from
   program events (`OrderMatched`/`OrderPlaced`/`PairMinted`/`Redeemed`) via the event
   coder over the user's signatures, cached client-side. Tests: parsed executions
   render in order; empty state.
@@ -315,3 +315,16 @@ Build chunks (test-first; each ends in a tickable item):
   it through the wallet (`useSendIx`); on confirm it refreshes so the now-redeemed balance
   (USDC in wallet) reflects. `PortfolioView` is presentational and RTL-tested (P&L
   display, redeem fires, loser shows "Lost").
+
+### Chunk 7 — History page (trade execution log)
+
+- **Sourced from program events.** `useHistory` reads the wallet's recent signatures
+  (`getSignaturesForAddress`), fetches each transaction's logs, and decodes the program's
+  events with Anchor's `EventParser` + `BorshCoder` (added `@anchor-lang/core` as a direct
+  dep — the SDK doesn't re-export the parser). Failed txs are skipped.
+- **The event→row mapping is pure** (`history.ts`, unit-tested): `OrderPlaced`/
+  `OrderMatched`/`PairMinted`/`Redeemed`/`OrderCancelled` → a typed entry, but **only when
+  the event involves the connected wallet** (the program emits a match event for both
+  sides; we filter to the user as maker *or* taker). Entries are sorted newest-first.
+  `HistoryView` renders the log (summary, market, time, size/price) and is RTL-tested with
+  connect/empty/populated states.
