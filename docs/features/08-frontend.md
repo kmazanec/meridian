@@ -103,7 +103,7 @@ Build chunks (test-first; each ends in a tickable item):
 - [x] **3. Landing + Markets pages** — Landing: explainer (brand voice), live prices,
   connect CTA. Markets: 7 stocks with live price + active contract count. RTL tests
   against mocked hooks.
-- [ ] **4. Trade page — book (both perspectives) + strike list + payoff/countdown** —
+- [x] **4. Trade page — book (both perspectives) + strike list + payoff/countdown** —
   strike list; order book in both Yes and No perspectives (`dualBook`); implied No
   price ($1.00 − Yes); plain-language payoff line; 4 PM ET settlement countdown.
   Tests: mirror consistency (best Yes bid + best No ask = `PRICE_SCALE`), implied No,
@@ -239,3 +239,24 @@ Build chunks (test-first; each ends in a tickable item):
   modules. (Runtime is already safe via the SDK's `.catch()`; this is purely the
   bundler's resolution graph.) Any other bundler-based consumer of `@meridian/sdk` that
   doesn't settle will hit the same and needs the same ignore — noted for F-09/F-10.
+
+### Chunk 4 — Trade page (book both perspectives, strikes, payoff, countdown)
+
+- **`/trade/[symbol]`** is the trading surface. It resolves the symbol → `Ticker`
+  (`symbolToTicker`, with an unknown-symbol guard), lists that ticker's strikes from
+  discovery, and defaults the selection to the first *open* strike. Selecting a strike
+  drives the market + book reads.
+- **`DualBookView` renders both perspectives** of the one book from the SDK's
+  `dualBook` — `OrderBookView` for Yes and for No, asks-over-bids, best-price-first. The
+  No side is the SDK's `1 − price` mirror; the UI never re-derives it. A component test
+  asserts the mirror (Yes bid $0.60 → No ask $0.40; Yes ask $0.70 → No bid $0.30).
+- **`PayoffLine`** shows the plain-language question ("Will META close at or above
+  $680.00 today? …") and both the Yes price and the **implied No price** ($1.00 − Yes)
+  with implied probabilities — translating the mechanics so the user never reasons about
+  token math.
+- **`Countdown`** ticks every second to the market's `trading_day`, which the program
+  already stores as the **4:00 PM ET close instant** (a unix timestamp) — so the
+  frontend just renders the delta and shows "Closed" past it; it never reimplements an
+  ET/DST calendar (that conversion is the automation service's concern).
+- Live Yes price for the selected strike is the book mid via `priceFromBook` (50/50
+  fallback on an empty book). The trade *panel* (chunk 5) slots into the marked spot.
