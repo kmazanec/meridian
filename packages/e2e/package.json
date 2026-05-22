@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "ts-mocha -p tsconfig.json --timeout 600000 'tests/**/*.test.ts'"
+    "test": "ts-mocha -p tsconfig.json --timeout 600000 'tests/**/*.test.ts'",
+    "test:contract": "ts-mocha -p tsconfig.json --timeout 120000 'tests/**/*.contract.test.ts'"
   },
   "dependencies": {
     "@meridian/automation": "workspace:^",

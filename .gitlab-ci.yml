@@ -192,8 +192,9 @@ lint-ts:
     # convergence suite are NOT run here — both need solana-test-validator (absent from
     # the Node image); they run locally / as documented manual gates (see
     # docs/features/08-frontend.md, docs/features/09-integration-e2e.md,
-    # docs/local-development.md). We DO typecheck @meridian/e2e here (Node-only, no
-    # validator) so its sources can't drift from the SDK/automation surfaces it imports.
+    # docs/local-development.md). We DO typecheck @meridian/e2e here AND run its pure
+    # contract tests (test:contract — the *.contract.test.ts files, no validator) so the
+    # vendored four-button/maker-account logic can't drift from the SDK surface unnoticed.
     - >-
       run_in_docker node:20
       'export YARN_ENABLE_GLOBAL_CACHE=false YARN_CACHE_FOLDER=/build/.yarn-cache
@@ -208,7 +209,8 @@ lint-ts:
       && corepack yarn@4.10.2 workspace @meridian/automation test
       && corepack yarn@4.10.2 workspace @meridian/web typecheck
       && corepack yarn@4.10.2 workspace @meridian/web test
-      && corepack yarn@4.10.2 workspace @meridian/e2e typecheck'
+      && corepack yarn@4.10.2 workspace @meridian/e2e typecheck
+      && corepack yarn@4.10.2 workspace @meridian/e2e test:contract'
 
 # Cursor code + security review (see the `include:` near the top). Inherits the
 # template's cursor-review runner tag, cursor-ci image, rules (manual on MRs),
