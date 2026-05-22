@@ -55,3 +55,19 @@ export {
   type BackoffOptions,
   type RetryEveryOptions,
 } from "./retry";
+export {
+  RpcChainClient,
+  type ChainClient,
+} from "./chain";
+export {
+  SdkMarketProvisioner,
+  SdkMarketDiscovery,
+  type MarketProvisioner,
+  type MarketDiscovery,
+  type ProvisionResult,
+} from "./markets";
+export {
+  runMorningJob,
+  type MorningJobOptions,
+  type MorningJobSummary,
+} from "./morningJob";

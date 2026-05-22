@@ -95,7 +95,7 @@ Build chunks (test-first; each ends in a tickable item):
 - [x] **4. PriceSource + Alerter + logger + retry** — interfaces + impls (Pyth + mock
   source; webhook + log alerter). Tests: mock close; webhook POST + log fallback; backoff
   math; the wide-confidence retry-every-30s-up-to-15min-then-alert loop (injected clock).
-- [ ] **5. Morning job** (`morningJob.ts` + provisioning) — per ticker: prev close →
+- [x] **5. Morning job** (`morningJob.ts` + provisioning) — per ticker: prev close →
   strikes → `createStrikeMarket` + `initOrderBook` + `growOrderBook`; logged, failures
   alerted, retries; skips when calendar says no session. Mocked-SDK contract test.
 - [ ] **6. Settlement job** (`settlementJob.ts`) — discover open markets past close →
@@ -194,3 +194,24 @@ Build chunks (test-first; each ends in a tickable item):
   settlement loop**: poll every 30s for up to 15 min, then throw `RetryGaveUp` (the caller
   alerts for `admin_settle`). Clock + sleep are injectable, so the loop is deterministic and
   instant under test.
+
+### Chunk 5 — morning job + chain boundary
+
+- **`ChainClient` boundary** (`chain.ts`): jobs build instructions with the SDK and hand
+  them to a `ChainClient` to sign (with the automation keypair) and submit. `RpcChainClient`
+  is the production transport (real `Connection`); the LiteSVM integration test supplies a
+  tiny adapter implementing the same interface. Jobs depend on the interface, never a
+  concrete transport — so they unit-test with a stub.
+- **`MarketProvisioner`** (`markets.ts`, `SdkMarketProvisioner`): wraps the three-step
+  tradeable-market flow — `create_strike_market` → `init_order_book` → `grow_order_book`
+  (ROADMAP concern #3). It is **idempotent**: it skips the create when the `Market` already
+  exists and skips book provisioning when `Market.order_book` is already wired, so re-running
+  the morning job (a retry, or a second cron fire) is safe.
+- **`runMorningJob`** never rejects on a single-strike failure: a ticker whose price can't be
+  read, or a strike that fails to provision after backoff retries, is *alerted* and counted
+  while the rest of the run continues. A non-session date (per the calendar) is a logged
+  no-op unless an explicit `tradingDay` forces a run (a manual/CLI override). `trading_day`
+  is the calendar's close instant unless supplied.
+- The SDK-backed provisioner/discovery hit the live program, so they are proven by the
+  LiteSVM integration test (chunk 8), not unit mocks; the orchestration logic is fully
+  unit-tested against a recording stub.
