@@ -121,7 +121,7 @@ Build chunks (test-first; each ends in a tickable item):
   program events (`OrderMatched`/`OrderPlaced`/`PairMinted`/`Redeemed`) via the event
   coder over the user's signatures, cached client-side. Tests: parsed executions
   render in order; empty state.
-- [ ] **8. Wallet connect + signing wiring** — connect/disconnect/account-change;
+- [x] **8. Wallet connect + signing wiring** — connect/disconnect/account-change;
   all state-changing actions via wallet `sendTransaction`; brand-styled tx-status
   toasts. Tests: connected/disconnected gate; action triggers `sendTransaction` with
   SDK-built ixs (mocked adapter).
@@ -328,3 +328,17 @@ Build chunks (test-first; each ends in a tickable item):
   sides; we filter to the user as maker *or* taker). Entries are sorted newest-first.
   `HistoryView` renders the log (summary, market, time, size/price) and is RTL-tested with
   connect/empty/populated states.
+
+### Chunk 8 — wallet connect + signing wiring
+
+- Wallet connect/disconnect uses `WalletMultiButton` in the header (Wallet-Standard
+  discovery, `autoConnect`); `ConnectGate` gates signer-only surfaces with a connect
+  prompt. Every state-changing action (the four intents, redeem) goes through `useSendIx`
+  → the wallet adapter's `sendTransaction` (one approval, no keys held), tracking
+  signing→confirming→success/error which `TxStatusBanner` surfaces inline.
+- **Tests:** `useSendIx` is unit-tested with a mocked adapter — it builds a transaction
+  carrying the given instructions, sends it via `sendTransaction`, reports `success` with
+  the signature, refuses with no wallet, and reports `error` on rejection. With the
+  `TradePanel` contract test (action → built instructions → `onSubmit`), this closes the
+  loop "each user action maps via the SDK to the correct on-chain action(s) and is signed
+  by the wallet." `ConnectGate` is RTL-tested (gated vs connected).
