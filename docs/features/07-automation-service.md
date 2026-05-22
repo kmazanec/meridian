@@ -86,7 +86,7 @@ Build chunks (test-first; each ends in a tickable item):
 - [x] **1. Workspace scaffold** — `packages/automation` wired into the yarn workspace;
   `@meridian/sdk` dep resolves; barrel `index.ts`; `tsc --noEmit` + import-surface smoke
   test green.
-- [ ] **2. Strike algorithm** (`strikes.ts`) — ±3/6/9% of prev close, round to nearest
+- [x] **2. Strike algorithm** (`strikes.ts`) — ±3/6/9% of prev close, round to nearest
   $10, dedupe, integer/fixed-point. Tests: META-style spread, AAPL-style collapse,
   optional rounded-close, no floats.
 - [ ] **3. Market calendar** (`calendar.ts`) — weekend/holiday/half-day; DST-aware ET→unix;
@@ -124,3 +124,30 @@ Build chunks (test-first; each ends in a tickable item):
 > by the builder, not the planner. Cross-cutting discoveries that affect other
 > features must also be propagated to ROADMAP.md or the architecture doc, not just
 > left here.
+
+### Chunk 1 — workspace scaffold
+
+- New workspace package `@meridian/automation` under `packages/automation`, mirroring
+  `@meridian/sdk`'s tooling (TypeScript strict, ts-mocha + chai tests, `tsc --noEmit`
+  typecheck, prettier via root `yarn lint`). It declares `@meridian/sdk` as a
+  `workspace:^` dependency and consumes it for *all* chain interaction — no hand-rolled
+  serialization or PDA derivation (ROADMAP concern #4).
+- Pyth deps are inherited as **optional peer deps** (same as the SDK): the service only
+  pulls them when the settlement path actually posts a Hermes update. They are also dev
+  deps so the LiteSVM/integration tests can import them.
+- The SDK must be built (`yarn workspace @meridian/sdk build`) before the automation
+  package resolves `@meridian/sdk` (its `main` points at `dist/`). CI already builds it
+  in the shared Node job; locally, build once.
+
+### Chunk 2 — strike algorithm
+
+- **All strike math is integer BN math on USDC base units (6 dp)** — the on-chain
+  `Market.strike` scale, so a strike compares directly against `settlement_price`. No
+  floats in any serialized value (ROADMAP concern #2). The previous close enters as base
+  units; `dollarsToBaseUnits()` is the single quantization point if a source hands back a
+  plain dollar `number`.
+- **Algorithm:** ±3/6/9% (`STRIKE_OFFSET_BPS`) of the close, each rounded to the nearest
+  $10 (midpoint rounds up), optional rounded-close, dedupe, ascending. Low-priced tickers
+  collapse to fewer unique strikes (the AAPL case) naturally via the dedupe — verified by
+  test. Any leg rounding to $0 (only possible near zero) is dropped, never emitted as a
+  meaningless $0 strike.

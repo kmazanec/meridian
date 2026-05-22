@@ -5,3 +5,11 @@
 // hand-rolls serialization or PDA derivation.
 
 export { VERSION } from "./version";
+export {
+  computeStrikes,
+  roundToStep,
+  dollarsToBaseUnits,
+  STRIKE_OFFSET_BPS,
+  STRIKE_ROUND_DOLLARS,
+  type ComputeStrikesOptions,
+} from "./strikes";
