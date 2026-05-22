@@ -95,7 +95,7 @@ Build chunks (test-first; each ends in a tickable item):
   Vitest+RTL+jsdom, root scripts, `Providers` (Connection/Wallet/WalletModal) with
   env RPC (`NEXT_PUBLIC_RPC_URL`/`NEXT_PUBLIC_USDC_MINT`), base layout + brand
   primitives. Smoke test passes.
-- [ ] **2. Chain data layer (hooks) + market discovery** — `src/lib`: `useProgram`,
+- [x] **2. Chain data layer (hooks) + market discovery** — `src/lib`: `useProgram`,
   `useConfig`, `useMarkets` (gPA discovery grouped by ticker), `useMarket`,
   `useOrderBook` (→ `dualBook`), `useUserPositions`, `priceFromBook`. Pure helpers
   (`format.ts`/`market-math.ts`: price/mid, P&L, 4 PM ET countdown, formatting)
@@ -179,3 +179,35 @@ Build chunks (test-first; each ends in a tickable item):
 - **Repo plumbing:** root `lint`/`lint:fix` globs widened to `.tsx`; `.gitignore` +
   `.prettierignore` updated for `.next`/Playwright artifacts. yarn `node_modules`
   linker (matches the SDK's choice for native addons).
+
+### Chunk 2 — chain data layer + market discovery
+
+- **Read/sign split.** `useProgram` builds the Anchor `Program` with a **read-only
+  provider** (connection + a placeholder pubkey, no signer). The frontend holds no
+  keys; we use the program only to *encode instructions* and *read/decode accounts*,
+  and we send the built instructions through the wallet adapter's `sendTransaction`
+  (chunk 8). This keeps the signing trust boundary in the wallet, matching the
+  architecture (the frontend "holds nothing").
+- **Market discovery via `getProgramAccounts`** (`discovery.ts`): there is no on-chain
+  market index, so `discoverMarkets` calls Anchor's `program.account.market.all()`
+  (discriminator-filtered, decoded), normalizes the enum fields, and sorts by
+  ticker→strike→day. `groupByTicker`/`activeCount` back the Markets page's per-stock
+  counts. Decode/sort/group are **pure** and unit-tested with a stubbed
+  `account.market.all()`; the RPC itself is exercised by the e2e. This stays in
+  `packages/web` (a frontend concern), **not** a cross-cutting SDK/contract change —
+  if F-09 wants a shared discovery helper later, lift it into the SDK then.
+- **Polling read hooks** (`useChain.ts`): a generic `usePolled` resource
+  (`{data,loading,error,refresh}`) with a manual refresh + interval poll, then
+  `useConfig`/`useMarkets`/`useMarket`/`useOrderBook`/`useUserPosition` on top. Books
+  poll fast (5 s, the trading surface); discovery/config slow (30 s/60 s). `useUsdcMint`
+  prefers on-chain `Config.usdcMint` and falls back to the env bootstrap so the UI can
+  render before config resolves.
+- **Pure helpers, all unit-tested:** `format.ts` (price→`$0.65`, price→`65%`
+  probability, USDC/token/signed-USDC, short key — floats live *only* here),
+  `market-math.ts` (`midPrice`/`priceFromBook` with the empty-book → strike-implied
+  50/50 fallback, `impliedComplement`, `markValue`, `positionPnl`, `settledPayout`,
+  `holdsBothSides`), `countdown.ts` (delta to the market's `trading_day`, which the
+  program already stores as the 4 PM ET close *instant* — the frontend never
+  reimplements an ET/DST calendar). A `dualbook.test` pins the SDK's dual-perspective
+  contract the UI leans on (best Yes bid + best No ask = `PRICE_SCALE`, sizes
+  preserved) so a regression in that projection trips here too.

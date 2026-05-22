@@ -1,0 +1,107 @@
+import BN from "bn.js";
+import { PublicKey } from "@solana/web3.js";
+import {
+  Outcome,
+  Ticker,
+  tickerFromArg,
+  marketPda,
+  type MeridianProgram,
+} from "@meridian/sdk";
+
+/**
+ * Market discovery. There is no on-chain index of all markets, so the frontend
+ * discovers them with `getProgramAccounts` — Anchor's `program.account.market.all()`
+ * filters by the `Market` account discriminator and decodes each. Discovery is a
+ * frontend concern; if a shared helper is wanted later it can be lifted into the SDK.
+ */
+
+/** A discovered market: its address plus the fields the UI lists/sorts on. */
+export interface DiscoveredMarket {
+  address: PublicKey;
+  ticker: Ticker;
+  strike: BN;
+  tradingDay: BN;
+  state: "open" | "settled";
+  outcome: Outcome;
+}
+
+/** Shape of a raw decoded `Market` account from Anchor's `.all()`. */
+interface RawMarketAccount {
+  publicKey: PublicKey;
+  account: {
+    ticker: Record<string, unknown>;
+    strike: BN;
+    tradingDay: BN;
+    state: Record<string, unknown>;
+    outcome: Record<string, unknown>;
+  };
+}
+
+function enumKey(e: Record<string, unknown>): string {
+  return Object.keys(e)[0] ?? "";
+}
+
+function normalizeOutcome(e: Record<string, unknown>): Outcome {
+  switch (enumKey(e)) {
+    case "yesWins":
+      return Outcome.YesWins;
+    case "noWins":
+      return Outcome.NoWins;
+    default:
+      return Outcome.Unsettled;
+  }
+}
+
+/** Decode + normalize one raw Anchor market account into a {@link DiscoveredMarket}. */
+export function normalizeDiscovered(raw: RawMarketAccount): DiscoveredMarket {
+  return {
+    address: raw.publicKey,
+    ticker: tickerFromArg(raw.account.ticker),
+    strike: raw.account.strike,
+    tradingDay: raw.account.tradingDay,
+    state: enumKey(raw.account.state) === "settled" ? "settled" : "open",
+    outcome: normalizeOutcome(raw.account.outcome),
+  };
+}
+
+/**
+ * Discover every market via `getProgramAccounts`, decoded and normalized. Sorted by
+ * ticker, then strike, then trading day — a stable order for lists.
+ */
+export async function discoverMarkets(
+  program: MeridianProgram
+): Promise<DiscoveredMarket[]> {
+  const raw =
+    (await program.account.market.all()) as unknown as RawMarketAccount[];
+  const markets = raw.map(normalizeDiscovered);
+  markets.sort(
+    (a, b) =>
+      a.ticker - b.ticker ||
+      a.strike.cmp(b.strike) ||
+      a.tradingDay.cmp(b.tradingDay)
+  );
+  return markets;
+}
+
+/** Group discovered markets by ticker (for the Markets page's per-stock counts). */
+export function groupByTicker(
+  markets: DiscoveredMarket[]
+): Map<Ticker, DiscoveredMarket[]> {
+  const byTicker = new Map<Ticker, DiscoveredMarket[]>();
+  for (const m of markets) {
+    const list = byTicker.get(m.ticker);
+    if (list) list.push(m);
+    else byTicker.set(m.ticker, [m]);
+  }
+  return byTicker;
+}
+
+/** Count of *open* (still-trading) markets for a ticker. */
+export function activeCount(markets: DiscoveredMarket[]): number {
+  return markets.filter((m) => m.state === "open").length;
+}
+
+/** Re-derive a market's PDA from its identity (sanity/round-trip helper). */
+export function addressFor(m: DiscoveredMarket): PublicKey {
+  return marketPda(m.ticker, m.strike, m.tradingDay);
+}
