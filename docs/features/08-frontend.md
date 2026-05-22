@@ -1,6 +1,6 @@
 # Feature: Frontend
 
-**ID:** F-08 · **Roadmap piece:** F-08 · **Status:** Not started
+**ID:** F-08 · **Roadmap piece:** F-08 · **Status:** In progress
 
 ## Description
 
@@ -64,6 +64,76 @@ through the UI. Runs in parallel with the automation service (F-07).
 - A browser wallet extension funded with devnet SOL + test USDC for manual testing;
   an RPC endpoint configured via env. Human verification of the UI flows in a browser.
 
+## Implementation plan (approved)
+
+Locked decisions (confirmed with the user before building):
+
+- **Stack:** Next.js (App Router, TS) · `@solana/wallet-adapter-react` for
+  connect/sign · Tailwind for the dark-fintech brand from the deck
+  (`docs/meridian-deck.html`) · Vitest + React Testing Library for component/unit
+  tests · Playwright for e2e.
+- **Data sourcing:** discover markets via `getProgramAccounts`
+  (`program.account.market.all()`, discriminator-filtered) over RPC; derive the
+  displayed "live price" from the order-book mid/last (fallback to strike-implied
+  $0.50 when the book is empty). **No Pyth deps in the browser bundle** — the SDK's
+  Pyth helpers are lazy/optional and the UI never settles.
+- **Test scope:** thorough component/unit tests in CI **plus** a Playwright e2e that
+  boots against a **local `solana-test-validator`** with an **injected keypair
+  signer** (no browser extension), exercising the golden path + the four trade paths.
+
+Lives in a new workspace package `packages/web` (`@meridian/web`), sibling of
+`packages/sdk`, depending on `@meridian/sdk` via the workspace. F-08 consumes only
+the SDK — never hand-rolls serialization, never re-implements the four-button
+mapping (it calls `buildTradeIntent`). Position constraint is **client-side only**
+(ADR-006). Units: USDC base units (6 dp), `PAYOFF_UNIT = PRICE_SCALE = 1_000_000`,
+no floats in serialized math.
+
+Build chunks (test-first; each ends in a tickable item):
+
+- [x] **1. Workspace scaffold + brand system** — `packages/web` Next.js App Router +
+  TS, Tailwind with deck palette/fonts as tokens, `@meridian/sdk` workspace dep,
+  Vitest+RTL+jsdom, root scripts, `Providers` (Connection/Wallet/WalletModal) with
+  env RPC (`NEXT_PUBLIC_RPC_URL`/`NEXT_PUBLIC_USDC_MINT`), base layout + brand
+  primitives. Smoke test passes.
+- [ ] **2. Chain data layer (hooks) + market discovery** — `src/lib`: `useProgram`,
+  `useConfig`, `useMarkets` (gPA discovery grouped by ticker), `useMarket`,
+  `useOrderBook` (→ `dualBook`), `useUserPositions`, `priceFromBook`. Pure helpers
+  (`format.ts`/`market-math.ts`: price/mid, P&L, 4 PM ET countdown, formatting)
+  unit-tested directly.
+- [ ] **3. Landing + Markets pages** — Landing: explainer (brand voice), live prices,
+  connect CTA. Markets: 7 stocks with live price + active contract count. RTL tests
+  against mocked hooks.
+- [ ] **4. Trade page — book (both perspectives) + strike list + payoff/countdown** —
+  strike list; order book in both Yes and No perspectives (`dualBook`); implied No
+  price ($1.00 − Yes); plain-language payoff line; 4 PM ET settlement countdown.
+  Tests: mirror consistency (best Yes bid + best No ask = `PRICE_SCALE`), implied No,
+  payoff text, countdown.
+- [ ] **5. Trade panel — four buttons + position constraint** — Buy/Sell Yes/No via
+  `buildTradeIntent` (one tx, one approval); `makerAccounts` from the live book for
+  marketable orders; client-side size/price validation; position-constraint guard
+  (client-only). Tests: action→intent mapping (decoded legs), BUY_NO whole-token/cap
+  rules, guard blocks Buy-Yes-while-holding-No.
+- [ ] **6. Portfolio + redeem flow** — active positions (entry vs current, P&L),
+  settled outcomes via `payoutFor`, redeem button building+signing the SDK `redeem`
+  ix (USDC to wallet). Entry price from a local trade store. Tests: P&L, payout
+  display, redeem ix + post-redeem balance.
+- [ ] **7. History page (trade execution log)** — log for the connected wallet from
+  program events (`OrderMatched`/`OrderPlaced`/`PairMinted`/`Redeemed`) via the event
+  coder over the user's signatures, cached client-side. Tests: parsed executions
+  render in order; empty state.
+- [ ] **8. Wallet connect + signing wiring** — connect/disconnect/account-change;
+  all state-changing actions via wallet `sendTransaction`; brand-styled tx-status
+  toasts. Tests: connected/disconnected gate; action triggers `sendTransaction` with
+  SDK-built ixs (mocked adapter).
+- [ ] **9. Playwright e2e vs local validator** — boot `solana-test-validator` with
+  `target/deploy/meridian.so` + Pyth Receiver, seed Config+market+book via SDK
+  builders, fund a generated keypair (SOL+USDC), run the app with an injected keypair
+  adapter, drive a browser: connect → mint/Buy Yes → Buy No → Sell Yes → Sell No →
+  (admin settle) → redeem. Gated for local + CI; if flaky in CI, stays runnable
+  locally and is documented as the manual-verification path (honestly noted).
+- [ ] **10. Adversarial review + triage** — independent subagent
+  (robustness/efficiency/security); fix high/medium, re-run suite, record lows below.
+
 ## Implementation notes (filled in by the building agent)
 
 > The agent implementing this feature records its implementation decisions and
@@ -73,3 +143,39 @@ through the UI. Runs in parallel with the automation service (F-07).
 > by the builder, not the planner. Cross-cutting discoveries that affect other
 > features must also be propagated to ROADMAP.md or the architecture doc, not just
 > left here.
+
+### Chunk 1 — workspace scaffold + brand system
+
+- **`packages/web` (`@meridian/web`)** is a new sibling workspace package, Next.js 14
+  App Router + TS. It depends on `@meridian/sdk` via `workspace:^`.
+- **SDK consumed as TypeScript source, not a prebuilt `dist`.** `@meridian/sdk`'s
+  `dist` is gitignored and not built in this worktree, so `tsconfig.json` maps
+  `@meridian/sdk` → `../sdk/src/index.ts` (and `/pyth` → `../sdk/src/pyth.ts`) and
+  `next.config.mjs` lists it under `transpilePackages`. Next/SWC compiles the SDK
+  source alongside the app — no separate SDK build step in the frontend's loop. Vitest
+  mirrors the same aliases. (If F-09/F-10 prefer consuming the built package, point the
+  alias at `dist` after a `yarn workspace @meridian/sdk build`; the import surface is
+  identical.)
+- **Brand contract = the pitch deck.** `tailwind.config.ts` encodes the deck's palette
+  (`docs/meridian-deck.html` `:root`) as design tokens — ink/panel/line/fg, accent &
+  `yes` mint `#4ff0a8`, `no` coral `#ff7a8a`, `usdc` blue `#5aa6ff`, amber — and its
+  three families (Archivo sans / Fraunces serif / Space Mono mono). `globals.css`
+  reproduces the deck's atmosphere glows and defines `.panel`/`.btn*` components. All UI
+  uses these tokens; no raw hex in components.
+- **Wallet stack:** `@solana/wallet-adapter-react` + `react-ui`. The static adapter
+  list is **empty** — wallets register via the Wallet Standard, so Phantom/Solflare/
+  Backpack appear without bundling per-wallet adapters. Dropped
+  `@solana/wallet-adapter-wallets` deliberately: it transitively pulls heavy SDKs
+  (Ledger → `@stellar/stellar-sdk`, `usb`, etc.) for wallets we don't need to hard-code.
+  The e2e harness injects its own keypair adapter via `Providers`' `wallets` prop.
+- **`Providers`** mounts `ConnectionProvider`/`WalletProvider`/`WalletModalProvider`
+  with an env-driven endpoint; `WalletMultiButton` is loaded via `next/dynamic`
+  (`ssr:false`) since it touches `window`. Config is `NEXT_PUBLIC_*` only (no secrets in
+  the frontend); `.env.example` documents `NEXT_PUBLIC_RPC_URL`/`_USDC_MINT`/`_CLUSTER`.
+- **Tests:** Vitest + RTL + jsdom, automatic JSX runtime (`esbuild.jsx: "automatic"`)
+  so components need no `React` import. Chunk-1 proof: brand-primitive render tests pass,
+  `tsc --noEmit` is clean, and `next build` produces an optimized production build
+  (SSR-safe wallet provider, SDK transpiled).
+- **Repo plumbing:** root `lint`/`lint:fix` globs widened to `.tsx`; `.gitignore` +
+  `.prettierignore` updated for `.next`/Playwright artifacts. yarn `node_modules`
+  linker (matches the SDK's choice for native addons).

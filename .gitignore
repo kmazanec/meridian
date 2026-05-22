@@ -9,6 +9,14 @@ test-ledger
 # Compiled TS package output (the off-chain workspace).
 packages/*/dist
 
+# Next.js frontend build + test artifacts.
+packages/web/.next
+packages/web/out
+packages/web/playwright-report
+packages/web/test-results
+packages/web/.env.local
+packages/web/tsconfig.tsbuildinfo
+
 # Ignore build output, but keep the canonical program keypair committed so the
 # program ID is reproducible across clones/worktrees. Without this, every fresh
 # build regenerates a new keypair and thus a different program ID.

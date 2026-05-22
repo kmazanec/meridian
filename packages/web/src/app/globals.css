@@ -1,0 +1,65 @@
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Space+Mono:wght@400;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #070b14;
+  color: #e8edf5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* The deck's atmosphere: faint accent glows behind the content. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(900px 600px at 78% -10%, rgba(79, 240, 168, 0.07), transparent 60%),
+    radial-gradient(700px 500px at 8% 110%, rgba(90, 166, 255, 0.06), transparent 60%);
+}
+
+@layer components {
+  .panel {
+    @apply rounded-panel border border-line-soft bg-panel/80 backdrop-blur;
+  }
+
+  .stat-mono {
+    @apply font-mono tabular-nums;
+  }
+
+  /* Brand button. Variants layered by callers via extra classes. */
+  .btn {
+    @apply inline-flex items-center justify-center rounded-lg border border-line px-4 py-2
+      font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-accent {
+    @apply border-accent/40 bg-accent/15 text-accent hover:bg-accent/25;
+  }
+  .btn-yes {
+    @apply border-yes/40 bg-yes/15 text-yes hover:bg-yes/25;
+  }
+  .btn-no {
+    @apply border-no/40 bg-no/15 text-no hover:bg-no/25;
+  }
+  .btn-ghost {
+    @apply text-fg-dim hover:border-line hover:text-fg;
+  }
+}
+
+/* The wallet-adapter modal/button ships its own CSS; tone it to the brand. */
+.wallet-adapter-button {
+  font-family: var(--font-sans, "Archivo", sans-serif) !important;
+}
