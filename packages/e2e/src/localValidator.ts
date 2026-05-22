@@ -229,7 +229,11 @@ export async function startLocalValidator(
 
   try {
     const connection = new Connection(rpcUrl, "confirmed");
-    await waitFor(() => connection.getVersion(), bootTimeoutMs, "validator RPC");
+    await waitFor(
+      () => connection.getVersion(),
+      bootTimeoutMs,
+      "validator RPC"
+    );
 
     // Fund the deployer (airdrop, confirmed).
     const sig = await connection.requestAirdrop(

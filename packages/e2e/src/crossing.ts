@@ -72,10 +72,11 @@ export function makerAccountsFor(opts: {
   });
 
   // Best price first; on ties, earliest seq (time priority) — the program's order.
-  crossable.sort((a, b) =>
-    side === OrderSide.Bid
-      ? a.price.cmp(b.price) || a.seq.cmp(b.seq) // buying: cheapest asks first
-      : b.price.cmp(a.price) || a.seq.cmp(b.seq) // selling: highest bids first
+  crossable.sort(
+    (a, b) =>
+      side === OrderSide.Bid
+        ? a.price.cmp(b.price) || a.seq.cmp(b.seq) // buying: cheapest asks first
+        : b.price.cmp(a.price) || a.seq.cmp(b.seq) // selling: highest bids first
   );
 
   // The maker receives USDC if we're buying (they sold Yes); Yes if we're selling.

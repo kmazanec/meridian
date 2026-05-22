@@ -101,10 +101,28 @@ opt-in env-gated live-devnet settlement smoke test (real Pyth Hermes→Receiver 
   fallback ladder documented in-file. (AC#5) **Code green; the live assertion is the
   manual gate below — it cannot be executed in CI/this session (no devnet keypair, and
   equity feeds need US market hours).**
-- [ ] **Chunk 7 — Wiring + docs.** Workspace wiring; keep validator suite out of the
-  Node-only CI `lint-ts` job (mirror Playwright); note in `.gitlab-ci.yml` + docs.
+- [x] **Chunk 7 — Wiring + docs.** `@meridian/e2e` joins the `packages/*` workspace; the
+  validator suite stays out of the Node-only CI `lint-ts` job (mirrors Playwright) but its
+  **typecheck** is added there so it can't drift from the SDK/automation surfaces;
+  `.gitlab-ci.yml` comment + `docs/local-development.md` "Convergence E2E suite" section
+  updated. Full suite verified: **12 passing, 1 pending** (devnet opt-in skipped).
 - [ ] **Adversarial review** — robustness/efficiency/security-integrity; fix high/medium.
 - [ ] **Rebase, push, open MR.**
+
+### Acceptance criteria coverage
+
+- AC#1 full lifecycle on a validator — `lifecycle.test.ts`. ✓
+- AC#2 all four trade paths on one book — `trade-paths.test.ts`. ✓
+- AC#3 multi-user maker/taker, both redeem — `multi-user.test.ts`. ✓
+- AC#4 invariants across the run (collateralization, payout completeness, immutability,
+  token provenance via mint/redeem-only, timing) — asserted in every suite after each
+  phase. ✓
+- AC#5 settlement timing/within-window — admin-override delay enforced (local);
+  within-10-min assertion in the devnet smoke test (opt-in manual gate). ✓ (local) /
+  manual (devnet)
+- AC#6 program↔SDK↔automation interfaces resolved — `automation.test.ts` drives both jobs
+  through the real `RpcChainClient`; no cross-cutting **contract** change was needed (only
+  two *usage* clarifications, recorded above). ✓
 
 ## Cross-cutting contracts obeyed
 

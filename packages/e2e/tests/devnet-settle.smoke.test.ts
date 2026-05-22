@@ -73,7 +73,9 @@ describeDevnet("live-devnet settlement via Pyth (opt-in)", function () {
       );
     }
     if (!keypairPath) {
-      throw new Error("SOLANA_KEYPAIR (a funded keypair file path) is required.");
+      throw new Error(
+        "SOLANA_KEYPAIR (a funded keypair file path) is required."
+      );
     }
     expect(TICKER_SYMBOLS).to.include(symbol);
     connection = new Connection(rpcUrl, "confirmed");
@@ -81,15 +83,21 @@ describeDevnet("live-devnet settlement via Pyth (opt-in)", function () {
   });
 
   it("posts a Hermes price update and settles a market via settle_market", async () => {
-    const program = getProgram({ connection, publicKey: cranker.publicKey } as never);
+    const program = getProgram({
+      connection,
+      publicKey: cranker.publicKey,
+    } as never);
 
     // The Config must already be initialized with this feed id (the on-chain feed-match
     // check compares the posted update's feed id against Config.tickers[ticker].feed_id).
     const config = await fetchConfig(program);
-    expect(config, "Config must be initialized on this cluster").to.not.equal(null);
-    expect(config!.admin.toBase58(), "keypair must be the Config admin").to.equal(
-      cranker.publicKey.toBase58()
+    expect(config, "Config must be initialized on this cluster").to.not.equal(
+      null
     );
+    expect(
+      config!.admin.toBase58(),
+      "keypair must be the Config admin"
+    ).to.equal(cranker.publicKey.toBase58());
     const usdcMint = config!.usdcMint;
 
     // Create a market whose close is a few minutes in the past, so settle_market's timing
@@ -98,9 +106,16 @@ describeDevnet("live-devnet settlement via Pyth (opt-in)", function () {
     const strike = new BN(1); // strike $0.000001 → essentially any positive price → Yes wins
     const market = { ticker, strike, tradingDay: new BN(tradingDay) };
 
-    const existing = await fetchMarketById(program, ticker, strike, new BN(tradingDay));
+    const existing = await fetchMarketById(
+      program,
+      ticker,
+      strike,
+      new BN(tradingDay)
+    );
     if (!existing) {
-      const { sendAndConfirmTransaction, Transaction } = await import("@solana/web3.js");
+      const { sendAndConfirmTransaction, Transaction } = await import(
+        "@solana/web3.js"
+      );
       const ix = await createStrikeMarket(program, {
         admin: cranker.publicKey,
         usdcMint,
@@ -128,17 +143,25 @@ describeDevnet("live-devnet settlement via Pyth (opt-in)", function () {
 
     // The market is settled, with the closing price + timestamp written immutably, and
     // settled within the 10-minute window of the (past) close instant (AC#5).
-    const settled = await fetchMarket(program, marketPda(ticker, strike, new BN(tradingDay)));
+    const settled = await fetchMarket(
+      program,
+      marketPda(ticker, strike, new BN(tradingDay))
+    );
     expect(settled!.state, "settled on-chain").to.equal("settled");
     expect(settled!.outcome).to.be.oneOf(["yesWins", "noWins"]);
-    expect(settled!.settlementPrice, "settlement price written").to.not.equal(null);
-    expect(settled!.settledAt!.toNumber(), "settled within 10 min of close").to.be.lessThan(
-      tradingDay + 600
+    expect(settled!.settlementPrice, "settlement price written").to.not.equal(
+      null
     );
+    expect(
+      settled!.settledAt!.toNumber(),
+      "settled within 10 min of close"
+    ).to.be.lessThan(tradingDay + 600);
 
     // eslint-disable-next-line no-console
     console.log(
-      `devnet settle ok: ${tickerToSymbol(ticker)} outcome=${settled!.outcome} ` +
+      `devnet settle ok: ${tickerToSymbol(ticker)} outcome=${
+        settled!.outcome
+      } ` +
         `price=${settled!.settlementPrice!.toString()} sig=${settleSignature}`
     );
   });

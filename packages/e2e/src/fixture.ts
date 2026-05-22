@@ -192,7 +192,12 @@ export class Fixture {
     await sendTx(
       this.connection,
       this.admin,
-      [await growOrderBook(this.program, { payer: this.admin.publicKey, market: id })],
+      [
+        await growOrderBook(this.program, {
+          payer: this.admin.publicKey,
+          market: id,
+        }),
+      ],
       [this.admin]
     );
     return id;
@@ -227,7 +232,11 @@ export class Fixture {
   }
 
   /** Mint `count` Yes/No pairs for `user` on `market` (user signs; deposits $1 each). */
-  async mintPairs(user: TestUser, market: MarketId, count: number): Promise<void> {
+  async mintPairs(
+    user: TestUser,
+    market: MarketId,
+    count: number
+  ): Promise<void> {
     for (let i = 0; i < count; i++) {
       await sendTx(
         this.connection,
@@ -254,14 +263,22 @@ export class Fixture {
   async trade(
     user: TestUser,
     market: MarketId,
-    opts: { action: TradeAction; price: BN | number; size: BN | number; isMarket?: boolean }
+    opts: {
+      action: TradeAction;
+      price: BN | number;
+      size: BN | number;
+      isMarket?: boolean;
+    }
   ): Promise<{ mintPairs: number; bookSide: number; yesPrice: BN }> {
     const price = new BN(opts.price);
     const size = new BN(opts.size);
     const isMarket = opts.isMarket ?? false;
 
     // Compute the crossing from the live book, in the Yes-book frame the action maps to.
-    const book = await fetchOrderBook(this.program, marketPda(market.ticker, market.strike, market.tradingDay));
+    const book = await fetchOrderBook(
+      this.program,
+      marketPda(market.ticker, market.strike, market.tradingDay)
+    );
     const makerAccounts = book
       ? makerAccountsFor({
           book,
@@ -287,15 +304,24 @@ export class Fixture {
       usdcMint: this.usdcMint,
       makerAccounts,
     });
-    await sendTx(this.connection, user.keypair, built.instructions, [user.keypair]);
-    return { mintPairs: built.mintPairs, bookSide: built.bookSide, yesPrice: built.yesPrice };
+    await sendTx(this.connection, user.keypair, built.instructions, [
+      user.keypair,
+    ]);
+    return {
+      mintPairs: built.mintPairs,
+      bookSide: built.bookSide,
+      yesPrice: built.yesPrice,
+    };
   }
 
   /**
    * Settle a (past-dated) market via the admin override. `settlementPrice` is in USDC
    * base units; outcome is YesWins iff `settlementPrice >= strike` (the program's rule).
    */
-  async settleAdmin(market: MarketId, settlementPrice: BN | number): Promise<void> {
+  async settleAdmin(
+    market: MarketId,
+    settlementPrice: BN | number
+  ): Promise<void> {
     await sendTx(
       this.connection,
       this.admin,
@@ -332,7 +358,9 @@ export class Fixture {
 
   /** Token balance (base units) for any token account; 0 if it doesn't exist. */
   async tokenBalance(account: PublicKey): Promise<bigint> {
-    const info = await this.connection.getTokenAccountBalance(account).catch(() => null);
+    const info = await this.connection
+      .getTokenAccountBalance(account)
+      .catch(() => null);
     return info ? BigInt(info.value.amount) : 0n;
   }
 
@@ -364,9 +392,10 @@ export class Fixture {
       BigInt(PAYOFF_UNIT.toString()) * BigInt(acc.pairsMinted.toString()) -
       BigInt(acc.winningRedeemed.toString());
     const actual = await this.vaultBalance(market);
-    expect(actual.toString(), "vault == PAYOFF_UNIT*pairs_minted - winning_redeemed").to.equal(
-      expected.toString()
-    );
+    expect(
+      actual.toString(),
+      "vault == PAYOFF_UNIT*pairs_minted - winning_redeemed"
+    ).to.equal(expected.toString());
   }
 }
 

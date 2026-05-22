@@ -37,13 +37,18 @@ describeOnValidator("convergence harness (real validator)", function () {
     expect(info, "program account present").to.not.equal(null);
     expect(info!.executable, "program is executable").to.equal(true);
     const pd = await validator.connection.getAccountInfo(validator.programData);
-    expect(pd, "ProgramData present (required by initialize_config)").to.not.equal(null);
+    expect(
+      pd,
+      "ProgramData present (required by initialize_config)"
+    ).to.not.equal(null);
   });
 
   it("initializes Config with the deployer as admin", async () => {
     const config = await fetchConfig(fx.program);
     expect(config, "config initialized").to.not.equal(null);
-    expect(config!.admin.toBase58()).to.equal(validator.deployer.publicKey.toBase58());
+    expect(config!.admin.toBase58()).to.equal(
+      validator.deployer.publicKey.toBase58()
+    );
     expect(config!.usdcMint.toBase58()).to.equal(fx.usdcMint.toBase58());
     expect(config!.paused).to.equal(false);
   });

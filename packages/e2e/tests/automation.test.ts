@@ -80,7 +80,9 @@ describeOnValidator("automation jobs against a real validator", function () {
       logger,
       tradingDay,
     });
-    expect(morning.skipped, "not skipped (explicit tradingDay)").to.equal(false);
+    expect(morning.skipped, "not skipped (explicit tradingDay)").to.equal(
+      false
+    );
     expect(morning.failed, "no provisioning failures").to.equal(0);
     expect(morning.created, "created one market per computed strike").to.equal(
       expectedStrikes.length
@@ -109,7 +111,9 @@ describeOnValidator("automation jobs against a real validator", function () {
       logger,
       tradingDay,
     });
-    expect(morningAgain.failed, "idempotent re-run has no failures").to.equal(0);
+    expect(morningAgain.failed, "idempotent re-run has no failures").to.equal(
+      0
+    );
     const afterRerun = await discovery.listMarkets();
     expect(afterRerun.length, "no duplicate markets created").to.equal(
       expectedStrikes.length

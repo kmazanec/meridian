@@ -49,7 +49,10 @@ describeOnValidator("multi-user maker/taker scenario", function () {
   after(() => validator?.stop());
 
   it("maker quotes, taker fills, settle, both redeem to the right USDC", async () => {
-    const market = await fx.createMarket({ ticker: Ticker.Meta, strike: STRIKE });
+    const market = await fx.createMarket({
+      ticker: Ticker.Meta,
+      strike: STRIKE,
+    });
 
     // Two real users with their own keypairs and starting USDC.
     const maker = await fx.newUser(100);
@@ -96,8 +99,12 @@ describeOnValidator("multi-user maker/taker scenario", function () {
     );
 
     let book = await fetchOrderBook(fx.program, marketAddr(market));
-    expect(book!.asks.filter((o) => o.active && !o.size.isZero()).length).to.equal(1);
-    expect(book!.bids.filter((o) => o.active && !o.size.isZero()).length).to.equal(1);
+    expect(
+      book!.asks.filter((o) => o.active && !o.size.isZero()).length
+    ).to.equal(1);
+    expect(
+      book!.bids.filter((o) => o.active && !o.size.isZero()).length
+    ).to.equal(1);
 
     // ── taker fills the maker's ask ──────────────────────────────────────────
     // Taker buys all 4 Yes @ $0.65 (crosses the ask). Pays 4 × $0.65 = $2.60.
@@ -129,9 +136,9 @@ describeOnValidator("multi-user maker/taker scenario", function () {
     );
 
     // Taker holds 4 Yes; maker sold 4 (kept 2 Yes) and gained $2.60.
-    expect((await fx.position(taker.publicKey, market)).yes.toString()).to.equal(
-      ONE.muln(4).toString()
-    );
+    expect(
+      (await fx.position(taker.publicKey, market)).yes.toString()
+    ).to.equal(ONE.muln(4).toString());
     // Trading never touches the vault.
     await fx.assertCollateralization(market);
 
@@ -168,7 +175,10 @@ describeOnValidator("multi-user maker/taker scenario", function () {
     await redeemSide(fx, maker, market, RedeemSide.No, ONE.muln(6));
 
     // Vault fully drained: all 6 winning Yes (4 taker + 2 maker) redeemed.
-    expect((await fx.vaultBalance(market)).toString(), "vault drained to zero").to.equal("0");
+    expect(
+      (await fx.vaultBalance(market)).toString(),
+      "vault drained to zero"
+    ).to.equal("0");
     await fx.assertCollateralization(market);
 
     // ── zero-sum P&L across the two users ────────────────────────────────────
@@ -178,11 +188,17 @@ describeOnValidator("multi-user maker/taker scenario", function () {
     const takerPnl = takerEndUsdc - takerStartUsdc;
 
     // Taker: −$2.60 (bought 4 Yes) + $4.00 (redeemed 4 winning Yes) = +$1.40.
-    expect(takerPnl.toString(), "taker P&L = +$1.40").to.equal((1_400_000n).toString());
+    expect(takerPnl.toString(), "taker P&L = +$1.40").to.equal(
+      1_400_000n.toString()
+    );
     // Maker: minted 6 ($−6) + sold 4 Yes ($+2.60) + redeemed 2 Yes ($+2.00) = −$1.40.
-    expect(makerPnl.toString(), "maker P&L = −$1.40").to.equal((-1_400_000n).toString());
+    expect(makerPnl.toString(), "maker P&L = −$1.40").to.equal(
+      (-1_400_000n).toString()
+    );
     // The system is exactly zero-sum between the two parties (no value created/destroyed).
-    expect((makerPnl + takerPnl).toString(), "zero-sum across users").to.equal("0");
+    expect((makerPnl + takerPnl).toString(), "zero-sum across users").to.equal(
+      "0"
+    );
   });
 });
 
@@ -192,8 +208,11 @@ function marketAddr(market: MarketId) {
   return marketPda(market.ticker, market.strike, market.tradingDay);
 }
 function yesMint(market: MarketId) {
-  return deriveMarketPdasFromIdentity(market.ticker, market.strike, market.tradingDay)
-    .yesMint;
+  return deriveMarketPdasFromIdentity(
+    market.ticker,
+    market.strike,
+    market.tradingDay
+  ).yesMint;
 }
 
 async function redeemSide(

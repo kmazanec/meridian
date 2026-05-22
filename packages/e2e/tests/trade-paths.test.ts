@@ -96,7 +96,10 @@ describeOnValidator("four trade paths on one book", function () {
   }
 
   it("Buy Yes: taker bids into a resting ask, gains Yes for USDC", async () => {
-    const market = await fx.createMarket({ ticker: Ticker.Meta, strike: 680_000_000 });
+    const market = await fx.createMarket({
+      ticker: Ticker.Meta,
+      strike: 680_000_000,
+    });
     await makerRestsAsk(market, new BN(600_000), ONE.muln(3));
 
     const taker = await fx.newUser(50);
@@ -119,7 +122,10 @@ describeOnValidator("four trade paths on one book", function () {
   });
 
   it("Sell Yes: taker asks into a resting bid, gives Yes for USDC", async () => {
-    const market = await fx.createMarket({ ticker: Ticker.Msft, strike: 400_000_000 });
+    const market = await fx.createMarket({
+      ticker: Ticker.Msft,
+      strike: 400_000_000,
+    });
     // Maker rests a bid to BUY Yes @ $0.55.
     await makerRestsBid(market, new BN(550_000), ONE.muln(2));
 
@@ -138,14 +144,18 @@ describeOnValidator("four trade paths on one book", function () {
     expect((before.yes - after.yes).toString(), "taker gave up 2 Yes").to.equal(
       ONE.muln(2).toString()
     );
-    expect((after.usdc - before.usdc).toString(), "received 2 × $0.55").to.equal(
-      (550_000n * 2n).toString()
-    );
+    expect(
+      (after.usdc - before.usdc).toString(),
+      "received 2 × $0.55"
+    ).to.equal((550_000n * 2n).toString());
     await fx.assertCollateralization(market);
   });
 
   it("Buy No: mint pair + sell the Yes, taker is left holding No", async () => {
-    const market = await fx.createMarket({ ticker: Ticker.Googl, strike: 150_000_000 });
+    const market = await fx.createMarket({
+      ticker: Ticker.Googl,
+      strike: 150_000_000,
+    });
     // Buy No @ $0.30 reflects to selling Yes @ $0.70, which crosses a resting bid @ $0.70.
     await makerRestsBid(market, new BN(700_000), ONE.muln(2));
 
@@ -160,7 +170,9 @@ describeOnValidator("four trade paths on one book", function () {
 
     expect(built.mintPairs, "minted 2 pairs for the Buy No").to.equal(2);
     // Taker keeps 2 No, sold the 2 minted Yes.
-    expect((after.no - before.no).toString(), "holds 2 No").to.equal(ONE.muln(2).toString());
+    expect((after.no - before.no).toString(), "holds 2 No").to.equal(
+      ONE.muln(2).toString()
+    );
     expect(after.yes.toString(), "sold all minted Yes").to.equal("0");
     // Effective No cost = $1.00 − Yes sale ($0.70) = $0.30 each → $0.60 for 2.
     // (Net USDC out = 2×$1.00 minted − 2×$0.70 received = $0.60.)
@@ -171,7 +183,10 @@ describeOnValidator("four trade paths on one book", function () {
   });
 
   it("Sell No: buy Yes, taker closes No exposure into a redeemable pair", async () => {
-    const market = await fx.createMarket({ ticker: Ticker.Amzn, strike: 200_000_000 });
+    const market = await fx.createMarket({
+      ticker: Ticker.Amzn,
+      strike: 200_000_000,
+    });
     // Sell No @ $0.40 reflects to buying Yes @ $0.60, crossing a resting ask @ $0.60.
     await makerRestsAsk(market, new BN(600_000), ONE.muln(2));
 
@@ -191,7 +206,9 @@ describeOnValidator("four trade paths on one book", function () {
 
     const before = await fx.position(taker.publicKey, market);
     expect(before.yes.toString(), "starts with 0 Yes").to.equal("0");
-    expect(before.no.toString(), "starts with 2 No").to.equal(ONE.muln(2).toString());
+    expect(before.no.toString(), "starts with 2 No").to.equal(
+      ONE.muln(2).toString()
+    );
 
     await fx.trade(taker, market, {
       action: TradeAction.SellNo,
@@ -212,7 +229,10 @@ describeOnValidator("four trade paths on one book", function () {
   });
 
   it("Partial fill: a taker order larger than resting liquidity fills part, rests the remainder", async () => {
-    const market = await fx.createMarket({ ticker: Ticker.Nvda, strike: 120_000_000 });
+    const market = await fx.createMarket({
+      ticker: Ticker.Nvda,
+      strike: 120_000_000,
+    });
     // Only 2 Yes resting on the ask @ $0.50.
     await makerRestsAsk(market, new BN(500_000), ONE.muln(2));
 
@@ -233,17 +253,23 @@ describeOnValidator("four trade paths on one book", function () {
     const book = await fetchOrderBook(fx.program, marketAddr(market));
     const restingBid = book!.bids.find((o) => o.active && !o.size.isZero());
     expect(restingBid, "remainder rests as a bid").to.not.equal(undefined);
-    expect(restingBid!.size.toString(), "3 Yes still wanted").to.equal(ONE.muln(3).toString());
-    // USDC out = $1.00 (fills) + $1.50 (escrowed for the resting bid) = $2.50.
-    expect((before.usdc - after.usdc).toString(), "spent $1 filled + $1.50 escrowed").to.equal(
-      (500_000n * 5n).toString()
+    expect(restingBid!.size.toString(), "3 Yes still wanted").to.equal(
+      ONE.muln(3).toString()
     );
+    // USDC out = $1.00 (fills) + $1.50 (escrowed for the resting bid) = $2.50.
+    expect(
+      (before.usdc - after.usdc).toString(),
+      "spent $1 filled + $1.50 escrowed"
+    ).to.equal((500_000n * 5n).toString());
     await fx.assertCollateralization(market);
   });
 
   it("At-strike boundary: settlement_price == strike → Yes wins", async () => {
     const STRIKE = 250_000_000;
-    const market = await fx.createMarket({ ticker: Ticker.Tsla, strike: STRIKE });
+    const market = await fx.createMarket({
+      ticker: Ticker.Tsla,
+      strike: STRIKE,
+    });
     const holder = await fx.newUser(10);
     await fx.mintPairs(holder, market, 1);
 
@@ -281,8 +307,11 @@ function marketAddr(market: MarketId) {
   return marketPda(market.ticker, market.strike, market.tradingDay);
 }
 function yesMint(market: MarketId) {
-  return deriveMarketPdasFromIdentity(market.ticker, market.strike, market.tradingDay)
-    .yesMint;
+  return deriveMarketPdasFromIdentity(
+    market.ticker,
+    market.strike,
+    market.tradingDay
+  ).yesMint;
 }
 
 /** A raw SPL transfer instruction from one user's ATA to another's, for the given mint. */
@@ -295,7 +324,10 @@ function transferToken(
 ) {
   // Lazy import to keep the spl-token surface local to this helper.
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { createTransferInstruction, getAssociatedTokenAddressSync } = require("@solana/spl-token");
+  const {
+    createTransferInstruction,
+    getAssociatedTokenAddressSync,
+  } = require("@solana/spl-token");
   return createTransferInstruction(
     getAssociatedTokenAddressSync(mint, from.publicKey),
     getAssociatedTokenAddressSync(mint, to.publicKey),
