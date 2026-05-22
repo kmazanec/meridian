@@ -1,6 +1,6 @@
 # Feature: Frontend
 
-**ID:** F-08 · **Roadmap piece:** F-08 · **Status:** In progress
+**ID:** F-08 · **Roadmap piece:** F-08 · **Status:** In review — [MR !8](https://labs.gauntletai.com/keithmazanec/meridian/-/merge_requests/8)
 
 ## Description
 
