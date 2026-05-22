@@ -90,9 +90,11 @@ opt-in env-gated live-devnet settlement smoke test (real Pyth Hermes→Receiver 
 - [x] **Chunk 4 — Multi-user.** `tests/multi-user.test.ts`: maker mints+quotes, taker
   fills, settle, both redeem correctly; collateralization across both + vault drains;
   zero-sum P&L (+$1.40 / −$1.40) verified. (AC#3,#4,#5) **Green: 1 passing.**
-- [ ] **Chunk 5 — Automation vs real validator.** `tests/automation.test.ts`:
+- [x] **Chunk 5 — Automation vs real validator.** `tests/automation.test.ts`:
   `runMorningJob` (Mock price → strikes → provision via real `RpcChainClient`) then
-  `runSettlementJob` (discovery + injected settler); created/settled counts + outcomes. (AC#6,#5)
+  `runSettlementJob` (real `getProgramAccounts` discovery + injected admin settler);
+  created/settled counts, on-chain outcomes, both jobs idempotent. (AC#6,#5)
+  **Green: 1 passing.**
 - [ ] **Chunk 6 — Live-devnet settle smoke (opt-in).** `tests/devnet-settle.smoke.test.ts`:
   env-gated real Hermes→Receiver→`settleMarket`; skipped without creds/market-hours;
   fallback ladder documented. (AC#5)
@@ -149,3 +151,10 @@ ROADMAP.md/ARCHITECTURE.md, not patched locally.
   `buildTradeIntent`, so it is unaffected). This is a *usage* contract, not a bug —
   documented here and handled in the suite by prepending `createAtaIfNeeded` (the same
   instruction the intent uses). No source change.
+
+- **`MorningJobSummary.created` counts successful (idempotent) provisions, not net-new
+  markets.** Re-running the morning job over the same session re-provisions every strike
+  and reports `created = N` again — it is *not* a "newly created" counter. On-chain
+  idempotency (no duplicate markets) is the right thing to assert via discovery, not the
+  summary number. Matches the field's documented meaning; the suite asserts the on-chain
+  market set is unchanged on re-run. No source change.
