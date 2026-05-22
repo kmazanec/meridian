@@ -1,6 +1,6 @@
 # Feature: Automation Service
 
-**ID:** F-07 · **Roadmap piece:** F-07 · **Status:** In progress
+**ID:** F-07 · **Roadmap piece:** F-07 · **Status:** In review — [MR !7](https://labs.gauntletai.com/keithmazanec/meridian/-/merge_requests/7)
 
 ## Description
 
