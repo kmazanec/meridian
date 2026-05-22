@@ -84,8 +84,9 @@ opt-in env-gated live-devnet settlement smoke test (real Pyth Hermes→Receiver 
 - [x] **Chunk 2 — Full lifecycle.** `tests/lifecycle.test.ts`: create→mint→place+match
   crossing→settle→redeem; invariants asserted after each phase. (AC#1, AC#4)
   **Green: 1 passing.**
-- [ ] **Chunk 3 — Four trade paths.** `tests/trade-paths.test.ts`: Buy/Sell Yes, Buy/Sell
+- [x] **Chunk 3 — Four trade paths.** `tests/trade-paths.test.ts`: Buy/Sell Yes, Buy/Sell
   No via `buildTradeIntent` vs maker liquidity; partial-fill + at-strike boundary. (AC#2)
+  **Green: 6 passing.**
 - [ ] **Chunk 4 — Multi-user.** `tests/multi-user.test.ts`: maker mints+quotes, taker
   fills, settle, both redeem correctly; collateralization across both + vault drains. (AC#3,#4,#5)
 - [ ] **Chunk 5 — Automation vs real validator.** `tests/automation.test.ts`:
@@ -138,10 +139,12 @@ ROADMAP.md/ARCHITECTURE.md, not patched locally.
 
 ### Convergence findings (surfaced by the integrated run)
 
-- **Raw `placeOrder` does not create the caller's outcome-token ATA.** A taker buying Yes
-  for the first time has no Yes ATA, and `place_order` requires `user_yes` to be
-  initialized (`AccountNotInitialized`/0xbc4). Only the SDK's `buildTradeIntent` prepends
-  the idempotent ATA-creation; callers using the low-level builder directly must create it
-  themselves (the frontend always goes through `buildTradeIntent`, so it is unaffected).
-  This is a *usage* contract, not a bug — documented here and handled in the suite by
-  prepending `createAtaIfNeeded` (the same instruction the intent uses). No source change.
+- **Raw `placeOrder` requires the caller's Yes ATA to already exist — on *both* sides.**
+  `place_order` wires `user_yes` for every order (an ask escrows Yes; a bid *receives*
+  Yes when it fills), so a fresh account that hasn't minted yet hits
+  `AccountNotInitialized` (0xbc4) whether it's resting a bid or an ask. Only the SDK's
+  `buildTradeIntent` prepends the idempotent ATA-creation; callers using the low-level
+  builder directly must create it themselves (the frontend always goes through
+  `buildTradeIntent`, so it is unaffected). This is a *usage* contract, not a bug —
+  documented here and handled in the suite by prepending `createAtaIfNeeded` (the same
+  instruction the intent uses). No source change.
