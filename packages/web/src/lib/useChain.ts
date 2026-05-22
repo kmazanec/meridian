@@ -4,14 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import {
-  dualBook,
   fetchConfig,
   fetchMarket,
   fetchOrderBook,
   fetchUserPosition,
   type ConfigAccount,
-  type DualBook,
   type MarketAccount,
+  type OrderBookAccount,
   type UserPosition,
 } from "@meridian/sdk";
 import { useProgram } from "./useProgram";
@@ -125,17 +124,20 @@ export function useMarket(
   );
 }
 
-/** The dual-perspective order book (Yes + No) for a market. */
+/**
+ * The raw order book for a market. Callers derive the dual-perspective view with the
+ * SDK's pure `dualBook` (cheap) and use the raw book for crossing/maker computation —
+ * one fetch serves both. Polls fast (the trading surface).
+ */
 export function useOrderBook(
   market: PublicKey | null
-): AsyncResource<DualBook> {
+): AsyncResource<OrderBookAccount> {
   const program = useProgram();
   return usePolled(
-    async () => {
-      if (!market) return null;
-      const book = await fetchOrderBook(program, market);
-      return book ? dualBook(book) : null;
-    },
+    () =>
+      market
+        ? fetchOrderBook(program, market)
+        : Promise.resolve<OrderBookAccount | null>(null),
     [program, market?.toBase58()],
     { enabled: !!market, pollMs: 5_000 }
   );

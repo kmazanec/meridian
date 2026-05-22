@@ -108,7 +108,7 @@ Build chunks (test-first; each ends in a tickable item):
   price ($1.00 − Yes); plain-language payoff line; 4 PM ET settlement countdown.
   Tests: mirror consistency (best Yes bid + best No ask = `PRICE_SCALE`), implied No,
   payoff text, countdown.
-- [ ] **5. Trade panel — four buttons + position constraint** — Buy/Sell Yes/No via
+- [x] **5. Trade panel — four buttons + position constraint** — Buy/Sell Yes/No via
   `buildTradeIntent` (one tx, one approval); `makerAccounts` from the live book for
   marketable orders; client-side size/price validation; position-constraint guard
   (client-only). Tests: action→intent mapping (decoded legs), BUY_NO whole-token/cap
@@ -260,3 +260,38 @@ Build chunks (test-first; each ends in a tickable item):
   ET/DST calendar (that conversion is the automation service's concern).
 - Live Yes price for the selected strike is the book mid via `priceFromBook` (50/50
   fallback on an empty book). The trade *panel* (chunk 5) slots into the marked spot.
+
+### Chunk 5 — trade panel (four buttons + position constraint)
+
+- **The mapping lives only in the SDK.** `TradePanel` collects an action + price (in the
+  action's own perspective) + size, and routes every action through the SDK's
+  `buildTradeIntent` into one transaction (one wallet approval). It never re-implements
+  Buy-No = mint+sell-Yes etc. A contract test mocks `buildTradeIntent` and asserts each
+  of the four buttons calls it with the correct `TradeAction`, price (No price passed
+  as-is for No actions — the SDK reflects it), and size.
+- **Maker accounts for marketable orders** (`crossing.ts`): the intent layer is
+  book-agnostic, so the panel computes the resting makers an order will cross from the
+  *live raw book* in the **Yes-book frame** (`tradeForm.yesSideFor`/`yesPriceFor` mirror
+  which Yes side/price the action lands on — mirroring *which side*, not re-deriving the
+  instructions). A Yes bid crossing asks lists each maker's **USDC** ATA (they receive
+  USDC); a Yes ask crossing bids lists makers' **Yes** ATAs — in best-price-then-seq
+  order, only as many as fill the size. Passed to `buildTradeIntent` as `makerAccounts`.
+- **Client-side validation** (`tradeForm.validateTradeForm`) mirrors the program/SDK
+  preconditions (size > 0, limit price in range, BUY_NO whole-token + `MAX_BUY_NO_MINT_PAIRS`
+  cap) so the user sees the problem before a round-trip.
+- **Position-constraint guard** (`positionGuard.ts`, ADR-006, **client-side only**):
+  blocks Buy-Yes-while-holding-No (and Buy-No-while-holding-Yes), points to the exit
+  action, and disables submit. It explicitly does *not* claim to be a fund-safety
+  control — the program permits both-sides (the Buy-No mint transiently holds both); this
+  is purely a UX guardrail. Selling either side is always allowed; an unknown (not-loaded)
+  position never blocks.
+- **Send path** (`useSendIx`): builds one `Transaction`, sets a fresh blockhash + the
+  wallet as fee payer, signs/sends via the wallet adapter's `sendTransaction`
+  (signing-here, no keys held), and tracks signing→confirming→success/error;
+  `TxStatusBanner` surfaces it. After a confirmed trade the page refreshes book + balances.
+- **Finding (test env, affects all chain-logic tests + the e2e):** under **jsdom**,
+  `getAssociatedTokenAddressSync`'s on-curve check throws "Unable to find a viable
+  program address nonce" — jsdom lacks the crypto/curve primitive Node/the real browser
+  provides. Pure chain-logic tests that derive ATAs (`crossing.test.ts`) run with
+  `// @vitest-environment node`; component tests that don't derive ATAs stay on jsdom.
+  The real browser is unaffected (the e2e uses a real Chromium).

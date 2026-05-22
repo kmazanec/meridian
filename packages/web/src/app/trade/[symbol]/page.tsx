@@ -2,15 +2,26 @@
 
 import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
-import { symbolToTicker, TICKER_SYMBOLS } from "@meridian/sdk";
-import { useMarkets, useMarket, useOrderBook } from "@/lib/useChain";
+import { dualBook, symbolToTicker, TICKER_SYMBOLS } from "@meridian/sdk";
+import {
+  useMarkets,
+  useMarket,
+  useOrderBook,
+  useUserPosition,
+  useUsdcMint,
+} from "@/lib/useChain";
+import { useProgram } from "@/lib/useProgram";
+import { useSendIx } from "@/lib/useSendIx";
 import { priceFromBook } from "@/lib/market-math";
 import type { DiscoveredMarket } from "@/lib/discovery";
 import { StrikeList } from "@/components/trade/StrikeList";
 import { DualBookView } from "@/components/trade/DualBookView";
 import { PayoffLine } from "@/components/trade/PayoffLine";
 import { Countdown } from "@/components/trade/Countdown";
+import { TradePanel } from "@/components/trade/TradePanel";
+import { TxStatusBanner } from "@/components/trade/TxStatusBanner";
 import { Panel } from "@/components/ui";
 import BN from "bn.js";
 
@@ -25,6 +36,9 @@ export default function TradePage() {
     ticker = null;
   }
 
+  const program = useProgram();
+  const { publicKey } = useWallet();
+  const usdcMint = useUsdcMint();
   const { data: allMarkets } = useMarkets();
   const strikes = useMemo(
     () =>
@@ -35,7 +49,6 @@ export default function TradePage() {
   );
 
   const [selectedAddr, setSelectedAddr] = useState<PublicKey | null>(null);
-  // Default to the first open strike (or first strike) once they load.
   const selected = useMemo(() => {
     if (selectedAddr) return selectedAddr;
     const open = strikes.find((m) => m.state === "open") ?? strikes[0];
@@ -43,8 +56,12 @@ export default function TradePage() {
   }, [selectedAddr, strikes]);
 
   const { data: market } = useMarket(selected);
-  const { data: book } = useOrderBook(selected);
-  const yesPrice = book ? priceFromBook(book.yes) : new BN(500_000);
+  const { data: rawBook, refresh: refreshBook } = useOrderBook(selected);
+  const { data: position, refresh: refreshPosition } = useUserPosition(market);
+  const tx = useSendIx();
+
+  const dual = useMemo(() => (rawBook ? dualBook(rawBook) : null), [rawBook]);
+  const yesPrice = dual ? priceFromBook(dual.yes) : new BN(500_000);
 
   if (ticker === null) {
     return (
@@ -57,6 +74,15 @@ export default function TradePage() {
   }
 
   const onSelect = (m: DiscoveredMarket) => setSelectedAddr(m.address);
+
+  const onSubmit = async (
+    instructions: import("@solana/web3.js").TransactionInstruction[]
+  ) => {
+    await tx.send(instructions);
+    // Refresh book + balances after a confirmed trade.
+    refreshBook();
+    refreshPosition();
+  };
 
   return (
     <div className="space-y-6">
@@ -78,15 +104,15 @@ export default function TradePage() {
         </aside>
 
         <section className="space-y-6">
-          {market ? (
+          {market && selected ? (
             <>
               <PayoffLine
                 ticker={ticker}
                 strike={market.strike}
                 yesPrice={yesPrice}
               />
-              {book ? (
-                <DualBookView book={book} />
+              {dual ? (
+                <DualBookView book={dual} />
               ) : (
                 <Panel>
                   <p className="text-sm text-fg-faint">
@@ -94,7 +120,18 @@ export default function TradePage() {
                   </p>
                 </Panel>
               )}
-              {/* The position-aware trade panel slots in here. */}
+              <TxStatusBanner state={tx} />
+              <TradePanel
+                program={program}
+                user={publicKey ?? null}
+                market={market}
+                marketAddress={selected}
+                book={rawBook}
+                position={position}
+                usdcMint={usdcMint}
+                onSubmit={onSubmit}
+                busy={tx.status === "signing" || tx.status === "confirming"}
+              />
             </>
           ) : (
             <Panel>
