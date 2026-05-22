@@ -74,6 +74,7 @@ describe("four-button intent translation", () => {
     // No on-chain state needed for the pure mapping assertions; just a program coder.
     h = Harness.create();
   });
+  after(() => h.dispose());
 
   describe("maps each action to the correct on-chain instruction(s)", () => {
     it("BUY_YES → a single bid at the Yes price", async () => {
@@ -232,6 +233,7 @@ describe("four-button intent translation", () => {
       hh.ensureUserAtas(liquidityMaker.publicKey, mints, usdcMint);
       hh.ensureUserAtas(trader.publicKey, mints, usdcMint);
     });
+    after(() => hh.dispose());
 
     it("BUY_NO leaves the trader holding No, having sold the minted Yes", async () => {
       // Maker rests a bid to BUY Yes @ $0.70 (so the trader's BUY_NO sell-Yes @ $0.70 fills).

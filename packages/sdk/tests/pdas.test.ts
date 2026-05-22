@@ -70,6 +70,7 @@ describe("PDA derivation", () => {
       await h.seedConfig(usdcMint);
       await h.createMarket({ ticker, strike, tradingDay, usdcMint });
     });
+    after(() => h.dispose());
 
     it("market / vault / mints / mint authority exist at the derived PDAs", () => {
       const market = marketPda(ticker, strike, tradingDay);

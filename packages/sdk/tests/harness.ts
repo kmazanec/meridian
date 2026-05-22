@@ -71,7 +71,7 @@ function builderProvider(): MeridianProgram {
 const ONE_SOL = BigInt(1_000_000_000);
 
 export class Harness {
-  readonly svm: LiteSVM;
+  svm: LiteSVM;
   readonly program: MeridianProgram;
   /** The program admin / default fee payer. */
   readonly admin: Keypair;
@@ -89,6 +89,20 @@ export class Harness {
   /** Boot a harness with the program loaded and a funded admin. */
   static create(): Harness {
     return new Harness();
+  }
+
+  /**
+   * Release the underlying LiteSVM so its (large, native) memory arena can be
+   * garbage-collected. Each `LiteSVM` holds a Rust-backed SVM; litesvm 0.8 has
+   * no explicit free, so we drop our reference and let GC reclaim it. Call this
+   * in an `after()` for every describe block that creates a Harness — otherwise
+   * instances accumulate and a low-RAM CI box (≈3.8 GB, no swap) hits
+   * `std::bad_alloc` part-way through the suite. See tests/_gc.ts, which forces a
+   * collection after each test when run under `--expose-gc`.
+   */
+  dispose(): void {
+    // Drop the heavy native reference. Any use after dispose is a test bug.
+    this.svm = undefined as unknown as LiteSVM;
   }
 
   /** Create and fund a fresh keypair (default 100 SOL). */

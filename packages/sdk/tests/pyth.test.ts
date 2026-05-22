@@ -56,6 +56,7 @@ describe("Pyth helper", () => {
       // Move clock just past the close instant so settle_market is allowed.
       h.setUnixTimestamp(day.toNumber() + 1);
     });
+    after(() => h.dispose());
 
     it("settles YesWins when the posted price is at/above the strike", async () => {
       const market = marketPda(id.ticker, id.strike, id.tradingDay);

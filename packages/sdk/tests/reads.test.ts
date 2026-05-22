@@ -135,6 +135,7 @@ describe("reads: dual-perspective book + payouts", () => {
         [b]
       );
     });
+    after(() => h.dispose());
 
     it("yes view matches the raw book", () => {
       const book = readBook(h, market);
@@ -208,6 +209,7 @@ describe("reads: dual-perspective book + payouts", () => {
         );
       }
     });
+    after(() => h.dispose());
 
     it("collapses same-price orders into one level with summed size and count", () => {
       const dual = dualBook(readBook(h, market));
