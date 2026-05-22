@@ -15,7 +15,7 @@ import {
   createStrikeMarket,
   initOrderBook,
   growOrderBook,
-  fetchMarket,
+  marketPda,
   type MarketId,
   type MarketAccount,
 } from "@meridian/sdk";
@@ -53,10 +53,8 @@ export class SdkMarketProvisioner implements MarketProvisioner {
   ) {}
 
   async provisionMarket(market: MarketId): Promise<ProvisionResult> {
-    const existing = await fetchMarket(
-      this.chain.program,
-      marketAddress(this.chain, market)
-    );
+    const address = marketPda(market.ticker, market.strike, market.tradingDay);
+    const existing = await this.chain.fetchMarket(address);
 
     let created = false;
     if (!existing) {
@@ -71,10 +69,7 @@ export class SdkMarketProvisioner implements MarketProvisioner {
 
     // Ensure the order book exists (idempotent: init/grow only when absent). A market
     // whose book is already wired (Market.order_book set) needs neither step.
-    const refreshed = await fetchMarket(
-      this.chain.program,
-      marketAddress(this.chain, market)
-    );
+    const refreshed = await this.chain.fetchMarket(address);
     const bookWired =
       refreshed?.orderBook && !refreshed.orderBook.equals(PublicKey.default);
     if (!bookWired) {
@@ -95,29 +90,11 @@ export class SdkMarketProvisioner implements MarketProvisioner {
   }
 }
 
-/** Derive a market's address via the SDK PDA helper (re-exported through instructions). */
-function marketAddress(chain: ChainClient, market: MarketId): PublicKey {
-  // The SDK derives the market PDA inside its builders; for a read we need the address.
-  // `marketPda` is exported from the SDK; import lazily to avoid a top-level cycle risk.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { marketPda } = require("@meridian/sdk") as typeof import("@meridian/sdk");
-  return marketPda(market.ticker, market.strike, market.tradingDay);
-}
-
-/** SDK-backed discovery: fetch all `Market` accounts via the Anchor program. */
+/** SDK-backed discovery: list `Market` accounts through the chain client. */
 export class SdkMarketDiscovery implements MarketDiscovery {
   constructor(private readonly chain: ChainClient) {}
 
-  async listMarkets(): Promise<
-    { address: PublicKey; account: MarketAccount }[]
-  > {
-    // `program.account.market.all()` does a getProgramAccounts filtered by discriminator.
-    const all = await this.chain.program.account.market.all();
-    const out: { address: PublicKey; account: MarketAccount }[] = [];
-    for (const entry of all) {
-      const acc = await fetchMarket(this.chain.program, entry.publicKey);
-      if (acc) out.push({ address: entry.publicKey, account: acc });
-    }
-    return out;
+  listMarkets(): Promise<{ address: PublicKey; account: MarketAccount }[]> {
+    return this.chain.listMarkets();
   }
 }

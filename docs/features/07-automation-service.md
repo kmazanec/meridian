@@ -131,7 +131,7 @@ Build chunks (test-first; each ends in a tickable item):
   — `run-morning`/`run-settlement` parse env, load the keypair from an env secret, exit
   non-zero on failure. Tests: rejects missing/empty secret; config validation. Document
   env vars for F-10's `.env.example`.
-- [ ] **8. Integration test (LiteSVM)** — load `meridian.so`, seed `Config`, run morning
+- [x] **8. Integration test (LiteSVM)** — load `meridian.so`, seed `Config`, run morning
   to create markets, run settlement (SDK `buildPriceUpdateV2` fixture) and assert markets
   go `Settled` with the expected outcome.
 - [ ] **9. CI wiring** — extend `.gitlab-ci.yml` `lint-ts` to typecheck + test
@@ -276,3 +276,21 @@ Build chunks (test-first; each ends in a tickable item):
   provisioner/discovery, settler, alerter, logger). The `bin/*` entrypoints stay thin: parse
   env, build runtime, run once, **exit non-zero on a failed/alerting run** so an external
   scheduler detects it (the CLI-only scheduling decision — no resident cron here).
+
+### Chunk 8 — LiteSVM integration test (real program)
+
+- **Reads moved onto `ChainClient`.** `fetchMarket`/`listMarkets` are now part of the chain
+  interface (not direct `program.account.*` calls), because the read path differs by
+  transport: production uses RPC (`getProgramAccounts` + `getAccountInfo`), the in-process
+  test uses LiteSVM's account store. `RpcChainClient` implements both via the SDK; the test
+  supplies a `LiteSvmChainClient` over the SDK's `Harness`.
+- The test runs the **real** `runMorningJob` + `runSettlementJob` (not mocks) against the
+  compiled `meridian.so`: morning creates 6 META strikes (each Open with its order book
+  wired), then settlement injects a `$700` `buildPriceUpdateV2` fixture per market (exactly
+  as the SDK's own settlement test does) and asserts each lands `Settled` with the correct
+  YesWins/NoWins outcome vs its strike, and that a **re-run is idempotent** (all skipped).
+- **LiteSVM has no `getProgramAccounts`**, so the test adapter's `listMarkets` scans the
+  addresses it provisioned; production discovery uses real RPC. The SDK harness is imported
+  by relative path (`../../sdk/tests/harness`) since it is a test helper, not part of the
+  SDK's published export map. The test needs `target/deploy/meridian.so` present (CI's
+  `build-program` job provides it, as for the SDK's LiteSVM tests).

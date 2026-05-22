@@ -18,11 +18,22 @@ import {
   TransactionInstruction,
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
-import { getProgram, type MeridianProgram } from "@meridian/sdk";
+import {
+  getProgram,
+  fetchMarket,
+  type MeridianProgram,
+  type MarketAccount,
+} from "@meridian/sdk";
 
-/** Sends instructions signed by the automation keypair; exposes the SDK program + payer. */
+/**
+ * The chain boundary. Sends instructions signed by the automation keypair and reads the
+ * `Market` accounts the jobs need. Abstracting *both* send and read lets the jobs run
+ * against a real RPC connection in production and an in-process LiteSVM in tests — the
+ * read path differs (RPC `getAccountInfo` vs the LiteSVM account store), so it must be
+ * part of the interface, not a direct `program.account.*` call.
+ */
 export interface ChainClient {
-  /** The typed SDK program, for building instructions and reading accounts. */
+  /** The typed SDK program, for building instructions. */
   readonly program: MeridianProgram;
   /** The automation signer (admin/cranker/payer). Its public key wires builder accounts. */
   readonly payer: PublicKey;
@@ -31,6 +42,10 @@ export interface ChainClient {
     instructions: TransactionInstruction[],
     extraSigners?: Keypair[]
   ): Promise<string>;
+  /** Read and decode a `Market` by address (null if absent). */
+  fetchMarket(address: PublicKey): Promise<MarketAccount | null>;
+  /** List all `Market` accounts the program owns, with their addresses. */
+  listMarkets(): Promise<{ address: PublicKey; account: MarketAccount }[]>;
   /** The underlying connection, for SDK helpers that take one (e.g. `postPriceUpdate`). */
   readonly connection: Connection;
   /** The automation keypair, for SDK helpers that need a `Keypair` (e.g. `settleWithPyth`). */
@@ -86,5 +101,22 @@ export class RpcChainClient implements ChainClient {
       this.keypair,
       ...extraSigners,
     ]);
+  }
+
+  fetchMarket(address: PublicKey): Promise<MarketAccount | null> {
+    return fetchMarket(this.program, address);
+  }
+
+  async listMarkets(): Promise<
+    { address: PublicKey; account: MarketAccount }[]
+  > {
+    // getProgramAccounts filtered by the Market discriminator, then normalized.
+    const all = await this.program.account.market.all();
+    const out: { address: PublicKey; account: MarketAccount }[] = [];
+    for (const entry of all) {
+      const acc = await fetchMarket(this.program, entry.publicKey);
+      if (acc) out.push({ address: entry.publicKey, account: acc });
+    }
+    return out;
   }
 }
