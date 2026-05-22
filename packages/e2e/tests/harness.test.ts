@@ -28,8 +28,8 @@ describeOnValidator("convergence harness (real validator)", function () {
     fx = await Fixture.bootstrap(validator);
   });
 
-  after(() => {
-    validator?.stop();
+  after(async () => {
+    await validator?.stop();
   });
 
   it("deploys the program with a ProgramData account", async () => {

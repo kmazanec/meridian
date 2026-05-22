@@ -275,6 +275,14 @@ export class Fixture {
    * via the SDK (`buildTradeIntent` — the single source of the four-button mapping) and
    * send all of its instructions together. `price` is in the action's own perspective
    * (Yes price for Yes actions, No price for No actions). Returns the SDK's `BuiltIntent`.
+   *
+   * **Single-writer only.** The maker accounts are computed from a book snapshot taken
+   * just before the send. If another actor consumes or inserts crossing liquidity in that
+   * gap, `remaining_accounts` no longer match the on-chain fill plan and `place_order` can
+   * fail or rest a different remainder. The convergence suite runs sequentially with one
+   * writer per market, so this never happens here; do not reuse this helper for
+   * parallel/load scenarios without re-reading the book and retrying on a maker-account
+   * mismatch (the production frontend handles that re-read/retry path).
    */
   async trade(
     user: TestUser,
@@ -362,22 +370,57 @@ export class Fixture {
     return acc;
   }
 
-  /** Raw vault USDC balance (base units) for a market. */
+  /**
+   * Strict vault USDC balance (base units). Unlike {@link tokenBalance}, this does NOT
+   * treat a missing/closed/mis-owned vault as a 0 balance — it verifies the vault is a
+   * live token account for the fixture's USDC mint and throws otherwise. That keeps
+   * {@link assertCollateralization} honest: a redeem/vault regression that closes or
+   * mis-owns the vault must fail the assertion, not pass vacuously when the expected
+   * balance is also 0.
+   */
   async vaultBalance(market: MarketId): Promise<bigint> {
     const { vault } = deriveMarketPdasFromIdentity(
       market.ticker,
       market.strike,
       market.tradingDay
     );
-    return this.tokenBalance(vault);
+    const parsed = await this.connection.getParsedAccountInfo(vault);
+    const value = parsed.value;
+    if (!value) {
+      throw new Error(`vault account missing: ${vault.toBase58()}`);
+    }
+    const data = value.data;
+    if (!("parsed" in data) || data.program !== "spl-token") {
+      throw new Error(`vault is not an SPL token account: ${vault.toBase58()}`);
+    }
+    const info = data.parsed?.info as
+      | { mint?: string; tokenAmount?: { amount?: string } }
+      | undefined;
+    if (info?.mint !== this.usdcMint.toBase58()) {
+      throw new Error(
+        `vault mint mismatch: expected ${this.usdcMint.toBase58()}, got ${
+          info?.mint
+        }`
+      );
+    }
+    return BigInt(info?.tokenAmount?.amount ?? "0");
   }
 
-  /** Token balance (base units) for any token account; 0 if it doesn't exist. */
+  /**
+   * Token balance (base units) for any token account; 0 if the account does not exist.
+   * Used for user ATAs, which legitimately may not exist yet — so a not-found is a real
+   * zero. Other RPC errors are NOT swallowed (they rethrow), so a transport/parse failure
+   * can't masquerade as a zero balance. For the collateral vault use {@link vaultBalance},
+   * which is strict.
+   */
   async tokenBalance(account: PublicKey): Promise<bigint> {
-    const info = await this.connection
-      .getTokenAccountBalance(account)
-      .catch(() => null);
-    return info ? BigInt(info.value.amount) : 0n;
+    try {
+      const info = await this.connection.getTokenAccountBalance(account);
+      return BigInt(info.value.amount);
+    } catch (e) {
+      if (isAccountNotFound(e)) return 0n;
+      throw e;
+    }
   }
 
   /** A user's Yes/No/USDC balances for a market. */
@@ -413,6 +456,21 @@ export class Fixture {
       "vault == PAYOFF_UNIT*pairs_minted - winning_redeemed"
     ).to.equal(expected.toString());
   }
+}
+
+/**
+ * True when an RPC error means "this token account does not exist" — the only case where a
+ * 0 balance is the right answer. `getTokenAccountBalance` surfaces a not-found as a JSON-RPC
+ * "could not find account" / "Invalid param" error; anything else (transport, parse, node
+ * error) must propagate rather than be read as zero.
+ */
+function isAccountNotFound(e: unknown): boolean {
+  const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
+  return (
+    msg.includes("could not find account") ||
+    msg.includes("account not found") ||
+    msg.includes("invalid param") // RPC's response when the account doesn't exist
+  );
 }
 
 /** Build, sign, and confirm one transaction. */

@@ -50,7 +50,9 @@ describeOnValidator("automation jobs against a real validator", function () {
     fx = await Fixture.bootstrap(validator);
   });
 
-  after(() => validator?.stop());
+  after(async () => {
+    await validator?.stop();
+  });
 
   it("morning job provisions the day's strikes; settlement job settles the due ones", async () => {
     // The automation service signs as the admin (deployer) via a real RpcChainClient.

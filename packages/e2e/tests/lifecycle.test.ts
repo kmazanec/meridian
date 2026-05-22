@@ -49,7 +49,9 @@ describeOnValidator(
       fx = await Fixture.bootstrap(validator);
     });
 
-    after(() => validator?.stop());
+    after(async () => {
+      await validator?.stop();
+    });
 
     it("runs the whole cycle and holds every invariant", async () => {
       // ── create ──────────────────────────────────────────────────────────────

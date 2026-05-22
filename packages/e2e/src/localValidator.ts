@@ -13,10 +13,17 @@
  * once per test file in a `before` hook and `stop()` in `after`.
  */
 
-import { spawn, execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { spawn, execFileSync, type ChildProcess } from "node:child_process";
+import {
+  existsSync,
+  mkdtempSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { createServer } from "node:net";
 import {
   Connection,
   Keypair,
@@ -24,8 +31,35 @@ import {
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 
-/** Default RPC for a freshly booted local validator. */
-const DEFAULT_RPC = "http://127.0.0.1:8899";
+/** Ask the OS for an unused TCP port (bind :0, read the assigned port, release it). */
+function freePort(): Promise<number> {
+  return new Promise((res, rej) => {
+    const srv = createServer();
+    srv.on("error", rej);
+    srv.listen(0, "127.0.0.1", () => {
+      const addr = srv.address();
+      if (addr && typeof addr === "object") {
+        const { port } = addr;
+        srv.close(() => res(port));
+      } else {
+        srv.close(() => rej(new Error("could not determine a free port")));
+      }
+    });
+  });
+}
+
+/**
+ * A free port for the faucet that is distinct from the RPC port AND the WebSocket port
+ * (`rpcPort + 1`, which the validator/web3.js use for confirmations). Retries until it
+ * lands clear of both.
+ */
+async function freeFaucetPort(rpcPort: number): Promise<number> {
+  for (let i = 0; i < 20; i++) {
+    const p = await freePort();
+    if (p !== rpcPort && p !== rpcPort + 1) return p;
+  }
+  throw new Error("could not find a faucet port clear of the RPC/WS ports");
+}
 
 /** The on-chain upgradeable BPF loader; ProgramData is a PDA of [programId] under it. */
 const BPF_LOADER_UPGRADEABLE = new PublicKey(
@@ -94,7 +128,11 @@ export const describeOnValidator: Mocha.SuiteFunction = (() => {
   const available = validatorAvailable();
   if (available) return describe;
   if (process.env.E2E_REQUIRE_VALIDATOR) {
-    return ((title: string, fn: (this: Mocha.Suite) => void) =>
+    // Validator required but unavailable: emit ONE clear failing test and do NOT register
+    // the real suite body. Calling `fn()` would register the suite's `before(startLocalValidator)`,
+    // and Mocha runs `before` hooks ahead of any `it` — so the boot would throw its own
+    // (less actionable) error first and mask this diagnostic.
+    return ((title: string, _fn: (this: Mocha.Suite) => void) =>
       describe(title, function () {
         it("requires a local validator (E2E_REQUIRE_VALIDATOR is set)", () => {
           throw new Error(
@@ -105,8 +143,6 @@ export const describeOnValidator: Mocha.SuiteFunction = (() => {
               `Build with \`anchor build\` (or set MERIDIAN_SO) and install the Solana CLI.`
           );
         });
-        // Still register the suite body so failures are obvious rather than empty.
-        fn.call(this);
       })) as unknown as Mocha.SuiteFunction;
   }
   return describe.skip;
@@ -119,15 +155,23 @@ export interface LocalValidator {
   readonly programId: PublicKey;
   readonly programData: PublicKey;
   readonly rpcUrl: string;
-  /** Stop the validator and remove its temp dirs. Idempotent. */
-  stop(): void;
+  /**
+   * Stop the validator and remove its temp dirs. Idempotent. **Await it** — it waits for
+   * the child to exit and the RPC port to stop responding before resolving, so the next
+   * boot can't collide with a still-shutting-down validator.
+   */
+  stop(): Promise<void>;
 }
 
 export interface StartLocalValidatorOptions {
   /** Lamports/SOL to airdrop the deployer (it pays for everything). Default 100 SOL. */
   deployerSol?: number;
-  /** Override the RPC URL (default 127.0.0.1:8899). */
-  rpcUrl?: string;
+  /**
+   * Fixed RPC port to bind. Default: an OS-assigned free port (so concurrent or
+   * back-to-back boots never collide). The validator is actually spawned on this port
+   * (`--rpc-port`), and the returned `rpcUrl` reflects it.
+   */
+  rpcPort?: number;
   /** Max ms to wait for the validator RPC to come up. Default 60s. */
   bootTimeoutMs?: number;
 }
@@ -165,7 +209,6 @@ async function waitFor<T>(
 export async function startLocalValidator(
   opts: StartLocalValidatorOptions = {}
 ): Promise<LocalValidator> {
-  const rpcUrl = opts.rpcUrl ?? DEFAULT_RPC;
   const deployerSol = opts.deployerSol ?? 100;
   const bootTimeoutMs = opts.bootTimeoutMs ?? 60_000;
 
@@ -184,14 +227,23 @@ export async function startLocalValidator(
     );
   }
 
-  // This harness binds the validator's default RPC port (8899). That makes two
-  // assumptions, both load-bearing:
-  //   1. Mocha runs spec files sequentially in one process (the default). Do NOT add
-  //      `--parallel` to the test script — parallel files would each boot a validator on
-  //      the same port and all but one would fail to bind.
-  //   2. No other validator is already on the port. A stale validator from a crashed prior
-  //      run would answer the RPC poll immediately, and we'd deploy onto its dirty ledger —
-  //      giving silently wrong results. Fail loudly instead of reusing a foreign validator.
+  // Each boot binds its own ports. Default to OS-assigned free ports so back-to-back boots
+  // (one per spec file) and even concurrent runs never collide — and so a still
+  // shutting-down validator from the previous file can't be mistaken for ours.
+  //
+  // IMPORTANT: solana-test-validator serves its PubSub WebSocket on `rpc-port + 1`, and
+  // web3.js derives that same WS endpoint for `confirmTransaction`. So the faucet must NOT
+  // sit on `rpc-port + 1` — that would clobber the WS port and every confirmation would
+  // hang. We reserve rpcPort, require rpcPort+1 (the WS port) to be free, and give the
+  // faucet a *separate*, non-adjacent free port.
+  const rpcPort = opts.rpcPort ?? (await freePort());
+  const faucetPort = await freeFaucetPort(rpcPort);
+  const rpcUrl = `http://127.0.0.1:${rpcPort}`;
+
+  // Guard against an existing validator on the chosen port: a stale process (or, with an
+  // explicit rpcPort, a foreign one) would answer the RPC poll, and we'd deploy onto its
+  // dirty ledger — silently wrong. Fail loudly. (With a dynamic port this is also a cheap
+  // sanity check that the just-freed port wasn't grabbed by something else.)
   const preexisting = await new Connection(rpcUrl, "confirmed")
     .getVersion()
     .then(() => true)
@@ -213,32 +265,53 @@ export async function startLocalValidator(
   writeFileSync(deployerPath, JSON.stringify(Array.from(deployer.secretKey)));
 
   // Detached + unref'd so a crashed test runner doesn't leave it attached to a dead
-  // parent's pipes; we kill it explicitly in stop().
-  const validator = spawn(
+  // parent's pipes; we kill it explicitly in stop(). Bound to our chosen ports.
+  const validator: ChildProcess = spawn(
     solanaBin("solana-test-validator"),
-    ["--reset", "--quiet", "--ledger", ledger],
+    [
+      "--reset",
+      "--quiet",
+      "--ledger",
+      ledger,
+      "--rpc-port",
+      String(rpcPort),
+      "--faucet-port",
+      String(faucetPort),
+    ],
     { stdio: "ignore", detached: true }
   );
   validator.unref();
 
-  let stopped = false;
-  const stop = () => {
-    if (stopped) return;
-    stopped = true;
-    if (validator.pid !== undefined) {
-      try {
-        process.kill(validator.pid, "SIGTERM");
-      } catch {
-        /* already gone */
+  // Resolves when the child has actually exited (so stop() can await it).
+  const exited = new Promise<void>((res) => {
+    validator.once("exit", () => res());
+    validator.once("error", () => res()); // failed spawn → treat as "not running"
+  });
+
+  let stopped: Promise<void> | undefined;
+  const stop = (): Promise<void> => {
+    if (stopped) return stopped;
+    stopped = (async () => {
+      if (validator.pid !== undefined && validator.exitCode === null) {
+        try {
+          process.kill(validator.pid, "SIGTERM");
+        } catch {
+          /* already gone */
+        }
+        // Wait for the process to exit AND the RPC port to stop answering, so the next
+        // boot's preexisting-RPC guard doesn't trip on our own dying validator.
+        await Promise.race([exited, delay(10_000)]);
+        await waitForPortFree(rpcUrl, 10_000);
       }
-    }
-    for (const dir of [ledger, work]) {
-      try {
-        rmSync(dir, { recursive: true, force: true });
-      } catch {
-        /* best effort */
+      for (const dir of [ledger, work]) {
+        try {
+          rmSync(dir, { recursive: true, force: true });
+        } catch {
+          /* best effort */
+        }
       }
-    }
+    })();
+    return stopped;
   };
 
   // If the child fails to spawn at all (e.g. binary not found), surface it AND clean up —
@@ -296,16 +369,36 @@ export async function startLocalValidator(
 
     return { connection, deployer, programId, programData, rpcUrl, stop };
   } catch (e) {
-    stop();
+    await stop();
     throw e;
+  }
+}
+
+/** Resolve after `ms`. */
+function delay(ms: number): Promise<void> {
+  return new Promise((res) => setTimeout(res, ms));
+}
+
+/** Poll until nothing answers RPC at `rpcUrl` (the validator has fully released the port). */
+async function waitForPortFree(
+  rpcUrl: string,
+  timeoutMs: number
+): Promise<void> {
+  const start = Date.now();
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const answering = await new Connection(rpcUrl, "confirmed")
+      .getVersion()
+      .then(() => true)
+      .catch(() => false);
+    if (!answering) return;
+    if (Date.now() - start > timeoutMs) return; // best effort; don't hang teardown forever
+    await delay(250);
   }
 }
 
 /** Read a Solana CLI keypair file (JSON byte array) and return its public key. */
 function programIdFromKeypairFile(path: string): PublicKey {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const bytes = JSON.parse(
-    require("node:fs").readFileSync(path, "utf8")
-  ) as number[];
+  const bytes = JSON.parse(readFileSync(path, "utf8")) as number[];
   return Keypair.fromSecretKey(Uint8Array.from(bytes)).publicKey;
 }

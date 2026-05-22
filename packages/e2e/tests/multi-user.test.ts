@@ -46,7 +46,9 @@ describeOnValidator("multi-user maker/taker scenario", function () {
     fx = await Fixture.bootstrap(validator);
   });
 
-  after(() => validator?.stop());
+  after(async () => {
+    await validator?.stop();
+  });
 
   it("maker quotes, taker fills, settle, both redeem to the right USDC", async () => {
     const market = await fx.createMarket({

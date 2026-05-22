@@ -49,7 +49,9 @@ describeOnValidator("four trade paths on one book", function () {
     maker = await fx.newUser(200);
   });
 
-  after(() => validator?.stop());
+  after(async () => {
+    await validator?.stop();
+  });
 
   /** Maker rests a resting ask (SELL Yes) of `size` at `price`. Maker must hold Yes. */
   async function makerRestsAsk(market: MarketId, price: BN, size: BN) {
