@@ -16,6 +16,7 @@ packages/web/playwright-report
 packages/web/test-results
 packages/web/.env.local
 packages/web/tsconfig.tsbuildinfo
+packages/web/e2e/.localnet.json
 
 # Ignore build output, but keep the canonical program keypair committed so the
 # program ID is reproducible across clones/worktrees. Without this, every fresh

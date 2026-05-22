@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "pretest:e2e": "yarn workspace @meridian/sdk build",
     "test:e2e": "playwright test"
   },
   "dependencies": {

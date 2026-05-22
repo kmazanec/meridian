@@ -125,12 +125,13 @@ Build chunks (test-first; each ends in a tickable item):
   all state-changing actions via wallet `sendTransaction`; brand-styled tx-status
   toasts. Tests: connected/disconnected gate; action triggers `sendTransaction` with
   SDK-built ixs (mocked adapter).
-- [ ] **9. Playwright e2e vs local validator** — boot `solana-test-validator` with
-  `target/deploy/meridian.so` + Pyth Receiver, seed Config+market+book via SDK
-  builders, fund a generated keypair (SOL+USDC), run the app with an injected keypair
-  adapter, drive a browser: connect → mint/Buy Yes → Buy No → Sell Yes → Sell No →
-  (admin settle) → redeem. Gated for local + CI; if flaky in CI, stays runnable
-  locally and is documented as the manual-verification path (honestly noted).
+- [x] **9. Playwright e2e vs local validator** — boot `solana-test-validator`, deploy
+  the program upgradeably, seed Config + markets + order books + a funded wallet via SDK
+  builders, run the app with an injected keypair adapter, and drive a real Chromium:
+  connect → Buy Yes → Sell Yes → Buy No → Sell No → portfolio → redeem (pre-settled
+  winner) → history. **Passes locally** against the real program. Runs locally /
+  manually (the CI Node image has no `solana-test-validator`); the unit suite + typecheck
+  run in CI.
 - [ ] **10. Adversarial review + triage** — independent subagent
   (robustness/efficiency/security); fix high/medium, re-run suite, record lows below.
 
@@ -342,3 +343,36 @@ Build chunks (test-first; each ends in a tickable item):
   `TradePanel` contract test (action → built instructions → `onSubmit`), this closes the
   loop "each user action maps via the SDK to the correct on-chain action(s) and is signed
   by the wallet." `ConnectGate` is RTL-tested (gated vs connected).
+
+### Chunk 9 — Playwright e2e against a local validator
+
+- **Provisioning** (`e2e/setup/localnet.mjs`): boots `solana-test-validator`, deploys the
+  program **upgradeably** (`solana program deploy` — a ProgramData account with the
+  deployer as upgrade authority is required by `initialize_config`), then via the SDK's
+  own builders: `initialize_config`, a mock USDC mint, three markets + order books, and a
+  funded test wallet. It writes `e2e/.localnet.json` (addresses + the wallet secret + the
+  validator PID). Verified end-to-end (~17 s).
+- **Injected wallet** (`e2eWallet.ts`): a keypair `BaseSignerWalletAdapter` registered
+  only when `NEXT_PUBLIC_E2E=1`; the spec injects the funded secret into `localStorage`
+  and pre-selects it so `autoConnect` connects without an extension.
+- **The spec drives a real Chromium** through connect → the four trade paths → portfolio
+  → redeem → history, asserting a confirmed transaction at each trade and the redeem.
+  **Result: passing.**
+- **Findings surfaced by building the e2e (real, not test-only):**
+  - *Inventory + the position guard shape the demo flow.* Sell Yes/Sell No must **escrow
+    real tokens**, so a wallet with no inventory can't sell (the program correctly rejects
+    with `insufficient funds`). And the position-constraint guard blocks acquiring the
+    opposite side while holding one. So the e2e runs **Yes-side paths on a Yes-funded
+    market and No-side paths on a separate No-funded market**, pre-funding single-side
+    inventory in setup (mint pairs, move the unwanted side to the deployer). This is the
+    realistic shape of the four-button UX, not a test hack.
+  - *Settlement is an admin/automation action, not a user action.* The browser drives
+    **redeem**; setup performs `admin_settle` (deployer = admin, on a market whose
+    `trading_day` is past the 1 h override delay) so a redeemable winning position exists.
+  - *jsdom vs real browser (confirms the chunk-5 finding):* ATA derivation works in the
+    real Chromium — only jsdom lacked the curve primitive.
+- **CI:** the unit suite + both packages' typecheck run in `lint-ts` (Node image). The
+  validator-backed e2e is **not** in CI (no `solana-test-validator` in that image); it is
+  the documented local/manual browser-verification gate, as the plan anticipated. Running
+  it: `yarn workspace @meridian/web test:e2e` (needs a built `target/deploy/meridian.so`;
+  in a worktree without one, `MERIDIAN_SO=/path/to/meridian.so yarn … test:e2e`).

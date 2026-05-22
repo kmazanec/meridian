@@ -185,6 +185,12 @@ lint-ts:
     paths:
       - .yarn-cache/
   script:
+    # One Node job for the whole off-chain workspace: shared lint, then each package's
+    # typecheck + tests. The SDK's LiteSVM suite is skipped in CI (SDK_SKIP_LITESVM=1 —
+    # native litesvm leak OOMs the small runner); its pure tests still run, and the full
+    # LiteSVM suite runs locally. The web app's Playwright e2e is NOT here — it needs
+    # solana-test-validator (absent from the Node image); it runs locally / as the
+    # documented manual browser-verification gate (see docs/features/08-frontend.md).
     - >-
       run_in_docker node:20
       'export YARN_ENABLE_GLOBAL_CACHE=false YARN_CACHE_FOLDER=/build/.yarn-cache
@@ -195,7 +201,9 @@ lint-ts:
       && corepack yarn@4.10.2 workspace @meridian/sdk build
       && corepack yarn@4.10.2 workspace @meridian/sdk test
       && corepack yarn@4.10.2 workspace @meridian/automation typecheck
-      && corepack yarn@4.10.2 workspace @meridian/automation test'
+      && corepack yarn@4.10.2 workspace @meridian/automation test
+      && corepack yarn@4.10.2 workspace @meridian/web typecheck
+      && corepack yarn@4.10.2 workspace @meridian/web test'
 
 # Cursor code + security review (see the `include:` near the top). Inherits the
 # template's cursor-review runner tag, cursor-ci image, rules (manual on MRs),
