@@ -22,8 +22,13 @@ VALIDATOR_LEDGER := $(LOCALNET_DIR)/ledger
 LOCAL_DEPLOYER   := $(LOCALNET_DIR)/deployer.json
 LOCAL_RPC        := http://127.0.0.1:8899
 
-# Default mock closes for the local demo markets (override by exporting your own).
-LOCAL_MOCK_CLOSES := MOCK_CLOSE_META=680 MOCK_CLOSE_AAPL=190 MOCK_CLOSE_NVDA=120
+# Default mock closes for the local demo markets — one per MAG7 ticker so `make dev` creates
+# markets for all seven (each close drives that ticker's ±3/6/9% strikes). Override by passing
+# your own on the command line, e.g. `make dev LOCAL_MOCK_CLOSES="MOCK_CLOSE_META=700"`.
+# (The seeded demo wallet is still stocked only for META/AAPL/NVDA — see devStack.ts; the
+# other markets are created and tradable, just without pre-funded demo inventory.)
+LOCAL_MOCK_CLOSES := MOCK_CLOSE_AAPL=190 MOCK_CLOSE_MSFT=420 MOCK_CLOSE_GOOGL=170 \
+	MOCK_CLOSE_AMZN=185 MOCK_CLOSE_NVDA=120 MOCK_CLOSE_META=680 MOCK_CLOSE_TSLA=340
 
 .DEFAULT_GOAL := help
 .PHONY: help dev stop demo deploy bootstrap create-markets lifecycle \
