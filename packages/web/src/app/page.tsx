@@ -1,19 +1,18 @@
-import Link from "next/link";
-import { Button } from "@/components/ui";
+"use client";
 
-// Placeholder home; the full Landing experience is built in a later chunk.
+import dynamic from "next/dynamic";
+import { useMarkets } from "@/lib/useChain";
+import { useTickerPrices } from "@/lib/useTickerPrices";
+import { LandingView } from "@/components/landing/LandingView";
+
+const WalletMultiButton = dynamic(
+  () =>
+    import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
+  { ssr: false }
+);
+
 export default function HomePage() {
-  return (
-    <section className="py-16 text-center">
-      <h1 className="font-serif text-4xl text-fg">Meridian</h1>
-      <p className="mt-3 text-fg-dim">
-        One book. Four actions. Two perspectives.
-      </p>
-      <div className="mt-8">
-        <Link href="/markets">
-          <Button variant="accent">View markets</Button>
-        </Link>
-      </div>
-    </section>
-  );
+  const { data: markets } = useMarkets();
+  const prices = useTickerPrices(markets ?? []);
+  return <LandingView prices={prices} connect={<WalletMultiButton />} />;
 }

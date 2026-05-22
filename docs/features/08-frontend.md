@@ -100,7 +100,7 @@ Build chunks (test-first; each ends in a tickable item):
   `useOrderBook` (→ `dualBook`), `useUserPositions`, `priceFromBook`. Pure helpers
   (`format.ts`/`market-math.ts`: price/mid, P&L, 4 PM ET countdown, formatting)
   unit-tested directly.
-- [ ] **3. Landing + Markets pages** — Landing: explainer (brand voice), live prices,
+- [x] **3. Landing + Markets pages** — Landing: explainer (brand voice), live prices,
   connect CTA. Markets: 7 stocks with live price + active contract count. RTL tests
   against mocked hooks.
 - [ ] **4. Trade page — book (both perspectives) + strike list + payoff/countdown** —
@@ -211,3 +211,31 @@ Build chunks (test-first; each ends in a tickable item):
   reimplements an ET/DST calendar). A `dualbook.test` pins the SDK's dual-perspective
   contract the UI leans on (best Yes bid + best No ask = `PRICE_SCALE`, sizes
   preserved) so a regression in that projection trips here too.
+
+### Chunk 3 — Landing + Markets pages
+
+- **Presentational/wrapper split.** Each page is a thin `"use client"` wrapper that
+  wires hooks to a pure presentational component (`LandingView`, `MarketsView`) taking
+  data props. The views render identically in tests (RTL, no provider) and against
+  live RPC; the connect-wallet control is *injected* into `LandingView` so it tests
+  without the wallet context.
+- **Markets** renders all 7 MAG7 tickers (always — even with no markets yet), each with
+  its live Yes price + implied probability and its **active (open) contract count**,
+  linking to `/trade/<SYMBOL>`. **Live prices** come from `useTickerPrices`, which reads
+  **one representative open market per ticker** (the median strike — closest to a
+  coin-flip, usually most liquid) and takes the book mid. That bounds the page to ~7
+  book reads instead of one per strike; selection is pure and unit-tested.
+- **Landing** states the pitch in the brand voice ("One book. Four actions. Two
+  perspectives.", `Yes + No = $1.00`), a live-price strip, connect CTA, and three
+  value props (non-custodial / four-buttons-one-book / settles-at-close).
+- **Finding (build-time, affects every consumer incl. F-07/F-09) → `webpack.IgnorePlugin`.**
+  The SDK barrel does `export * from "./pyth"`, and although the Pyth helpers
+  *lazy-load* their optional peer deps (`await import("@pythnetwork/...")` at call
+  time), a **bundler still statically resolves** those dynamic specifiers and their
+  transitive deps (`axios`, `rpc-websockets`) at build time — which aren't installed
+  (they're optional). The frontend never settles, so it never calls them; `next.config`
+  adds an `IgnorePlugin` for `@pythnetwork/hermes-client` + `@pythnetwork/pyth-solana-receiver`
+  so the production build doesn't try to resolve genuinely-absent, never-executed
+  modules. (Runtime is already safe via the SDK's `.catch()`; this is purely the
+  bundler's resolution graph.) Any other bundler-based consumer of `@meridian/sdk` that
+  doesn't settle will hit the same and needs the same ignore — noted for F-09/F-10.
