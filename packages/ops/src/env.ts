@@ -81,10 +81,12 @@ function loadDeployerKeypair(env: Env): Keypair {
   }
 
   // A path: read the file and parse its JSON byte array.
-  // Heuristic: anything containing a path separator, a leading ~, or an existing file is a
-  // path. We also try the filesystem before falling back to base58 so a bare filename works.
+  // Heuristic: a path separator, a leading `~`, or a `.json` suffix. We deliberately do NOT
+  // treat a bare existing-filename as a path: a base58 secret key (no `/`, ~88 chars) could
+  // otherwise collide with a same-named file in the CWD and be read as the wrong "keypair".
+  // Path-like values always carry one of these markers; a base58 secret carries none.
   const looksLikePath =
-    raw.includes("/") || raw.startsWith("~") || existsSync(expandHome(raw));
+    raw.includes("/") || raw.startsWith("~") || raw.endsWith(".json");
   if (looksLikePath) {
     const path = expandHome(raw);
     if (!existsSync(path)) {
@@ -174,12 +176,40 @@ function parsePubkey(value: string, key: string): PublicKey {
 /** Derive a human cluster label from an RPC URL (overridden by `CLUSTER`). */
 function clusterLabel(rpcUrl: string, override?: string): string {
   if (override && override.trim().length > 0) return override.trim();
+  if (isLocalRpc(rpcUrl)) return "localnet";
   const u = rpcUrl.toLowerCase();
   if (u.includes("devnet")) return "devnet";
   if (u.includes("testnet")) return "testnet";
   if (u.includes("mainnet")) return "mainnet-beta";
-  if (u.includes("127.0.0.1") || u.includes("localhost")) return "localnet";
-  return "localnet";
+  // Deliberately NOT "localnet": an unrecognized endpoint (e.g. a private/staging node) is
+  // unknown, not local. Defaulting it to "localnet" would let the local-only `dev-up` guard
+  // (which now checks the RPC host, not this label) be fooled — see isLocalRpc.
+  return "unknown";
+}
+
+/**
+ * True only for an RPC that is unambiguously a LOCAL validator (loopback host). This is the
+ * authoritative check for the `dev-up` safety guard — it inspects the actual RPC host rather
+ * than the cosmetic cluster label, so a private/non-standard remote URL can never be mistaken
+ * for local and trigger an airdrop/mock-mint against a real cluster. Parses the URL so a
+ * substring like "localhost" inside a path/query can't grant local status.
+ */
+export function isLocalRpc(rpcUrl: string): boolean {
+  let host: string;
+  try {
+    host = new URL(rpcUrl).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  // URL.hostname keeps IPv6 brackets (e.g. "[::1]"); strip them for the comparison.
+  if (host.startsWith("[") && host.endsWith("]")) host = host.slice(1, -1);
+  return (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "0.0.0.0" ||
+    host === "::1" ||
+    host.endsWith(".localhost")
+  );
 }
 
 /** Parse a comma-separated TICKERS list (symbols) into ordinals; default = full MAG7. */

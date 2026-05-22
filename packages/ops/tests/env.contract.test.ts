@@ -10,7 +10,7 @@ import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { Keypair } from "@solana/web3.js";
-import { loadOpsEnv, DEFAULT_LOCAL_RPC } from "../src/env";
+import { loadOpsEnv, isLocalRpc, DEFAULT_LOCAL_RPC } from "../src/env";
 
 /** A minimal valid env: a deployer keypair (inline JSON byte array) + an RPC. */
 function baseEnv(
@@ -54,6 +54,30 @@ describe("ops env (contract)", () => {
     const kp = Keypair.generate();
     const cfg = loadOpsEnv(baseEnv({ DEPLOYER_KEYPAIR: enc(kp.secretKey) }));
     expect(cfg.deployer.publicKey.toBase58()).to.equal(kp.publicKey.toBase58());
+  });
+
+  it("treats a base58 secret as base58 even if a same-named file exists in CWD", () => {
+    // Regression: the path heuristic must require a path marker (/, ~, .json) — a base58
+    // secret (no marker) must never be read as a file just because the name collides on disk.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const bs58 = require("bs58");
+    const enc = (bs58.default ?? bs58).encode;
+    const kp = Keypair.generate();
+    const b58 = enc(kp.secretKey);
+    const prevCwd = process.cwd();
+    const dir = mkdtempSync(resolve(tmpdir(), "ops-collide-"));
+    try {
+      // Create a file in CWD whose name is exactly the base58 secret (no extension).
+      writeFileSync(resolve(dir, b58), "junk-not-a-keypair");
+      process.chdir(dir);
+      const cfg = loadOpsEnv(baseEnv({ DEPLOYER_KEYPAIR: b58 }));
+      expect(cfg.deployer.publicKey.toBase58()).to.equal(
+        kp.publicKey.toBase58()
+      );
+    } finally {
+      process.chdir(prevCwd);
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("defaults RPC_URL to the local validator endpoint when unset", () => {
@@ -101,6 +125,31 @@ describe("ops env (contract)", () => {
         baseEnv({ RPC_URL: "https://api.devnet.solana.com", CLUSTER: "custom" })
       ).cluster
     ).to.equal("custom");
+  });
+
+  it("labels an unrecognized remote RPC 'unknown', NOT 'localnet'", () => {
+    // A private/non-standard node must not be mislabeled local (that would fool dev-up's guard).
+    expect(
+      loadOpsEnv(baseEnv({ RPC_URL: "https://rpc.example-staging.io/x" }))
+        .cluster
+    ).to.equal("unknown");
+    expect(
+      loadOpsEnv(baseEnv({ RPC_URL: "http://10.0.1.5:8899" })).cluster
+    ).to.equal("unknown");
+  });
+
+  it("isLocalRpc accepts only genuine loopback hosts (the dev-up safety guard)", () => {
+    expect(isLocalRpc("http://127.0.0.1:8899")).to.equal(true);
+    expect(isLocalRpc("http://localhost:8899")).to.equal(true);
+    expect(isLocalRpc("http://[::1]:8899")).to.equal(true);
+    // Remote / private / tricky URLs must NOT pass.
+    expect(isLocalRpc("https://api.devnet.solana.com")).to.equal(false);
+    expect(isLocalRpc("http://10.0.1.5:8899")).to.equal(false);
+    expect(isLocalRpc("https://rpc.example.com/?host=localhost")).to.equal(
+      false
+    );
+    expect(isLocalRpc("https://localhost.evil.com")).to.equal(false);
+    expect(isLocalRpc("not-a-url")).to.equal(false);
   });
 
   it("parses per-ticker mock closes (dollars) into base units, default empty", () => {

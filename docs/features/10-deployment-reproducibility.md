@@ -111,9 +111,53 @@ validator → deploy → init config + USDC → create markets → seed demo wal
   (install toolchain, create+fund a devnet keypair, `.env`, the four `make *-devnet` targets,
   explorer viewing, live-Pyth opt-in vs admin-override, troubleshooting table); updated
   `docs/local-development.md` with the `make dev` flow + ops repro test. (AC#1, AC#5)
-- [ ] **Adversarial review** — robustness/efficiency/security-integrity; fix high/medium;
-  record lows for the user.
+- [x] **Adversarial review** — robustness/efficiency/security-integrity; high/medium fixed
+  (see "Adversarial review" below); lows recorded for the user. **Green after fixes: 43 ops
+  tests (incl. validator-backed repro).**
 - [ ] **Rebase, push, open MR.**
+
+## Adversarial review
+
+An independent review subagent attacked the ops scripts for robustness, efficiency, and —
+most relevant here — security/secret-handling and the *integrity of the reproducibility proof*
+(could a green run hide a real bug?). It verified claims against the program/SDK source and
+self-retracted one initial finding (the taker `makerAccountsFor` side, confirmed correct
+against the crossing contract test). **Fixed (high/medium):**
+
+- **Lifecycle invariants were logged, not asserted (HIGH/integrity).** The zero-sum P&L and
+  vault-drain checks printed `yes`/`NO` but did not `throw`, so a payout bug could exit 0 with
+  `zero-sum: NO` in the transcript — undermining "a green run is the proof." Both are now hard
+  assertions (`makerPnl + takerPnl === 0`, `vaultRemaining === 0`) that throw on violation, on
+  top of the per-phase `assertCollateralization`. The repro test relies on this.
+- **`dev-up` local-only guard was bypassable (HIGH/security).** It checked the *derived cluster
+  label*, and `clusterLabel` defaulted any unrecognized RPC (e.g. a private node with no
+  "devnet" in the URL) to `"localnet"` — so `dev-up` could airdrop + mint mock USDC against a
+  real cluster. Fixed two ways: `clusterLabel` now returns `"unknown"` (not `"localnet"`) for
+  unrecognized endpoints, and the guard now uses a new `isLocalRpc(rpcUrl)` that parses the URL
+  and accepts *only* genuine loopback hosts (`127.0.0.1`/`localhost`/`::1`). Tested against
+  tricky URLs (`?host=localhost`, `localhost.evil.com`, IPv6).
+- **Keypair path heuristic could misread a base58 secret (MEDIUM).** `looksLikePath` treated
+  any string matching an existing CWD filename as a path, so a base58 secret colliding with a
+  local filename would be read as the wrong "keypair." Tightened to require a real path marker
+  (`/`, `~`, or `.json`); a base58 secret carries none. Regression test added.
+- **Deprecated airdrop confirm (MEDIUM).** `devStack` confirmed the demo-wallet airdrop with
+  the deprecated bare-signature form (can miss a dropped tx on a busy validator); switched to
+  the `{ blockhash, lastValidBlockHeight }` form.
+
+The HIGH "deployer secret written to a temp file for the CLI" was assessed and **kept as-is**:
+it is the *same accepted pattern as the existing F-09 e2e harness* (the Solana CLI requires a
+keypair *file*), the temp dir is `mkdtemp` mode-0700, and the file is removed in a `finally`.
+Noted as a known constraint rather than a new vulnerability.
+
+### Low-severity findings (deferred — for the user to decide)
+
+- `baseUnitsToDollars` truncates (not rounds) to 2 decimals in *log output only* — the
+  on-chain value is exact; cosmetic.
+- `Makefile` `stop`'s `pkill` fallback pattern uses the relative ledger path; only matters if
+  the pid file is missing *and* `make stop` is run from another directory. The pid-based kill
+  is the normal path.
+- `deploy.ts` `programIdFromKeypairFile` uses an inline `require("node:fs")` rather than the
+  top-level import (style nit; mirrors an existing pattern in the codebase).
 
 ## Implementation notes (filled in by the building agent)
 

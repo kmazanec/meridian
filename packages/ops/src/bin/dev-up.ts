@@ -11,7 +11,7 @@
  */
 
 import { configPda } from "@meridian/sdk";
-import { loadOpsEnv } from "../env";
+import { loadOpsEnv, isLocalRpc } from "../env";
 import { createConsoleLog } from "../log";
 import { deployProgram, solanaCliAvailable } from "../deploy";
 import { bootstrap } from "../bootstrap";
@@ -24,11 +24,15 @@ async function main(): Promise<void> {
   const log = createConsoleLog();
   log.section("Dev stack up (localnet)");
 
-  if (env.cluster !== "localnet") {
+  // Guard on the RPC HOST, not the (cosmetic) cluster label: dev-up airdrops + mints mock
+  // USDC, which must never hit a real cluster. A private/non-standard remote URL whose label
+  // doesn't say "devnet" must still be refused — isLocalRpc requires a genuine loopback host.
+  if (!isLocalRpc(env.rpcUrl)) {
     throw new Error(
-      `dev-up is local-only (it airdrops + mints mock USDC). RPC_URL "${env.rpcUrl}" ` +
-        `resolves to cluster "${env.cluster}". For devnet use the deploy/bootstrap/` +
-        `create-markets/lifecycle steps directly (see docs/devnet-deployment.md).`
+      `dev-up is local-only (it airdrops + mints mock USDC) and refuses any non-loopback RPC. ` +
+        `RPC_URL "${env.rpcUrl}" is not a local validator (expected 127.0.0.1/localhost). ` +
+        `For devnet use the deploy/bootstrap/create-markets/lifecycle steps directly ` +
+        `(see docs/devnet-deployment.md).`
     );
   }
   if (!solanaCliAvailable()) {

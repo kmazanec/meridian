@@ -239,15 +239,32 @@ export async function runLifecycle(
   const makerPnl = makerEndUsdc - makerStartUsdc;
   const takerPnl = takerEndUsdc - takerStartUsdc;
 
+  // Hard-assert the end-state invariants — a green run must MEAN the invariants held, so these
+  // throw (not just log). Payout completeness (§7.2): value is conserved between the two
+  // parties (zero-sum), and every winning token was paid from the vault and only the vault
+  // (the vault drains to exactly 0 once all winners redeem). `assertCollateralization` above
+  // already enforces the vault==accounting identity at each phase; these make the lifecycle's
+  // own success criteria explicit failures rather than transcript notes.
+  if (makerPnl + takerPnl !== 0n) {
+    throw new Error(
+      `zero-sum invariant violated: maker ${makerPnl} + taker ${takerPnl} != 0`
+    );
+  }
+  if (vaultRemaining !== 0n) {
+    throw new Error(
+      `vault did not drain to zero after all winners redeemed: ${vaultRemaining} base units remain`
+    );
+  }
+
   log?.section("Lifecycle: result");
   log?.detail("outcome", settled.outcome);
   log?.detail("maker P&L", signedDollars(makerPnl));
   log?.detail("taker P&L", signedDollars(takerPnl));
+  log?.detail("zero-sum", "yes (✓ asserted)");
   log?.detail(
-    "zero-sum",
-    (makerPnl + takerPnl).toString() === "0" ? "yes (✓)" : "NO"
+    "vault remaining",
+    `${signedDollars(vaultRemaining)} (drained ✓)`
   );
-  log?.detail("vault remaining", `${signedDollars(vaultRemaining)} (drained)`);
   log?.ok("Lifecycle complete — invariants held at every phase");
 
   return {

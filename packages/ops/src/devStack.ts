@@ -118,7 +118,17 @@ export async function seedDevStack(
     wallet.publicKey,
     10 * LAMPORTS_PER_SOL
   );
-  await connection.confirmTransaction(airdropSig, "confirmed");
+  // Confirm with the blockhash form (the bare-signature form is deprecated and can return
+  // without catching a dropped tx on a busy validator).
+  const bh = await connection.getLatestBlockhash("confirmed");
+  await connection.confirmTransaction(
+    {
+      signature: airdropSig,
+      blockhash: bh.blockhash,
+      lastValidBlockHeight: bh.lastValidBlockHeight,
+    },
+    "confirmed"
+  );
   const walletUsdc = await getOrCreateAssociatedTokenAccount(
     connection,
     opts.deployer,
