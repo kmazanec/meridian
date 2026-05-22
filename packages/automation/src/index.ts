@@ -84,3 +84,16 @@ export {
   type PythSettlerOptions,
   type SettleWithPythFn,
 } from "./settler";
+export { loadKeypairFromEnv, AUTOMATION_KEYPAIR_ENV } from "./keypair";
+export {
+  loadConfig,
+  PriceSourceKind,
+  ENV_KEYS,
+  type AutomationConfig,
+} from "./config";
+export {
+  buildRuntime,
+  morningDeps,
+  settlementDeps,
+  type Runtime,
+} from "./runtime";

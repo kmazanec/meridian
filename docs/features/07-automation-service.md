@@ -64,6 +64,32 @@ Wave 4, parallel with the frontend (F-08). Off the single longest critical path
   price source if an external API is used. Configure the alert channel (e.g. a
   webhook) for failure notifications.
 
+### Environment variables this service reads (for F-10's `.env.example`)
+
+The single source of truth is `ENV_KEYS` in `packages/automation/src/config.ts`. Summary:
+
+**Required:**
+- `AUTOMATION_KEYPAIR` — the funded automation keypair *secret*, as a JSON byte array (the
+  Solana CLI keypair file contents) **or** a base58 secret key. Never committed; mask it in
+  CI. The keypair signs only permissioned instructions and pays fees (ADR-005).
+- `RPC_URL` — the Solana RPC endpoint for the target cluster.
+- `USDC_MINT` — the collateral mint pubkey (matches `Config.usdc_mint`).
+
+**Optional:**
+- `PRICE_SOURCE` — `mock` (default) or `pyth`.
+- `MOCK_CLOSE_<SYMBOL>` (e.g. `MOCK_CLOSE_META=680`) — mock previous close in dollars
+  (used by the mock source; lets the demo run without market hours).
+- `FEED_<SYMBOL>` (e.g. `FEED_META=0x…`) — per-ticker Pyth hex feed id; required for the
+  `pyth` source and the settlement path. Must equal `Config.tickers[].feed_id`.
+- `TICKERS` — comma list of symbols to run (default all MAG7).
+- `ALERT_WEBHOOK_URL` — failure alerts POST here (default: log-only).
+- `HERMES_URL` — Pyth Hermes endpoint override.
+- `INCLUDE_CLOSE` — `1`/`true` to also create the at-the-money (rounded-close) strike.
+
+**Scheduling:** there is no resident scheduler. Run `meridian-run-morning` (~8 AM ET) and
+`meridian-run-settlement` (~4:05 PM ET) from an external cron / systemd timer / CI schedule
+(F-10's deployment layer). Each exits non-zero on a failed run so the scheduler can detect it.
+
 ## Implementation plan (approved)
 
 Confirmed with the user before building:
@@ -101,7 +127,7 @@ Build chunks (test-first; each ends in a tickable item):
 - [x] **6. Settlement job** (`settlementJob.ts`) — discover open markets past close →
   settle (idempotent no-op on re-settle); wide-confidence → retry loop → admin alert for
   `admin_settle`. Mocked-chain orchestration tests.
-- [ ] **7. CLI entrypoints + keypair/secret loading** (`bin/*`, `keypair.ts`, `config.ts`)
+- [x] **7. CLI entrypoints + keypair/secret loading** (`bin/*`, `keypair.ts`, `config.ts`)
   — `run-morning`/`run-settlement` parse env, load the keypair from an env secret, exit
   non-zero on failure. Tests: rejects missing/empty secret; config validation. Document
   env vars for F-10's `.env.example`.
@@ -234,3 +260,19 @@ Build chunks (test-first; each ends in a tickable item):
   human-in-the-loop). One market's failure never aborts the rest.
 - **Trust boundary held:** the job's only chain write is the permissionless `settle_market`.
   The admin override is an alert, never an automatic privileged call.
+
+### Chunk 7 — CLI entrypoints, keypair/secret loading, config
+
+- **Keypair from an env secret only** (`AUTOMATION_KEYPAIR`): JSON byte array (Solana CLI
+  format) or base58. The loader is strict — missing/empty/malformed/wrong-length throws a
+  clear error; it **never reads a file path** (a path-looking value is a malformed secret).
+  Verified end-to-end: `meridian-run-morning` with no secret exits 1 with a clear,
+  non-leaking message.
+- **`config.ts`** parses + validates all env into a typed `AutomationConfig`; `ENV_KEYS` is
+  the documented contract for F-10's `.env.example` (mirrored in "Manual setup" above).
+  Mock closes are parsed as exact dollar values into base units; the $10 strike snapping
+  happens later in `computeStrikes`.
+- **`runtime.ts`** wires config → concrete deps (connection, `RpcChainClient`, price source,
+  provisioner/discovery, settler, alerter, logger). The `bin/*` entrypoints stay thin: parse
+  env, build runtime, run once, **exit non-zero on a failed/alerting run** so an external
+  scheduler detects it (the CLI-only scheduling decision — no resident cron here).
