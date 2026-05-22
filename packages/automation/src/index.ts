@@ -13,3 +13,13 @@ export {
   STRIKE_ROUND_DOLLARS,
   type ComputeStrikesOptions,
 } from "./strikes";
+export {
+  isTradingDay,
+  isHalfDay,
+  isHoliday,
+  isWeekend,
+  closeInstant,
+  sessionForDate,
+  etParts,
+  type SessionInfo,
+} from "./calendar";

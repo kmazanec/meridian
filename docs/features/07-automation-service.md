@@ -89,7 +89,7 @@ Build chunks (test-first; each ends in a tickable item):
 - [x] **2. Strike algorithm** (`strikes.ts`) — ±3/6/9% of prev close, round to nearest
   $10, dedupe, integer/fixed-point. Tests: META-style spread, AAPL-style collapse,
   optional rounded-close, no floats.
-- [ ] **3. Market calendar** (`calendar.ts`) — weekend/holiday/half-day; DST-aware ET→unix;
+- [x] **3. Market calendar** (`calendar.ts`) — weekend/holiday/half-day; DST-aware ET→unix;
   `closeInstant()` = 4:00 PM ET (1:00 PM half-days) = `trading_day`. Tests across DST,
   holiday, half-day, weekend.
 - [ ] **4. PriceSource + Alerter + logger + retry** — interfaces + impls (Pyth + mock
@@ -151,3 +151,23 @@ Build chunks (test-first; each ends in a tickable item):
   collapse to fewer unique strikes (the AAPL case) naturally via the dedupe — verified by
   test. Any leg rounding to $0 (only possible near zero) is dropped, never emitted as a
   meaningless $0 strike.
+
+### Chunk 3 — market calendar (DST-aware timing, off-chain per ADR-005)
+
+- **No timezone library.** DST-correct ET→unix conversion is derived from the platform's
+  IANA `America/New_York` zone via `Intl.DateTimeFormat` (built into Node, zero deps): the
+  ET UTC offset for an instant is read live (`GMT-4`/`GMT-5`), so EDT/EST and any future
+  rule change are handled without hand-coded transition rules. Holiday/weekend dates are
+  computed in ET calendar terms so a run from any host timezone resolves the same session.
+- **`closeInstant(date)` = `Market.trading_day`** — the 4:00 PM ET close instant as whole
+  unix seconds (1:00 PM ET on half-days). This is the load-bearing cross-cutting value:
+  the program gates `now >= trading_day` with a single integer compare (F-04 sub-contract).
+  A single offset-correction step suffices because 13:00/16:00 ET never falls in the 2 AM
+  DST transition window.
+- **Holidays covered:** fixed-date (New Year, Juneteenth, Independence, Christmas) with
+  Sat→Fri / Sun→Mon NYSE observance; floating (MLK, Presidents', Memorial, Labor,
+  Thanksgiving); and Good Friday via a Gregorian-computus Easter calc. **Half-days:** the
+  Friday after Thanksgiving, July 3, and Christmas Eve (the recurring three). The
+  holiday/half-day table is computed, not a static list, but NYSE occasionally varies
+  (one-off closures, ad-hoc half-days) — a documented, bounded demo limitation; the
+  `admin_settle` fallback covers any mis-classified session.
