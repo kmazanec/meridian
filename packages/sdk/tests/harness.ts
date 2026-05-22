@@ -70,8 +70,24 @@ function builderProvider(): MeridianProgram {
 
 const ONE_SOL = BigInt(1_000_000_000);
 
+/**
+ * `describe` for suites that spin up a LiteSVM (via {@link Harness}). Skipped when
+ * `SDK_SKIP_LITESVM` is set.
+ *
+ * Why: litesvm's Node binding leaks ~13 MB of native memory per `LiteSVM` instance
+ * that GC cannot reclaim (no `free()` API as of litesvm 1.1). Each on-chain suite
+ * creates one, so on the low-RAM CI runner (~3.8 GB, shared, no usable headroom)
+ * the cumulative leak hits a native `std::bad_alloc` partway through the suite.
+ * These tests pass locally on a roomier box and the program's own Rust LiteSVM
+ * tests (the `verify` CI job) cover the same on-chain behavior, so CI sets
+ * `SDK_SKIP_LITESVM=1` and runs only the pure (no-VM) SDK tests here.
+ */
+export const describeOnChain: Mocha.SuiteFunction = (
+  process.env.SDK_SKIP_LITESVM ? describe.skip : describe
+) as Mocha.SuiteFunction;
+
 export class Harness {
-  svm: LiteSVM;
+  readonly svm: LiteSVM;
   readonly program: MeridianProgram;
   /** The program admin / default fee payer. */
   readonly admin: Keypair;
@@ -89,20 +105,6 @@ export class Harness {
   /** Boot a harness with the program loaded and a funded admin. */
   static create(): Harness {
     return new Harness();
-  }
-
-  /**
-   * Release the underlying LiteSVM so its (large, native) memory arena can be
-   * garbage-collected. Each `LiteSVM` holds a Rust-backed SVM; litesvm 0.8 has
-   * no explicit free, so we drop our reference and let GC reclaim it. Call this
-   * in an `after()` for every describe block that creates a Harness — otherwise
-   * instances accumulate and a low-RAM CI box (≈3.8 GB, no swap) hits
-   * `std::bad_alloc` part-way through the suite. See tests/_gc.ts, which forces a
-   * collection after each test when run under `--expose-gc`.
-   */
-  dispose(): void {
-    // Drop the heavy native reference. Any use after dispose is a test bug.
-    this.svm = undefined as unknown as LiteSVM;
   }
 
   /** Create and fund a fresh keypair (default 100 SOL). */

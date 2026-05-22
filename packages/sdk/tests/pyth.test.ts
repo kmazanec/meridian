@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import BN from "bn.js";
 import { PublicKey } from "@solana/web3.js";
-import { Harness } from "./harness";
+import { Harness, describeOnChain } from "./harness";
 import { Ticker } from "../src/types";
 import { marketPda } from "../src/pdas";
 import * as ix from "../src/instructions";
@@ -37,7 +37,7 @@ describe("Pyth helper", () => {
     });
   });
 
-  describe("settle_market reads the fixture (LiteSVM)", () => {
+  describeOnChain("settle_market reads the fixture (LiteSVM)", () => {
     let h: Harness;
     let usdc: PublicKey;
     const day = new BN(1_716_300_000);
@@ -56,7 +56,6 @@ describe("Pyth helper", () => {
       // Move clock just past the close instant so settle_market is allowed.
       h.setUnixTimestamp(day.toNumber() + 1);
     });
-    after(() => h.dispose());
 
     it("settles YesWins when the posted price is at/above the strike", async () => {
       const market = marketPda(id.ticker, id.strike, id.tradingDay);

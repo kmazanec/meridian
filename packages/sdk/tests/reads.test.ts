@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import BN from "bn.js";
 import { Keypair, PublicKey } from "@solana/web3.js";
-import { Harness } from "./harness";
+import { Harness, describeOnChain } from "./harness";
 import { Ticker, OrderSide, Outcome } from "../src/types";
 import { PAYOFF_UNIT, PRICE_SCALE } from "../src/constants";
 import { marketPda, orderBookPda, ata } from "../src/pdas";
@@ -64,7 +64,7 @@ describe("reads: dual-perspective book + payouts", () => {
     });
   });
 
-  describe("dualBook on a real book (LiteSVM)", () => {
+  describeOnChain("dualBook on a real book (LiteSVM)", () => {
     let h: Harness;
     let usdc: PublicKey;
     let market: PublicKey;
@@ -135,7 +135,6 @@ describe("reads: dual-perspective book + payouts", () => {
         [b]
       );
     });
-    after(() => h.dispose());
 
     it("yes view matches the raw book", () => {
       const book = readBook(h, market);
@@ -168,7 +167,7 @@ describe("reads: dual-perspective book + payouts", () => {
     });
   });
 
-  describe("aggregation across multiple orders at one price", () => {
+  describeOnChain("aggregation across multiple orders at one price", () => {
     let h: Harness;
     let usdc: PublicKey;
     let market: PublicKey;
@@ -209,7 +208,6 @@ describe("reads: dual-perspective book + payouts", () => {
         );
       }
     });
-    after(() => h.dispose());
 
     it("collapses same-price orders into one level with summed size and count", () => {
       const dual = dualBook(readBook(h, market));

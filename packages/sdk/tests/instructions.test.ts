@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import BN from "bn.js";
 import { Keypair, PublicKey } from "@solana/web3.js";
-import { Harness, TxError } from "./harness";
+import { Harness, TxError, describeOnChain } from "./harness";
 import { Ticker, OrderSide, RedeemSide } from "../src/types";
 import { PAYOFF_UNIT } from "../src/constants";
 import {
@@ -18,8 +18,11 @@ import * as ix from "../src/instructions";
  * LiteSVM and asserting the on-chain state effect. This is the acceptance criterion
  * "every instruction has a typed builder that produces a valid transaction against
  * the deployed program" — and it locks the SDK surface F-07/F-08 import.
+ *
+ * Whole block is on-chain (LiteSVM); skipped in CI via SDK_SKIP_LITESVM (see
+ * describeOnChain in harness.ts).
  */
-describe("instruction builders (against the real program)", () => {
+describeOnChain("instruction builders (against the real program)", () => {
   const day = new BN(1_716_300_000);
 
   describe("provisioning: create / add_strike / book", () => {
@@ -30,7 +33,6 @@ describe("instruction builders (against the real program)", () => {
       usdc = h.ensureUsdc();
       await h.seedConfig(usdc);
     });
-    after(() => h.dispose());
 
     it("create_strike_market provisions an Open market with mints + vault", async () => {
       const id = {
@@ -160,7 +162,6 @@ describe("instruction builders (against the real program)", () => {
       user = h.user();
       h.setTokenBalance(usdc, user.publicKey, new BN(10).mul(PAYOFF_UNIT)); // $10
     });
-    after(() => h.dispose());
 
     it("mint_pair deposits $1.00 and issues 1 Yes + 1 No", async () => {
       const i = await ix.mintPair(h.program, {
@@ -252,7 +253,6 @@ describe("instruction builders (against the real program)", () => {
       });
       h.send([mintIx], [maker]);
     });
-    after(() => h.dispose());
 
     it("place_order rests a limit ask, and cancel_order returns the escrow", async () => {
       const m = marketPda(id.ticker, id.strike, id.tradingDay);
@@ -361,7 +361,6 @@ describe("instruction builders (against the real program)", () => {
       usdc = h.ensureUsdc();
       await h.seedConfig(usdc);
     });
-    after(() => h.dispose());
 
     it("pause sets the flag and unpause clears it", async () => {
       const pauseIx = await ix.pause(h.program, { admin: h.admin.publicKey });
@@ -403,7 +402,6 @@ describe("instruction builders (against the real program)", () => {
       tradingDay: day,
     };
     const base = { user, market: id, usdcMint: usdc, size: new BN(1_000) };
-    after(() => h.dispose());
 
     it("rejects a zero size", async () => {
       let threw = false;

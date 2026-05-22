@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import BN from "bn.js";
 import { Keypair, PublicKey, TransactionInstruction } from "@solana/web3.js";
-import { Harness } from "./harness";
+import { Harness, describeOnChain } from "./harness";
 import { Ticker, OrderSide } from "../src/types";
 import { PAYOFF_UNIT, PRICE_SCALE } from "../src/constants";
 import { marketPda, ata } from "../src/pdas";
@@ -59,7 +59,9 @@ function placeOrderIxs(
   return list.filter((i) => ixName(h, i) === "placeOrder");
 }
 
-describe("four-button intent translation", () => {
+// Creates a LiteSVM harness (even the pure-mapping tests build via a real coder),
+// so the whole block is gated off in CI via SDK_SKIP_LITESVM (see describeOnChain).
+describeOnChain("four-button intent translation", () => {
   const day = new BN(1_716_300_000);
   const id = {
     ticker: Ticker.Meta,
@@ -74,7 +76,6 @@ describe("four-button intent translation", () => {
     // No on-chain state needed for the pure mapping assertions; just a program coder.
     h = Harness.create();
   });
-  after(() => h.dispose());
 
   describe("maps each action to the correct on-chain instruction(s)", () => {
     it("BUY_YES → a single bid at the Yes price", async () => {
@@ -233,7 +234,6 @@ describe("four-button intent translation", () => {
       hh.ensureUserAtas(liquidityMaker.publicKey, mints, usdcMint);
       hh.ensureUserAtas(trader.publicKey, mints, usdcMint);
     });
-    after(() => hh.dispose());
 
     it("BUY_NO leaves the trader holding No, having sold the minted Yes", async () => {
       // Maker rests a bid to BUY Yes @ $0.70 (so the trader's BUY_NO sell-Yes @ $0.70 fills).
