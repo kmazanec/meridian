@@ -9,6 +9,10 @@ import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import type { Adapter } from "@solana/wallet-adapter-base";
 import { RPC_URL } from "@/lib/env";
 import { E2EWalletAdapter } from "@/lib/e2eWallet";
+import {
+  LocalDevWalletAdapter,
+  localWalletConfigured,
+} from "@/lib/localWallet";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -30,6 +34,26 @@ if (
   );
 }
 
+// On a LOCAL validator we register a built-in keypair wallet (the pre-funded demo wallet
+// `make dev` seeds), so a developer can connect and trade with no browser extension. Like
+// the e2e adapter it carries a real (disposable, localnet-only) secret, so it is gated the
+// same way: enabled only when the cluster is `localnet` AND not a production build. On
+// devnet/mainnet this stays off and users connect a real Wallet-Standard wallet (Phantom,
+// etc.) — exactly as the empty static list intends.
+const LOCAL_DEV_WALLET =
+  process.env.NEXT_PUBLIC_CLUSTER === "localnet" &&
+  process.env.NODE_ENV !== "production" &&
+  localWalletConfigured();
+
+if (
+  process.env.NEXT_PUBLIC_LOCAL_WALLET_SECRET &&
+  process.env.NODE_ENV === "production"
+) {
+  throw new Error(
+    "NEXT_PUBLIC_LOCAL_WALLET_SECRET must not be set in a production build — the local dev wallet is a localnet-only signing backdoor."
+  );
+}
+
 /**
  * The wallet + connection context every page sits inside. Wallets are discovered via
  * the Wallet Standard (Phantom/Solflare/Backpack register themselves), so the static
@@ -45,10 +69,12 @@ export function Providers({
   endpoint?: string;
   wallets?: Adapter[];
 }) {
-  const walletList = useMemo(
-    () => (E2E ? [new E2EWalletAdapter(), ...wallets] : wallets),
-    [wallets]
-  );
+  const walletList = useMemo(() => {
+    const extra: Adapter[] = [];
+    if (E2E) extra.push(new E2EWalletAdapter());
+    if (LOCAL_DEV_WALLET) extra.push(new LocalDevWalletAdapter());
+    return [...extra, ...wallets];
+  }, [wallets]);
 
   return (
     <ConnectionProvider endpoint={endpoint}>

@@ -211,7 +211,13 @@ export async function seedDevStack(
   return info;
 }
 
-/** Write `packages/web/.env.local` so the frontend talks to the local stack. */
+/**
+ * Write `packages/web/.env.local` so the frontend talks to the local stack — and register the
+ * seeded demo wallet as the app's built-in "Local Dev Wallet" so a developer can connect with
+ * no browser extension. `NEXT_PUBLIC_LOCAL_WALLET_SECRET` carries the demo keypair (a
+ * disposable, pre-funded localnet account); the app only honors it on `localnet` and refuses
+ * it in a production build. This file is gitignored.
+ */
 function writeWebEnv(info: DevStackInfo, log?: ConsoleLog): void {
   const path = resolve(repoRoot(), "packages", "web", ".env.local");
   const body =
@@ -219,7 +225,10 @@ function writeWebEnv(info: DevStackInfo, log?: ConsoleLog): void {
     `# Safe to delete; regenerated on the next \`make dev\`. Not committed (gitignored).\n` +
     `NEXT_PUBLIC_RPC_URL=${info.rpcUrl}\n` +
     `NEXT_PUBLIC_USDC_MINT=${info.usdcMint}\n` +
-    `NEXT_PUBLIC_CLUSTER=${info.cluster}\n`;
+    `NEXT_PUBLIC_CLUSTER=${info.cluster}\n` +
+    `# Built-in "Local Dev Wallet" — the seeded, pre-funded demo keypair so the UI can connect\n` +
+    `# without a browser extension. LOCALNET-ONLY: the app refuses this in a production build.\n` +
+    `NEXT_PUBLIC_LOCAL_WALLET_SECRET=${JSON.stringify(info.walletSecret)}\n`;
   writeFileSync(path, body);
   log?.detail("web env", path);
 }
