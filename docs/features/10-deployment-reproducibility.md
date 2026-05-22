@@ -1,6 +1,6 @@
 # Feature: Deployment & Reproducibility
 
-**ID:** F-10 · **Roadmap piece:** F-10 · **Status:** In progress
+**ID:** F-10 · **Roadmap piece:** F-10 · **Status:** In review — [MR !10](https://labs.gauntletai.com/keithmazanec/meridian/-/merge_requests/10)
 
 ## Description
 
@@ -114,7 +114,9 @@ validator → deploy → init config + USDC → create markets → seed demo wal
 - [x] **Adversarial review** — robustness/efficiency/security-integrity; high/medium fixed
   (see "Adversarial review" below); lows recorded for the user. **Green after fixes: 43 ops
   tests (incl. validator-backed repro).**
-- [ ] **Rebase, push, open MR.**
+- [x] **Rebase, push, open MR.** Rebased onto local main (auto-merged a CI restructure that
+  landed during the build); full suite re-run green; pushed `feat/f-10-deployment`; opened
+  [MR !10](https://labs.gauntletai.com/keithmazanec/meridian/-/merge_requests/10).
 
 ## Adversarial review
 
