@@ -98,7 +98,7 @@ Build chunks (test-first; each ends in a tickable item):
 - [x] **5. Morning job** (`morningJob.ts` + provisioning) — per ticker: prev close →
   strikes → `createStrikeMarket` + `initOrderBook` + `growOrderBook`; logged, failures
   alerted, retries; skips when calendar says no session. Mocked-SDK contract test.
-- [ ] **6. Settlement job** (`settlementJob.ts`) — discover open markets past close →
+- [x] **6. Settlement job** (`settlementJob.ts`) — discover open markets past close →
   settle (idempotent no-op on re-settle); wide-confidence → retry loop → admin alert for
   `admin_settle`. Mocked-chain orchestration tests.
 - [ ] **7. CLI entrypoints + keypair/secret loading** (`bin/*`, `keypair.ts`, `config.ts`)
@@ -215,3 +215,22 @@ Build chunks (test-first; each ends in a tickable item):
 - The SDK-backed provisioner/discovery hit the live program, so they are proven by the
   LiteSVM integration test (chunk 8), not unit mocks; the orchestration logic is fully
   unit-tested against a recording stub.
+
+### Chunk 6 — settlement job
+
+- **`Settler` interface** returns a discriminated `SettleStatus` (`Settled` /
+  `WideConfidence` / `Error`). `PythSettler` is the SDK-backed impl: it runs the pull-oracle
+  path (`settleWithPyth` — Hermes fetch → Receiver post → permissionless `settle_market`)
+  and **classifies the on-chain error**. Only `WideConfidence` is retryable; an
+  already-settled race (`MarketSettled`) is mapped to success (idempotent); everything else
+  (stale, wrong feed, RPC) is a hard error that alerts. Classification keys off the Anchor
+  error *name* + `#[msg]` text, not the numeric code (which is offset by Anchor's 6000 base
+  and brittle to reorderings).
+- **`runSettlementJob`** discovers all `Market` accounts, then per market: skip if already
+  settled (idempotent), skip if `trading_day` hasn't passed (avoid a guaranteed
+  `TooEarlyToSettle` round-trip), else settle. On `WideConfidence` it runs the
+  `retryEvery(30s, 15min)` loop; if the window exhausts (`RetryGaveUp`) it **alerts the admin
+  to run `admin_settle`** — it never calls the privileged override itself (trust-minimized,
+  human-in-the-loop). One market's failure never aborts the rest.
+- **Trust boundary held:** the job's only chain write is the permissionless `settle_market`.
+  The admin override is an alert, never an automatic privileged call.

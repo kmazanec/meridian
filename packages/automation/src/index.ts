@@ -71,3 +71,16 @@ export {
   type MorningJobOptions,
   type MorningJobSummary,
 } from "./morningJob";
+export {
+  runSettlementJob,
+  SettleStatus,
+  type Settler,
+  type SettleResult,
+  type SettlementJobOptions,
+  type SettlementJobSummary,
+} from "./settlementJob";
+export {
+  PythSettler,
+  type PythSettlerOptions,
+  type SettleWithPythFn,
+} from "./settler";
