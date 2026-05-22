@@ -148,6 +148,10 @@ describeOnValidator("four trade paths on one book", function () {
       (after.usdc - before.usdc).toString(),
       "received 2 × $0.55"
     ).to.equal((550_000n * 2n).toString());
+    // Selling Yes must not touch the No side — guards against a side-accounting bug.
+    expect(after.no.toString(), "No balance unchanged by Sell Yes").to.equal(
+      before.no.toString()
+    );
     await fx.assertCollateralization(market);
   });
 

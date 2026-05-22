@@ -106,8 +106,49 @@ opt-in env-gated live-devnet settlement smoke test (real Pyth Hermes→Receiver 
   **typecheck** is added there so it can't drift from the SDK/automation surfaces;
   `.gitlab-ci.yml` comment + `docs/local-development.md` "Convergence E2E suite" section
   updated. Full suite verified: **12 passing, 1 pending** (devnet opt-in skipped).
-- [ ] **Adversarial review** — robustness/efficiency/security-integrity; fix high/medium.
+- [x] **Adversarial review** — robustness/efficiency/security-integrity; high/medium fixed
+  (see below); lows recorded for the user.
 - [ ] **Rebase, push, open MR.**
+
+## Adversarial review
+
+An independent review subagent attacked the suite for robustness, efficiency, and —
+most importantly for a test suite — integrity (could a real program bug pass green?). It
+self-retracted several initial findings on inspection (the four-button USDC-delta math,
+the maker-account ordering, and the immutability test were all verified correct against
+the program source). **Fixed (high/medium):**
+
+- **Vacuous collateralization on a fresh market (HIGH).** `assertCollateralization` reads
+  a non-existent vault as 0, which trivially satisfies `0 == PAYOFF_UNIT·0 − 0` — so a
+  wrong vault PDA could pass before any mint. `createMarket` now asserts the vault account
+  actually exists, making every later collateralization check meaningful.
+- **Temp-dir leak on validator spawn error (HIGH).** The async `error` event lands outside
+  the boot try/catch; the handler now calls `stop()` so a failed spawn cleans up its temp
+  dirs.
+- **Fixed-port assumptions unguarded (HIGH).** The harness binds the default RPC port, so
+  it relies on Mocha's sequential file execution (no `--parallel`) and no pre-existing
+  validator. Added a pre-boot guard that fails loudly if something already serves the RPC
+  port (catches a stale/foreign validator → dirty ledger), plus explicit comments on the
+  no-`--parallel` constraint.
+- **Sell-Yes didn't assert the No side unchanged (MEDIUM).** Added `after.no == before.no`
+  to guard against a side-accounting bug.
+- **Devnet timing assertion was vacuous (MEDIUM).** `settledAt < tradingDay + 600` was
+  always true (window included "now"). Now asserts the elapsed gap `settledAt − tradingDay`
+  is in `(0, 600]` — a genuine bound on AC#5.
+
+### Low-severity findings (deferred — for the user to decide)
+
+- `getProgram({connection, publicKey} as never)` casts (fixture + devnet test) mirror the
+  existing SDK/automation read-only provider pattern; a future `program.rpc.*` call would
+  fail at runtime, not compile time. Consistent with the codebase; left as is.
+- Devnet `loadKeypair` could validate the 64-byte length and zero the buffer after use for
+  a clearer error / less secret-in-memory exposure (opt-in test only).
+- Automation idempotence test asserts the on-chain *outcome* (no duplicate markets) but not
+  the *mechanism* (program reject vs SDK skip); adequate for regression of the observable.
+- `mintPairs` sends one tx per pair (no batching) — a minor CI-latency risk, not a
+  correctness issue.
+- `programIdFromKeypairFile` uses an inline `require("node:fs")` instead of the top-level
+  import (style nit).
 
 ### Acceptance criteria coverage
 

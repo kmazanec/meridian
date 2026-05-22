@@ -102,7 +102,10 @@ describeDevnet("live-devnet settlement via Pyth (opt-in)", function () {
 
     // Create a market whose close is a few minutes in the past, so settle_market's timing
     // gate (now >= trading_day) passes while the Pyth price is still fresh (< staleness).
-    const tradingDay = Math.floor(Date.now() / 1000) - 300;
+    // The 300s offset is also what makes the "within 10 min of close" assertion below a
+    // real bound: settledAt − tradingDay must come out ~300s (< 600s).
+    const closeOffsetSeconds = 300;
+    const tradingDay = Math.floor(Date.now() / 1000) - closeOffsetSeconds;
     const strike = new BN(1); // strike $0.000001 → essentially any positive price → Yes wins
     const market = { ticker, strike, tradingDay: new BN(tradingDay) };
 
@@ -152,10 +155,14 @@ describeDevnet("live-devnet settlement via Pyth (opt-in)", function () {
     expect(settled!.settlementPrice, "settlement price written").to.not.equal(
       null
     );
-    expect(
-      settled!.settledAt!.toNumber(),
-      "settled within 10 min of close"
-    ).to.be.lessThan(tradingDay + 600);
+    // AC#5: settlement happens within 10 minutes of the close instant. Assert the actual
+    // elapsed gap (settledAt − tradingDay) is in (0, 600] — a real bound here, since the
+    // close is 300s in the past, not a window that's trivially satisfied by "now".
+    const settledGap = settled!.settledAt!.toNumber() - tradingDay;
+    expect(settledGap, "settledAt is after the close").to.be.greaterThan(0);
+    expect(settledGap, "settled within 10 min of close (AC#5)").to.be.at.most(
+      600
+    );
 
     // eslint-disable-next-line no-console
     console.log(

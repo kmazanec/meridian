@@ -200,6 +200,22 @@ export class Fixture {
       ],
       [this.admin]
     );
+
+    // Confirm the collateral vault was actually created. Without this, a wrong vault PDA
+    // would later read as a non-existent (0-balance) account and make assertCollateralization
+    // pass vacuously on a fresh market (0 == PAYOFF_UNIT*0 - 0). Proving the account exists
+    // here makes the collateralization checks meaningful from the first assertion.
+    const { vault } = deriveMarketPdasFromIdentity(
+      id.ticker,
+      id.strike,
+      id.tradingDay
+    );
+    const vaultInfo = await this.connection.getAccountInfo(vault);
+    if (!vaultInfo) {
+      throw new Error(
+        `vault account not created for market ${vault.toBase58()}`
+      );
+    }
     return id;
   }
 

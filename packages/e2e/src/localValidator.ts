@@ -184,6 +184,26 @@ export async function startLocalValidator(
     );
   }
 
+  // This harness binds the validator's default RPC port (8899). That makes two
+  // assumptions, both load-bearing:
+  //   1. Mocha runs spec files sequentially in one process (the default). Do NOT add
+  //      `--parallel` to the test script — parallel files would each boot a validator on
+  //      the same port and all but one would fail to bind.
+  //   2. No other validator is already on the port. A stale validator from a crashed prior
+  //      run would answer the RPC poll immediately, and we'd deploy onto its dirty ledger —
+  //      giving silently wrong results. Fail loudly instead of reusing a foreign validator.
+  const preexisting = await new Connection(rpcUrl, "confirmed")
+    .getVersion()
+    .then(() => true)
+    .catch(() => false);
+  if (preexisting) {
+    throw new Error(
+      `Something is already serving RPC at ${rpcUrl} (a stale or external solana-test-validator?). ` +
+        `Stop it before running the convergence suite — this harness manages its own validator ` +
+        `and must start from a clean ledger.`
+    );
+  }
+
   // Two temp dirs: the validator's ledger (wiped by --reset) and a work dir for the
   // deployer keypair file the CLI deploy reads (must survive the reset).
   const ledger = mkdtempSync(resolve(tmpdir(), "meridian-e2e-ledger-"));
@@ -221,10 +241,13 @@ export async function startLocalValidator(
     }
   };
 
-  // If the child fails to spawn at all, surface it rather than hanging on the RPC poll.
+  // If the child fails to spawn at all (e.g. binary not found), surface it AND clean up —
+  // the spawn error is async and lands outside the try/catch below, so without stop() here
+  // the ledger/work temp dirs created above would leak.
   validator.on("error", (e) => {
     // eslint-disable-next-line no-console
     console.error("solana-test-validator failed to spawn:", e.message);
+    stop();
   });
 
   try {
