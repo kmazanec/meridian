@@ -31,6 +31,15 @@ const ACTIONS: { action: TradeAction; label: string; variant: "yes" | "no" }[] =
     { action: TradeAction.SellNo, label: "Sell No", variant: "no" },
   ];
 
+/** What the panel reports about a submitted trade (for cost-basis tracking). */
+export interface TradeFill {
+  action: TradeAction;
+  /** The price in the action's own perspective (Yes price / No price). */
+  price: BN;
+  /** Size in token base units. */
+  size: BN;
+}
+
 /**
  * The position-aware four-button trade panel. Every action routes through the SDK's
  * `buildTradeIntent` (never re-derived here) into a single transaction, with maker
@@ -57,7 +66,8 @@ export function TradePanel({
   usdcMint: PublicKey | null;
   /** Send the built instructions (one wallet approval). Injected for testing. */
   onSubmit: (
-    instructions: import("@solana/web3.js").TransactionInstruction[]
+    instructions: import("@solana/web3.js").TransactionInstruction[],
+    fill: TradeFill
   ) => Promise<unknown>;
   busy?: boolean;
 }) {
@@ -117,7 +127,7 @@ export function TradePanel({
       usdcMint,
       makerAccounts,
     });
-    await onSubmit(built.instructions);
+    await onSubmit(built.instructions, { action, price, size });
   };
 
   const priceLabel = isNoAction(action) ? "No price ($)" : "Yes price ($)";

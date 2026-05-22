@@ -98,7 +98,10 @@ describe("TradePanel", () => {
     expect(intent.action).toBe(TradeAction.BuyYes);
     expect(intent.price.toNumber()).toBe(500_000);
     expect(intent.size.toNumber()).toBe(1_000_000);
-    expect(onSubmit).toHaveBeenCalledWith([{ marker: "ix" }]);
+    // onSubmit receives the built instructions plus the fill summary.
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0]).toEqual([{ marker: "ix" }]);
+    expect(onSubmit.mock.calls[0][1].action).toBe(TradeAction.BuyYes);
   });
 
   it("routes each of the four actions through the SDK with the right action", async () => {

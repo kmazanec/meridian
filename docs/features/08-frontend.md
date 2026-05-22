@@ -113,7 +113,7 @@ Build chunks (test-first; each ends in a tickable item):
   marketable orders; client-side size/price validation; position-constraint guard
   (client-only). Tests: action→intent mapping (decoded legs), BUY_NO whole-token/cap
   rules, guard blocks Buy-Yes-while-holding-No.
-- [ ] **6. Portfolio + redeem flow** — active positions (entry vs current, P&L),
+- [x] **6. Portfolio + redeem flow** — active positions (entry vs current, P&L),
   settled outcomes via `payoutFor`, redeem button building+signing the SDK `redeem`
   ix (USDC to wallet). Entry price from a local trade store. Tests: P&L, payout
   display, redeem ix + post-redeem balance.
@@ -295,3 +295,23 @@ Build chunks (test-first; each ends in a tickable item):
   provides. Pure chain-logic tests that derive ATAs (`crossing.test.ts`) run with
   `// @vitest-environment node`; component tests that don't derive ATAs stay on jsdom.
   The real browser is unaffected (the e2e uses a real Chromium).
+
+### Chunk 6 — Portfolio + redeem flow
+
+- **Cost basis is local + display-only** (`tradeStore.ts`). The chain records no per-user
+  entry price, so to show P&L the app remembers the user's own fills in `localStorage`
+  (size-weighted average per wallet+market+side) and the trade page records a fill after
+  each confirmed trade (`recordTradeFill` maps action→acquired side+price: BUY_YES/SELL_NO
+  → Yes; BUY_NO → No; SELL_YES is an exit, not recorded). This never affects the program
+  or settlement — a cleared store just means P&L shows "—". The aggregation + the
+  action→record mapping are pure and unit-tested.
+- **Portfolio assembly is pure** (`portfolio.ts`): `buildPortfolio(holdings, basis)` folds
+  holdings + marks + basis into rows. **Open** rows mark a Yes holding at the book mid and
+  a No holding at `1 − mid`, and show entry/mark/P&L (P&L null when no basis). **Settled**
+  rows use the on-chain outcome via `settledPayout` (winner 1:1, loser $0) and expose a
+  redeem button only for redeemable winners. `usePortfolio` gathers holdings across all
+  discovered markets the wallet touches.
+- **Redeem** builds the SDK `redeem` instruction (Yes/No side, full held amount) and sends
+  it through the wallet (`useSendIx`); on confirm it refreshes so the now-redeemed balance
+  (USDC in wallet) reflects. `PortfolioView` is presentational and RTL-tested (P&L
+  display, redeem fires, loser shows "Lost").

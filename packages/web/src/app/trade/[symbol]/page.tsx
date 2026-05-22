@@ -15,12 +15,13 @@ import {
 import { useProgram } from "@/lib/useProgram";
 import { useSendIx } from "@/lib/useSendIx";
 import { priceFromBook } from "@/lib/market-math";
+import { recordTradeFill } from "@/lib/recordTradeFill";
 import type { DiscoveredMarket } from "@/lib/discovery";
 import { StrikeList } from "@/components/trade/StrikeList";
 import { DualBookView } from "@/components/trade/DualBookView";
 import { PayoffLine } from "@/components/trade/PayoffLine";
 import { Countdown } from "@/components/trade/Countdown";
-import { TradePanel } from "@/components/trade/TradePanel";
+import { TradePanel, type TradeFill } from "@/components/trade/TradePanel";
 import { TxStatusBanner } from "@/components/trade/TxStatusBanner";
 import { Panel } from "@/components/ui";
 import BN from "bn.js";
@@ -76,10 +77,14 @@ export default function TradePage() {
   const onSelect = (m: DiscoveredMarket) => setSelectedAddr(m.address);
 
   const onSubmit = async (
-    instructions: import("@solana/web3.js").TransactionInstruction[]
+    instructions: import("@solana/web3.js").TransactionInstruction[],
+    fill: TradeFill
   ) => {
     await tx.send(instructions);
-    // Refresh book + balances after a confirmed trade.
+    // Record cost basis (display-only) and refresh book + balances after confirm.
+    if (publicKey && selected) {
+      recordTradeFill(publicKey.toBase58(), selected.toBase58(), fill);
+    }
     refreshBook();
     refreshPosition();
   };
