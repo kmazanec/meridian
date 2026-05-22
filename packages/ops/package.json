@@ -1,0 +1,41 @@
+{
+  "name": "@meridian/ops",
+  "version": "0.1.0",
+  "description": "Operational scripts for Meridian: deploy the program, bootstrap Config + USDC, create the day's markets, and run the full lifecycle (create -> mint -> trade -> settle -> redeem) end-to-end. Environment-agnostic (driven by RPC_URL) so the same scripts run against a local solana-test-validator (CI/demo) and real devnet. Reuses @meridian/sdk, the @meridian/e2e harness, and @meridian/automation jobs; never re-implements them.",
+  "license": "ISC",
+  "private": true,
+  "bin": {
+    "meridian-bootstrap": "./src/bin/bootstrap.ts",
+    "meridian-create-markets": "./src/bin/create-markets.ts",
+    "meridian-deploy": "./src/bin/deploy.ts",
+    "meridian-lifecycle": "./src/bin/lifecycle.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "ts-mocha -p tsconfig.json --timeout 600000 'tests/**/*.test.ts'",
+    "test:contract": "ts-mocha -p tsconfig.json --timeout 120000 'tests/**/*.contract.test.ts'",
+    "deploy": "ts-node src/bin/deploy.ts",
+    "bootstrap": "ts-node src/bin/bootstrap.ts",
+    "create-markets": "ts-node src/bin/create-markets.ts",
+    "lifecycle": "ts-node src/bin/lifecycle.ts"
+  },
+  "dependencies": {
+    "@meridian/automation": "workspace:^",
+    "@meridian/e2e": "workspace:^",
+    "@meridian/sdk": "workspace:^",
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.98.0",
+    "bn.js": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.5",
+    "@types/chai": "^4.3.0",
+    "@types/mocha": "^9.0.0",
+    "@types/node": "^20.0.0",
+    "chai": "^4.3.4",
+    "mocha": "^9.0.3",
+    "ts-mocha": "^10.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}

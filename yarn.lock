@@ -462,7 +462,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@meridian/e2e@workspace:packages/e2e":
+"@meridian/e2e@workspace:^, @meridian/e2e@workspace:packages/e2e":
   version: 0.0.0-use.local
   resolution: "@meridian/e2e@workspace:packages/e2e"
   dependencies:
@@ -489,6 +489,33 @@ __metadata:
       optional: true
     "@pythnetwork/pyth-solana-receiver":
       optional: true
+  languageName: unknown
+  linkType: soft
+
+"@meridian/ops@workspace:packages/ops":
+  version: 0.0.0-use.local
+  resolution: "@meridian/ops@workspace:packages/ops"
+  dependencies:
+    "@meridian/automation": "workspace:^"
+    "@meridian/e2e": "workspace:^"
+    "@meridian/sdk": "workspace:^"
+    "@solana/spl-token": "npm:^0.4.9"
+    "@solana/web3.js": "npm:^1.98.0"
+    "@types/bn.js": "npm:^5.1.5"
+    "@types/chai": "npm:^4.3.0"
+    "@types/mocha": "npm:^9.0.0"
+    "@types/node": "npm:^20.0.0"
+    bn.js: "npm:^5.2.1"
+    chai: "npm:^4.3.4"
+    mocha: "npm:^9.0.3"
+    ts-mocha: "npm:^10.0.0"
+    ts-node: "npm:^10.9.2"
+    typescript: "npm:^5.7.3"
+  bin:
+    meridian-bootstrap: ./src/bin/bootstrap.ts
+    meridian-create-markets: ./src/bin/create-markets.ts
+    meridian-deploy: ./src/bin/deploy.ts
+    meridian-lifecycle: ./src/bin/lifecycle.ts
   languageName: unknown
   linkType: soft
 

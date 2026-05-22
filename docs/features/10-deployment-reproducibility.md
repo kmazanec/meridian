@@ -1,6 +1,6 @@
 # Feature: Deployment & Reproducibility
 
-**ID:** F-10 · **Roadmap piece:** F-10 · **Status:** Not started
+**ID:** F-10 · **Roadmap piece:** F-10 · **Status:** In progress
 
 ## Description
 
@@ -56,6 +56,51 @@ Wave 5, the final link on the critical path after integration (F-09 → F-10).
   env per `.env.example`. (Bonus: a funded mainnet-beta setup if the mainnet
   deployment is attempted — not required for the core submission.)
 
+## Build plan (approved)
+
+Delivered as a new private workspace package **`@meridian/ops`** (`packages/ops`) plus a
+root **`Makefile`**, **`.env.example`**, and a novice-grade **devnet runbook**. The ops
+package houses *environment-agnostic, RPC-driven* scripts that work against a **local
+validator** (automated/CI/demo) and **real devnet** (operator-run with a funded wallet).
+It reuses — never re-implements — the SDK builders, the F-09 e2e harness (`startLocalValidator`,
+`Fixture`, `crossing`), and the automation jobs.
+
+**Decisions taken with the user:** (1) deliver *both* a reproducible local-validator path
+(CI + demo) and a real devnet deploy the operator runs themselves, with precise
+novice-friendly instructions; (2) `make dev` = full local stack bring-up (build → boot
+validator → deploy → init config + USDC → create markets → seed demo wallet → write web
+`.env.local`); (3) Makefile + a scripts package reusing the SDK and e2e harness.
+
+- [x] **Chunk 1 — `@meridian/ops` scaffold + shared config/logging.** package.json/tsconfig;
+  `src/env.ts` (RPC_URL, deployer keypair via env *or* path, optional USDC_MINT, cluster,
+  ticker/strike selection; fail-fast like automation `loadConfig`); `src/log.ts`. Joins the
+  `packages/*` workspace. Pure `tests/env.contract.test.ts`. (AC#3 groundwork)
+  **Green: 11 passing; typecheck + prettier clean.**
+- [ ] **Chunk 2 — Deploy + bootstrap.** `src/deploy.ts` (idempotent upgradeable
+  `solana program deploy` against RPC_URL, honoring MERIDIAN_SO/keypair overrides),
+  `src/bootstrap.ts` (mock USDC mint or USDC_MINT + `initialize_config`, idempotent), bins,
+  `deploy-manifest.json`. Contract test for argv + manifest schema. (AC#2 deploy leg)
+- [ ] **Chunk 3 — Create-markets + lifecycle scripts.** `src/createMarkets.ts` (compute
+  strikes via automation `strikes.ts`; provision via SDK 3-step; idempotent),
+  `src/lifecycle.ts` (create→mint→trade(maker/taker via `buildTradeIntent`)→admin_settle→
+  redeem, asserting §7 invariants per phase; human-readable transcript), bins. Contract test
+  for strike/market-id derivation. (AC#2 create+lifecycle; AC#4 invariants)
+- [ ] **Chunk 4 — `make dev` + Makefile + `.env.example`.** Makefile (`dev`, `demo`,
+  `deploy-devnet`/`bootstrap-devnet`/`create-markets-devnet`/`lifecycle-devnet`, `test`,
+  `lint`, `build`, `stop`, `clean`); `.env.example` (every var, grouped, safe placeholders,
+  loud header); gitignore root `.env`. Env-drift guard test. (AC#1, AC#3)
+- [ ] **Chunk 5 — Reproducibility verification.** `tests/repro.test.ts` (validator-gated):
+  boot a real validator, run the *actual* ops scripts as subprocesses, assert exit 0 +
+  invariants. Add ops typecheck + contract tests to CI `lint-ts` (validator suite excluded,
+  mirrors e2e). (Testing requirement; AC#4)
+- [ ] **Chunk 6 — README + devnet runbook.** README one-command flow + Risks/Limitations
+  note; `docs/devnet-deployment.md` novice runbook (install CLI, fund keypair, `.env`, the
+  four make targets, explorer, live-Pyth opt-in vs admin-override, troubleshooting); update
+  Status, repo-layout, `docs/local-development.md`. (AC#1, AC#5)
+- [ ] **Adversarial review** — robustness/efficiency/security-integrity; fix high/medium;
+  record lows for the user.
+- [ ] **Rebase, push, open MR.**
+
 ## Implementation notes (filled in by the building agent)
 
 > The agent implementing this feature records its implementation decisions and
@@ -65,3 +110,23 @@ Wave 5, the final link on the critical path after integration (F-09 → F-10).
 > by the builder, not the planner. Cross-cutting discoveries that affect other
 > features must also be propagated to ROADMAP.md or the architecture doc, not just
 > left here.
+
+### Chunk 1 — scaffold
+
+- **New `@meridian/ops` workspace package** (private, no `dist` — bins run via `ts-node`,
+  tests via `ts-mocha`, mirroring `@meridian/e2e`). It is the only package that needs both
+  the SDK *and* the e2e harness, and the only TS run *as scripts* against an arbitrary RPC.
+- **`@meridian/e2e` gained a source entry** (`src/index.ts` + `main`/`exports` →
+  `./src/index.ts`) so its `startLocalValidator`/`Fixture`/`crossing` primitives are
+  importable by `@meridian/ops` without re-implementing validator bring-up. e2e is consumed
+  from source (never built to `dist`), so a source `exports` entry is the right shape.
+- **`env.ts` deployer keypair accepts a file PATH** (in addition to the inline JSON/base58
+  the automation `keypair.ts` takes) because a human operator deploying to devnet has a
+  Solana CLI keypair *file*. Single source of selection between local and devnet is
+  `RPC_URL` + which keypair is supplied — the scripts are otherwise identical
+  (environment-agnostic). `OPS_ENV_KEYS` documents the surface for `.env.example` and is
+  guarded against drift by a later test (Chunk 4).
+- **`log.ts` is a human-readable console transcript** (sections/steps/details/ok), distinct
+  from automation's JSON-per-line `Logger`: the ops scripts are watched live by an operator
+  or during a demo. The automation *jobs* the demo invokes still log JSON via their own
+  logger.

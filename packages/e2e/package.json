@@ -4,6 +4,14 @@
   "description": "Cross-stack convergence suite for Meridian: drives the full daily lifecycle (create → mint → trade → settle → redeem), all four trade paths, and a multi-user scenario against a real solana-test-validator using @meridian/sdk and @meridian/automation, re-verifying the on-chain invariants across the integrated stack.",
   "license": "ISC",
   "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "ts-mocha -p tsconfig.json --timeout 600000 'tests/**/*.test.ts'",
