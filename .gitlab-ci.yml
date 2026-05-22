@@ -212,3 +212,8 @@ cursor_code_review:
   extends: .cursor_review
   stage: review
   needs: []   # independent of build/check/test; runs only on MR pipelines
+  # Non-blocking: run-review.sh (in keithmazanec/gitlab-cursor-review) passes the
+  # whole diff as an argv to cursor-agent, so large MRs fail with E2BIG
+  # ("Argument list too long"). Until that script feeds the diff via stdin/file,
+  # don't let a big-diff review failure block the MR. Remove once infra is fixed.
+  allow_failure: true
