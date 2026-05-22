@@ -118,13 +118,15 @@ export function validatorAvailable(): boolean {
 }
 
 /**
- * A `describe` that becomes `describe.skip` when no local validator can run (missing
- * binary or un-built program). Keeps a Node-only CI runner green without the Solana
- * toolchain, exactly as the SDK's `describeOnChain` does for LiteSVM. Set
- * `E2E_REQUIRE_VALIDATOR=1` to make a missing validator a hard failure instead (so a
- * misconfigured local run doesn't silently skip everything).
+ * Resolve the right `describe` for the current environment: the real one when a validator
+ * can run, a single failing test when `E2E_REQUIRE_VALIDATOR` is set but none is available,
+ * or `describe.skip` otherwise. Resolved **lazily, at call time** (not module load) so this
+ * module is safe to `import` from non-Mocha code — e.g. the `@meridian/ops` deploy/lifecycle
+ * scripts reuse the harness primitives below (`startLocalValidator`, paths) without a Mocha
+ * global in scope. The previous module-load IIFE crashed (`describe is not defined`) when
+ * imported outside a test runner.
  */
-export const describeOnValidator: Mocha.SuiteFunction = (() => {
+function resolveDescribe(): Mocha.SuiteFunction {
   const available = validatorAvailable();
   if (available) return describe;
   if (process.env.E2E_REQUIRE_VALIDATOR) {
@@ -145,8 +147,43 @@ export const describeOnValidator: Mocha.SuiteFunction = (() => {
         });
       })) as unknown as Mocha.SuiteFunction;
   }
-  return describe.skip;
-})() as Mocha.SuiteFunction;
+  return describe.skip as unknown as Mocha.SuiteFunction;
+}
+
+/**
+ * A `describe` that becomes `describe.skip` when no local validator can run (missing binary
+ * or un-built program). Keeps a Node-only CI runner green without the Solana toolchain,
+ * exactly as the SDK's `describeOnChain` does for LiteSVM. Set `E2E_REQUIRE_VALIDATOR=1` to
+ * make a missing validator a hard failure instead.
+ *
+ * Implemented as a thunk that resolves `describe`/`describe.skip` on first call so importing
+ * this module never touches the Mocha globals (see {@link resolveDescribe}).
+ */
+function makeLazyDescribe(): Mocha.SuiteFunction {
+  const fn = function (this: unknown, ...args: unknown[]) {
+    return (resolveDescribe() as unknown as (...a: unknown[]) => unknown).apply(
+      this,
+      args
+    );
+  };
+  // Forward `.skip` / `.only` to the resolved describe lazily too, so call sites using
+  // `describeOnValidator.skip(...)` keep working.
+  const forward = (key: "skip" | "only") =>
+    function (this: unknown, ...args: unknown[]) {
+      return (
+        resolveDescribe() as unknown as Record<
+          string,
+          (...a: unknown[]) => unknown
+        >
+      )[key].apply(this, args);
+    };
+  return Object.assign(fn, {
+    skip: forward("skip"),
+    only: forward("only"),
+  }) as unknown as Mocha.SuiteFunction;
+}
+
+export const describeOnValidator: Mocha.SuiteFunction = makeLazyDescribe();
 
 /** A booted validator: a live connection, the funded deployer, and a teardown hook. */
 export interface LocalValidator {

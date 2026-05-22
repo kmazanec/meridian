@@ -76,10 +76,12 @@ validator → deploy → init config + USDC → create markets → seed demo wal
   ticker/strike selection; fail-fast like automation `loadConfig`); `src/log.ts`. Joins the
   `packages/*` workspace. Pure `tests/env.contract.test.ts`. (AC#3 groundwork)
   **Green: 11 passing; typecheck + prettier clean.**
-- [ ] **Chunk 2 — Deploy + bootstrap.** `src/deploy.ts` (idempotent upgradeable
+- [x] **Chunk 2 — Deploy + bootstrap.** `src/deploy.ts` (idempotent upgradeable
   `solana program deploy` against RPC_URL, honoring MERIDIAN_SO/keypair overrides),
-  `src/bootstrap.ts` (mock USDC mint or USDC_MINT + `initialize_config`, idempotent), bins,
-  `deploy-manifest.json`. Contract test for argv + manifest schema. (AC#2 deploy leg)
+  `src/bootstrap.ts` (mock USDC mint or USDC_MINT + `initialize_config`, idempotent),
+  `src/manifest.ts` (secret-free deploy manifest), bins. Contract test for argv + PDA + feed
+  ids + manifest schema. (AC#2 deploy leg) **Green: 19 contract tests; smoke-verified against
+  a real local validator (fresh deploy → bootstrap → idempotent re-run).**
 - [ ] **Chunk 3 — Create-markets + lifecycle scripts.** `src/createMarkets.ts` (compute
   strikes via automation `strikes.ts`; provision via SDK 3-step; idempotent),
   `src/lifecycle.ts` (create→mint→trade(maker/taker via `buildTradeIntent`)→admin_settle→
@@ -130,3 +132,27 @@ validator → deploy → init config + USDC → create markets → seed demo wal
   from automation's JSON-per-line `Logger`: the ops scripts are watched live by an operator
   or during a demo. The automation *jobs* the demo invokes still log JSON via their own
   logger.
+
+### Chunk 2 — deploy + bootstrap
+
+- **Deploy reuses the F-09 harness's exact `solana program deploy` invocation** (global
+  `--keypair`/`--url` before the subcommand; explicit fee-payer + upgrade-authority =
+  deployer, which `initialize_config` checks). A pure `deployArgv` builder lets a contract
+  test pin that argv so it can't silently drift from the proven-correct reference.
+- **Idempotency:** `solana program deploy --program-id <kp>` upgrades when the signer is the
+  upgrade authority and deploys fresh otherwise, so re-running is safe; `bootstrap` no-ops if
+  `Config` already exists (a second `initialize_config` would hit the re-init guard).
+- **Deploy manifest (`deploy-manifest.json`)** records only **public** addresses (program id,
+  ProgramData, USDC mint, Config, admin pubkey) + RPC/cluster — never a keypair — so later
+  steps and the operator have the addresses without re-deriving, and it is safe on disk.
+  Gitignored (Chunk 4).
+- **Fixed a latent reuse bug in `@meridian/e2e`:** `describeOnValidator` resolved
+  `describe`/`describe.skip` in a **module-load IIFE**, so importing the harness from any
+  non-Mocha context (the ops scripts) crashed with `describe is not defined`. Made it resolve
+  the Mocha global **lazily, on first call** (a thunk forwarding `.skip`/`.only`), preserving
+  every existing e2e call site while making the module import-safe for scripts. This is a
+  source fix in the shared harness, not a fork — it keeps the convergence suite using the same
+  primitives the ops scripts now reuse.
+- **Verified live:** a smoke run booted a bare `solana-test-validator`, deployed onto it
+  (`wasAlreadyDeployed=false`), bootstrapped a fresh USDC mint + Config, then re-ran both and
+  observed the upgrade path + config no-op. (Folded into the Chunk 5 repro test.)

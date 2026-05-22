@@ -47,6 +47,8 @@ export interface OpsEnv {
   tickers: Ticker[];
   /** Per-ticker mock previous-close in USDC base units (drives create-markets strikes). */
   mockCloses: Partial<Record<TickerSymbol, BN>>;
+  /** Per-ticker Pyth feed ids (hex) for devnet; absent tickers use the local test pattern. */
+  feedIdsHex: Partial<Record<TickerSymbol, string>>;
   /** Include the rounded close as an at-the-money strike. Default false. */
   includeClose: boolean;
 }
@@ -212,6 +214,7 @@ export function loadOpsEnv(env: Env = process.env): OpsEnv {
   const tickers = parseTickers(env["TICKERS"]);
 
   const mockCloses: Partial<Record<TickerSymbol, BN>> = {};
+  const feedIdsHex: Partial<Record<TickerSymbol, string>> = {};
   for (const sym of TICKER_SYMBOLS) {
     const mock = env[`MOCK_CLOSE_${sym}`]?.trim();
     if (mock) {
@@ -223,6 +226,8 @@ export function loadOpsEnv(env: Env = process.env): OpsEnv {
       }
       mockCloses[sym] = dollarsExactToBaseUnits(dollars);
     }
+    const feed = env[`FEED_${sym}`]?.trim();
+    if (feed) feedIdsHex[sym] = normalizeFeedId(feed, sym);
   }
 
   return {
@@ -232,8 +237,24 @@ export function loadOpsEnv(env: Env = process.env): OpsEnv {
     usdcMint,
     tickers,
     mockCloses,
+    feedIdsHex,
     includeClose: parseBool(env["INCLUDE_CLOSE"]),
   };
+}
+
+/**
+ * Validate a Pyth feed id (32-byte / 64-hex, optional `0x`) and return it unchanged. Catches
+ * a transposed/garbage id at config load rather than at settlement; the value is the same
+ * form `bootstrap.feedIdHexToBytes` consumes. (Mirrors the automation config's check.)
+ */
+function normalizeFeedId(value: string, sym: string): string {
+  const hex = value.startsWith("0x") ? value.slice(2) : value;
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+    throw new Error(
+      `FEED_${sym} must be a 32-byte hex feed id (64 hex chars, optional 0x prefix); got "${value}"`
+    );
+  }
+  return value;
 }
 
 /**
@@ -250,6 +271,7 @@ export const OPS_ENV_KEYS = {
     "USDC_MINT (existing collateral mint pubkey; default: bootstrap creates a mock mint)",
     "TICKERS (comma list of symbols to operate on; default all MAG7)",
     "MOCK_CLOSE_<SYMBOL> (mock previous close in dollars, e.g. MOCK_CLOSE_META=680)",
+    "FEED_<SYMBOL> (devnet Pyth hex feed id per ticker; absent → local test pattern)",
     "INCLUDE_CLOSE (1/true to add the at-the-money strike)",
   ],
 } as const;
