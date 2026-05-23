@@ -30,9 +30,17 @@ LOCAL_RPC        := http://127.0.0.1:8899
 LOCAL_MOCK_CLOSES := MOCK_CLOSE_AAPL=190 MOCK_CLOSE_MSFT=420 MOCK_CLOSE_GOOGL=170 \
 	MOCK_CLOSE_AMZN=185 MOCK_CLOSE_NVDA=120 MOCK_CLOSE_META=680 MOCK_CLOSE_TSLA=340
 
+# Trading-bot fleet (@meridian/traders). The config lists each bot (name, wallet, model);
+# `make bots` spawns one background process per bot, logging to $(BOTS_LOG_DIR)/<name>.log.
+BOTS_DIR     := packages/traders
+BOTS_CONFIG  := $(BOTS_DIR)/bots.config.json
+BOTS_LOG_DIR := $(BOTS_DIR)/logs
+BOTS_PIDS    := $(BOTS_LOG_DIR)/bots.pids
+
 .DEFAULT_GOAL := help
 .PHONY: help dev stop demo deploy bootstrap create-markets lifecycle \
         deploy-devnet bootstrap-devnet create-markets-devnet lifecycle-devnet \
+        bots bots-stop bots-logs \
         build test lint clean _require-devnet-keypair _validator-up
 
 help: ## Show this help.
@@ -151,12 +159,47 @@ _require-devnet-keypair:
 	  exit 1; \
 	fi
 
+# ── Trading bots (LLM fleet, @meridian/traders) ───────────────────────────────
+# Requires RPC_URL + OPENROUTER_API_KEY in the environment (and funded trader wallets,
+# e.g. `make fund-traders-devnet`). Each bot in $(BOTS_CONFIG) runs as its own process,
+# so the fleet trades concurrently — one crashing doesn't stop the others.
+
+bots: ## Spawn one background process per bot in packages/traders/bots.config.json.
+	@if [ ! -f $(BOTS_CONFIG) ]; then \
+	  echo "✗ No $(BOTS_CONFIG). Copy $(BOTS_DIR)/bots.config.example.json to it and edit."; exit 1; fi
+	@if [ -z "$$OPENROUTER_API_KEY" ]; then echo "✗ OPENROUTER_API_KEY is not set."; exit 1; fi
+	@if [ -z "$$RPC_URL" ]; then echo "✗ RPC_URL is not set (e.g. https://api.devnet.solana.com)."; exit 1; fi
+	@$(YARN) workspace @meridian/sdk build >/dev/null
+	@$(YARN) workspace @meridian/traders build >/dev/null
+	@mkdir -p $(BOTS_LOG_DIR)
+	@: > $(BOTS_PIDS)
+	@names=$$(node -e "for(const b of require('./$(BOTS_CONFIG)').bots) console.log(b.name)"); \
+	for name in $$names; do \
+	  node $(BOTS_DIR)/dist/bin/run-bot.js "$$name" > $(BOTS_LOG_DIR)/$$name.log 2>&1 & \
+	  echo "$$!" >> $(BOTS_PIDS); \
+	  echo "  ▸ started $$name (pid $$!) → $(BOTS_LOG_DIR)/$$name.log"; \
+	done; \
+	echo "✓ Fleet running. Watch them: make bots-logs   Stop them: make bots-stop"
+
+bots-stop: ## Stop all running bots (kills the PIDs recorded by `make bots`).
+	@if [ ! -f $(BOTS_PIDS) ]; then echo "No $(BOTS_PIDS); nothing to stop."; exit 0; fi
+	@while read -r pid; do \
+	  if kill "$$pid" 2>/dev/null; then echo "  ▪ stopped pid $$pid"; fi; \
+	done < $(BOTS_PIDS); \
+	rm -f $(BOTS_PIDS); echo "✓ Fleet stopped."
+
+bots-logs: ## Tail the combined reasoning logs of all running bots.
+	@if [ ! -d $(BOTS_LOG_DIR) ] || [ -z "$$(ls -A $(BOTS_LOG_DIR)/*.log 2>/dev/null)" ]; then \
+	  echo "No logs yet in $(BOTS_LOG_DIR). Start the fleet with 'make bots'."; exit 0; fi
+	@tail -n 40 -f $(BOTS_LOG_DIR)/*.log
+
 # ── Build / test / lint / clean ───────────────────────────────────────────────
 
 build: ## Build the program (.so) and the TS workspaces.
 	anchor build
 	$(YARN) workspace @meridian/sdk build
 	$(YARN) workspace @meridian/automation build
+	$(YARN) workspace @meridian/traders build
 
 test: ## Run the Rust tests + the off-chain workspace tests.
 	cargo test

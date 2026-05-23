@@ -1,0 +1,19 @@
+{
+  "$schema": "./bots.schema.json",
+  "bots": [
+    {
+      "name": "claude-trader",
+      "wallet": "~/.config/solana/trader1.json",
+      "model": "anthropic/claude-3.5-sonnet",
+      "intervalSec": 60,
+      "persona": "A disciplined value trader. Looks for strikes whose order-book implied probability disagrees with where spot sits relative to the strike, and takes the cheaper side."
+    },
+    {
+      "name": "gpt-trader",
+      "wallet": "~/.config/solana/trader2.json",
+      "model": "openai/gpt-4o",
+      "intervalSec": 60,
+      "persona": "An aggressive momentum trader. Leans into the direction the underlying has been moving over the last few days and is willing to pay up for conviction."
+    }
+  ]
+}

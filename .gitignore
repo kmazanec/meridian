@@ -19,6 +19,11 @@ test-ledger
 # Compiled TS package output (the off-chain workspace).
 packages/*/dist
 
+# Trading-bot fleet: the real config names wallet paths, and logs are per-run. The
+# committed template is bots.config.example.json.
+packages/traders/bots.config.json
+packages/traders/logs/
+
 # Next.js frontend build + test artifacts.
 packages/web/.next
 packages/web/out
