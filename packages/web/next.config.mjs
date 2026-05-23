@@ -1,3 +1,5 @@
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants.js";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -36,4 +38,34 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+// In production this is a pure static export (no server), so the `/api/history` Pages
+// Function is served by Cloudflare alongside `out/`. But `next dev` has no Cloudflare
+// runtime, so that route would 404 in development. To keep hot-reload AND real price
+// history locally, we proxy `/api/history/*` to a `wrangler pages dev` instance during
+// dev only (rewrites are unsupported under `output: export`, so they're added only in
+// the dev phase — the production export is unchanged). Point at a custom wrangler origin
+// with WRANGLER_DEV_URL if you don't use the default port.
+//
+//   Terminal 1:  cd packages/web && yarn build && npx wrangler pages dev out --port 8788
+//   Terminal 2:  yarn workspace @meridian/web dev
+const WRANGLER_DEV_URL =
+  process.env.WRANGLER_DEV_URL ?? "http://localhost:8788";
+
+export default (phase) => {
+  if (phase === PHASE_DEVELOPMENT_SERVER) {
+    // Strip `output: export` (incompatible with rewrites) and proxy the API in dev.
+    const { output, ...devConfig } = nextConfig;
+    return {
+      ...devConfig,
+      async rewrites() {
+        return [
+          {
+            source: "/api/:path*",
+            destination: `${WRANGLER_DEV_URL}/api/:path*`,
+          },
+        ];
+      },
+    };
+  }
+  return nextConfig;
+};

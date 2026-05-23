@@ -70,11 +70,30 @@ daily closes). It proxies a public market-data source server-side because that s
 sends no CORS headers, so the browser can't call it directly. The static export is
 unaffected — the function rides along in the same deploy.
 
-- **Local check:** `cd packages/web && npx wrangler pages dev out`, then open
-  `http://localhost:8788/api/history?symbol=NVDA`.
-- **Plain `next dev` serves no Functions**, so the Markets-page sparkline falls back to its
-  empty-state baseline there. That's expected; use `wrangler pages dev` to exercise it, or
-  point `NEXT_PUBLIC_HISTORY_BASE` at a deployed preview.
+- **Quick check:** `cd packages/web && yarn build && npx wrangler pages dev out`, then open
+  `http://localhost:8788/api/history?symbol=NVDA`. This serves the real static build + the
+  function together (no hot-reload).
+
+- **`next dev` hot-reload with real history (recommended for development).** `next dev` has
+  no Cloudflare runtime, so `/api/history` would 404 on its own. `next.config.mjs` therefore
+  **proxies `/api/*` to a local `wrangler pages dev` instance in the dev phase only** (the
+  production static export is unchanged — rewrites can't coexist with `output: export`, so
+  they're added only under `PHASE_DEVELOPMENT_SERVER`). Run two terminals:
+
+  ```bash
+  # Terminal 1 — serve the function (rebuild once; out/ only needs to exist)
+  cd packages/web && yarn build && npx wrangler pages dev out --port 8788
+
+  # Terminal 2 — the app with hot-reload; /api/* is proxied to :8788
+  yarn workspace @meridian/web dev
+  ```
+
+  Override the proxy target with `WRANGLER_DEV_URL` if you use a different port. With only
+  `next dev` running (no wrangler), `/api/history` 404s and the sparkline shows its empty
+  baseline — harmless, expected.
+
+- Alternatively, point `NEXT_PUBLIC_HISTORY_BASE` at a deployed Pages preview to skip the
+  local wrangler process entirely.
 
 ## Clean URLs
 
