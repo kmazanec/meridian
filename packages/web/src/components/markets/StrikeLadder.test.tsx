@@ -107,4 +107,49 @@ describe("StrikeLadder", () => {
       "data-selectable"
     );
   });
+
+  it("draws the last-close marker between the strikes it falls between", () => {
+    // Strikes $300 and $320; last close $308.82 → marker between them.
+    render(
+      <StrikeLadder
+        rows={[row(300_000_000), row(320_000_000)]}
+        lastClose={308.82}
+      />
+    );
+    const marker = screen.getByTestId("last-close-marker");
+    expect(marker).toHaveTextContent(/last close/i);
+    expect(marker).toHaveTextContent("$308.82");
+
+    // Marker sits after the $300 row and before the $320 row in DOM order.
+    const rows = Array.from(
+      document.querySelectorAll(
+        "[data-testid^='ladder-row-'], [data-testid='last-close-marker']"
+      )
+    ).map((el) => el.getAttribute("data-testid"));
+    expect(rows).toEqual([
+      "ladder-row-300000000",
+      "last-close-marker",
+      "ladder-row-320000000",
+    ]);
+  });
+
+  it("places the marker below all strikes when the close is above every strike", () => {
+    render(
+      <StrikeLadder
+        rows={[row(300_000_000), row(320_000_000)]}
+        lastClose={999}
+      />
+    );
+    const ids = Array.from(
+      document.querySelectorAll(
+        "[data-testid^='ladder-row-'], [data-testid='last-close-marker']"
+      )
+    ).map((el) => el.getAttribute("data-testid"));
+    expect(ids[ids.length - 1]).toBe("last-close-marker");
+  });
+
+  it("omits the marker when lastClose is null", () => {
+    render(<StrikeLadder rows={[row(300_000_000)]} lastClose={null} />);
+    expect(screen.queryByTestId("last-close-marker")).not.toBeInTheDocument();
+  });
 });

@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Outcome } from "@meridian/sdk";
 import {
   formatPrice,
@@ -19,16 +20,23 @@ import { DepthBar } from "./DepthBar";
  * non-interactive — you can't trade a closed market. Without `onSelect` it's a read-only
  * table. Presentational — rows are derived upstream by `strikeLadderRows`.
  */
+/** Columns the ladder renders — used to size the full-width "last close" marker. */
+const COL_COUNT = 7;
+
 export function StrikeLadder({
   rows,
   selectedAddress,
   onSelect,
+  lastClose,
 }: {
   rows: StrikeRow[];
   /** Address of the currently selected strike (highlighted), if any. */
   selectedAddress?: string | null;
   /** When provided, open rows are clickable and call this with the row address. */
   onSelect?: (address: string) => void;
+  /** The stock's last close (dollars). Draws a marker line between the strikes it sits
+   *  between, so you can see at a glance which strikes are in/out of the money. */
+  lastClose?: number | null;
 }) {
   if (rows.length === 0) {
     return (
@@ -37,6 +45,20 @@ export function StrikeLadder({
       </p>
     );
   }
+
+  // Rows are strike-ascending. The marker goes before the first strike that is *above*
+  // the last close (so the close sits between that row and the one before it). If the
+  // close is above every strike, place it after the last row.
+  const STRIKE_SCALE = 1_000_000; // strike is in USDC base units (6dp); close is dollars.
+  const markerIndex =
+    lastClose == null
+      ? -1
+      : (() => {
+          const idx = rows.findIndex(
+            (r) => r.strike.toNumber() / STRIKE_SCALE > lastClose
+          );
+          return idx === -1 ? rows.length : idx;
+        })();
 
   return (
     <div className="overflow-x-auto" data-testid="strike-ladder">
@@ -55,51 +77,83 @@ export function StrikeLadder({
           </tr>
         </thead>
         <tbody className="stat-mono">
-          {rows.map((row) => {
+          {rows.map((row, i) => {
             const selectable = !!onSelect && row.state === "open";
             const selected = selectedAddress === row.address;
             return (
-              <tr
-                key={row.address}
-                className={cx(
-                  "border-t border-line-soft/60",
-                  selectable && "cursor-pointer hover:bg-panel-2/60",
-                  selected && "bg-accent/10",
-                  row.state === "settled" && "opacity-55"
+              <Fragment key={row.address}>
+                {i === markerIndex && lastClose != null && (
+                  <LastCloseMarker value={lastClose} />
                 )}
-                data-testid={`ladder-row-${row.strike.toString()}`}
-                data-selectable={selectable || undefined}
-                data-selected={selected || undefined}
-                aria-selected={onSelect ? selected : undefined}
-                onClick={selectable ? () => onSelect!(row.address) : undefined}
-              >
-                <td className="py-2 pr-3 text-fg">
-                  {formatUsdc(row.strike, 0)}
-                </td>
-                <td className="py-2 pr-3 text-yes">
-                  {formatPrice(row.yesPrice)}
-                </td>
-                <td className="py-2 pr-3 text-fg-dim">
-                  {formatProbability(row.yesPrice)}
-                </td>
-                <td className="hidden py-2 pr-3 text-fg-dim sm:table-cell">
-                  {row.spread ? formatPrice(row.spread) : "—"}
-                </td>
-                <td className="hidden py-2 pr-3 text-fg-dim sm:table-cell">
-                  {formatTokens(row.restingSize, 0)}
-                </td>
-                <td className="py-2 pr-3">
-                  <DepthBar view={row.depth} className="w-20" />
-                </td>
-                <td className="py-2">
-                  <StatusCell row={row} />
-                </td>
-              </tr>
+                <tr
+                  className={cx(
+                    "border-t border-line-soft/60",
+                    selectable && "cursor-pointer hover:bg-panel-2/60",
+                    selected && "bg-accent/10",
+                    row.state === "settled" && "opacity-55"
+                  )}
+                  data-testid={`ladder-row-${row.strike.toString()}`}
+                  data-selectable={selectable || undefined}
+                  data-selected={selected || undefined}
+                  aria-selected={onSelect ? selected : undefined}
+                  onClick={
+                    selectable ? () => onSelect!(row.address) : undefined
+                  }
+                >
+                  <td className="py-2 pr-3 text-fg">
+                    {formatUsdc(row.strike, 0)}
+                  </td>
+                  <td className="py-2 pr-3 text-yes">
+                    {formatPrice(row.yesPrice)}
+                  </td>
+                  <td className="py-2 pr-3 text-fg-dim">
+                    {formatProbability(row.yesPrice)}
+                  </td>
+                  <td className="hidden py-2 pr-3 text-fg-dim sm:table-cell">
+                    {row.spread ? formatPrice(row.spread) : "—"}
+                  </td>
+                  <td className="hidden py-2 pr-3 text-fg-dim sm:table-cell">
+                    {formatTokens(row.restingSize, 0)}
+                  </td>
+                  <td className="py-2 pr-3">
+                    <DepthBar view={row.depth} className="w-20" />
+                  </td>
+                  <td className="py-2">
+                    <StatusCell row={row} />
+                  </td>
+                </tr>
+              </Fragment>
             );
           })}
+          {/* Close above every strike → marker sits below the last row. */}
+          {markerIndex === rows.length && lastClose != null && (
+            <LastCloseMarker value={lastClose} />
+          )}
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** A full-width divider row marking where the last close falls among the strikes. */
+function LastCloseMarker({ value }: { value: number }) {
+  // `value` is a plain dollar amount (from the price-history feed), not USDC base units —
+  // format it directly rather than via formatUsdc (which divides by 1e6).
+  const label = `$${value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+  return (
+    <tr data-testid="last-close-marker" aria-hidden>
+      <td colSpan={COL_COUNT} className="p-0">
+        <div className="flex items-center gap-2 py-1">
+          <span className="whitespace-nowrap text-xs uppercase tracking-wide text-amber">
+            Last close <span className="stat-mono normal-case">{label}</span>
+          </span>
+          <span className="h-px flex-1 bg-amber/50" />
+        </div>
+      </td>
+    </tr>
   );
 }
 

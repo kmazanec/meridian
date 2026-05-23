@@ -180,6 +180,7 @@ export default function TradePageClient() {
             rows={ladderRows}
             selectedAddress={selected?.toBase58() ?? null}
             onSelect={(addr) => setSelectedAddr(new PublicKey(addr))}
+            lastClose={spot?.close ?? null}
           />
         </section>
 
