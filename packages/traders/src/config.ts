@@ -60,6 +60,13 @@ export interface Environment {
   webBaseUrl?: string;
   /** Pyth Hermes endpoint for spot prices (defaults to the public endpoint in the tool). */
   hermesUrl?: string;
+  /**
+   * Where get_market_price gets the spot price:
+   *   - "pyth" (default): the real Pyth feed via Hermes.
+   *   - "synthetic": the deterministic intraday price from WEB_BASE_URL's /api/price — moving,
+   *     and identical for every bot at the same clock tick (for local/dev variability).
+   */
+  priceSource: "pyth" | "synthetic";
   /** When true, the place-order tool logs the intended trade but does not send it. */
   dryRun: boolean;
 }
@@ -129,12 +136,30 @@ export function loadEnvironment(
       "OPENROUTER_API_KEY is required. Get one at https://openrouter.ai/keys."
     );
   }
+  const priceSourceRaw = env.PRICE_SOURCE?.trim().toLowerCase();
+  if (
+    priceSourceRaw &&
+    priceSourceRaw !== "pyth" &&
+    priceSourceRaw !== "synthetic"
+  ) {
+    throw new Error(
+      `PRICE_SOURCE must be "pyth" or "synthetic" (got "${env.PRICE_SOURCE}").`
+    );
+  }
+  const priceSource = priceSourceRaw === "synthetic" ? "synthetic" : "pyth";
+  if (priceSource === "synthetic" && !env.WEB_BASE_URL?.trim()) {
+    throw new Error(
+      "PRICE_SOURCE=synthetic requires WEB_BASE_URL (it serves /api/price)."
+    );
+  }
+
   return {
     rpcUrl,
     openRouterApiKey,
     usdcMint: env.USDC_MINT?.trim() || undefined,
     webBaseUrl: env.WEB_BASE_URL?.trim() || undefined,
     hermesUrl: env.HERMES_URL?.trim() || undefined,
+    priceSource,
     dryRun: /^(1|true|yes)$/i.test(env.DRY_RUN?.trim() ?? ""),
   };
 }

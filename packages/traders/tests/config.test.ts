@@ -63,4 +63,29 @@ describe("environment loading", () => {
     expect(env.dryRun).to.equal(true);
     expect(loadEnvironment(base).dryRun).to.equal(false);
   });
+
+  it("defaults priceSource to pyth", () => {
+    expect(loadEnvironment(base).priceSource).to.equal("pyth");
+  });
+
+  it("accepts PRICE_SOURCE=synthetic when WEB_BASE_URL is set", () => {
+    const env = loadEnvironment({
+      ...base,
+      PRICE_SOURCE: "synthetic",
+      WEB_BASE_URL: "http://localhost:8788",
+    });
+    expect(env.priceSource).to.equal("synthetic");
+  });
+
+  it("rejects PRICE_SOURCE=synthetic without WEB_BASE_URL", () => {
+    expect(() =>
+      loadEnvironment({ ...base, PRICE_SOURCE: "synthetic" })
+    ).to.throw(/WEB_BASE_URL/);
+  });
+
+  it("rejects an invalid PRICE_SOURCE", () => {
+    expect(() => loadEnvironment({ ...base, PRICE_SOURCE: "magic" })).to.throw(
+      /PRICE_SOURCE/
+    );
+  });
 });
