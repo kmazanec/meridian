@@ -17,6 +17,8 @@ const NAV = [
   { href: "/markets", label: "Markets" },
   { href: "/portfolio", label: "Portfolio" },
   { href: "/history", label: "History" },
+  // The page itself gates to the Config admin (non-admins see a notice, no controls).
+  { href: "/admin", label: "Admin" },
 ];
 
 export function Header() {
