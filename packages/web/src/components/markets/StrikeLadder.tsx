@@ -46,18 +46,23 @@ export function StrikeLadder({
     );
   }
 
-  // Rows are strike-ascending. The marker goes before the first strike that is *above*
-  // the last close (so the close sits between that row and the one before it). If the
-  // close is above every strike, place it after the last row.
+  // Display highest strike at the top: rows arrive strike-ascending, so reverse to
+  // descending for the ladder (a trader reads the price scale top-down, high to low).
+  const orderedRows = [...rows].reverse();
+
+  // The marker shows where the last close falls among the (now descending) strikes: it
+  // goes before the first strike that is *at or below* the close, so the close sits between
+  // that row and the higher one above it. If the close is below every strike, place it
+  // after the last row.
   const STRIKE_SCALE = 1_000_000; // strike is in USDC base units (6dp); close is dollars.
   const markerIndex =
     lastClose == null
       ? -1
       : (() => {
-          const idx = rows.findIndex(
-            (r) => r.strike.toNumber() / STRIKE_SCALE > lastClose
+          const idx = orderedRows.findIndex(
+            (r) => r.strike.toNumber() / STRIKE_SCALE <= lastClose
           );
-          return idx === -1 ? rows.length : idx;
+          return idx === -1 ? orderedRows.length : idx;
         })();
 
   return (
@@ -77,7 +82,7 @@ export function StrikeLadder({
           </tr>
         </thead>
         <tbody className="stat-mono">
-          {rows.map((row, i) => {
+          {orderedRows.map((row, i) => {
             const selectable = !!onSelect && row.state === "open";
             const selected = selectedAddress === row.address;
             return (
@@ -125,8 +130,8 @@ export function StrikeLadder({
               </Fragment>
             );
           })}
-          {/* Close above every strike → marker sits below the last row. */}
-          {markerIndex === rows.length && lastClose != null && (
+          {/* Close below every strike → marker sits below the last row. */}
+          {markerIndex === orderedRows.length && lastClose != null && (
             <LastCloseMarker value={lastClose} />
           )}
         </tbody>

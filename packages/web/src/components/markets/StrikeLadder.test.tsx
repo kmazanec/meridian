@@ -108,8 +108,24 @@ describe("StrikeLadder", () => {
     );
   });
 
+  it("renders strikes in descending order (highest at the top)", () => {
+    render(
+      <StrikeLadder
+        rows={[row(300_000_000), row(310_000_000), row(320_000_000)]}
+      />
+    );
+    const ids = Array.from(
+      document.querySelectorAll("[data-testid^='ladder-row-']")
+    ).map((el) => el.getAttribute("data-testid"));
+    expect(ids).toEqual([
+      "ladder-row-320000000",
+      "ladder-row-310000000",
+      "ladder-row-300000000",
+    ]);
+  });
+
   it("draws the last-close marker between the strikes it falls between", () => {
-    // Strikes $300 and $320; last close $308.82 → marker between them.
+    // Strikes $300 and $320 (shown descending: $320, $300); last close $308.82 → between.
     render(
       <StrikeLadder
         rows={[row(300_000_000), row(320_000_000)]}
@@ -120,24 +136,41 @@ describe("StrikeLadder", () => {
     expect(marker).toHaveTextContent(/last close/i);
     expect(marker).toHaveTextContent("$308.82");
 
-    // Marker sits after the $300 row and before the $320 row in DOM order.
+    // Descending display: marker sits after the $320 row and before the $300 row.
     const rows = Array.from(
       document.querySelectorAll(
         "[data-testid^='ladder-row-'], [data-testid='last-close-marker']"
       )
     ).map((el) => el.getAttribute("data-testid"));
     expect(rows).toEqual([
-      "ladder-row-300000000",
-      "last-close-marker",
       "ladder-row-320000000",
+      "last-close-marker",
+      "ladder-row-300000000",
     ]);
   });
 
-  it("places the marker below all strikes when the close is above every strike", () => {
+  it("places the marker above all strikes when the close is above every strike", () => {
+    // Descending display ($320, $300); close $999 is above the top strike → marker first.
     render(
       <StrikeLadder
         rows={[row(300_000_000), row(320_000_000)]}
         lastClose={999}
+      />
+    );
+    const ids = Array.from(
+      document.querySelectorAll(
+        "[data-testid^='ladder-row-'], [data-testid='last-close-marker']"
+      )
+    ).map((el) => el.getAttribute("data-testid"));
+    expect(ids[0]).toBe("last-close-marker");
+  });
+
+  it("places the marker below all strikes when the close is below every strike", () => {
+    // Descending display ($320, $300); close $1 is below the bottom strike → marker last.
+    render(
+      <StrikeLadder
+        rows={[row(300_000_000), row(320_000_000)]}
+        lastClose={1}
       />
     );
     const ids = Array.from(
