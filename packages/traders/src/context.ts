@@ -136,3 +136,31 @@ export function feedIdHex(
 export function resolveSymbol(symbol: string): Ticker {
   return symbolToTicker(symbol);
 }
+
+/**
+ * Normalize an *optional* symbol filter to either an uppercase symbol or `undefined`
+ * (meaning "no filter — all symbols").
+ *
+ * LLMs frequently fill an optional field with the literal strings `"null"`, `"undefined"`,
+ * `"none"`, `"all"`, `""` (or whitespace) instead of omitting it. Treating those as a real
+ * ticker filters out every market and makes the tool look like nothing is open — which is
+ * exactly what stalled one bot. Map all those sentinels to `undefined` so the tool lists
+ * everything, as intended.
+ */
+export function normalizeSymbolFilter(
+  symbol: string | null | undefined
+): string | undefined {
+  if (symbol == null) return undefined;
+  const trimmed = symbol.trim();
+  if (trimmed === "") return undefined;
+  const lower = trimmed.toLowerCase();
+  if (
+    lower === "null" ||
+    lower === "undefined" ||
+    lower === "none" ||
+    lower === "all"
+  ) {
+    return undefined;
+  }
+  return trimmed.toUpperCase();
+}

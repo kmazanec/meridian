@@ -12,7 +12,7 @@ import { tool, type StructuredToolInterface } from "@langchain/core/tools";
 import { z } from "zod";
 import { fetchOrderBook } from "@meridian/sdk";
 import type { BotContext } from "../context";
-import { discoverOpenMarkets } from "../context";
+import { discoverOpenMarkets, normalizeSymbolFilter } from "../context";
 import { summarizeBook } from "../book";
 import { unitsToAmount, round } from "../format";
 
@@ -29,7 +29,7 @@ const schema = z.object({
 export function makeStrikePricesTool(ctx: BotContext): StructuredToolInterface {
   return tool(
     async ({ symbol }) => {
-      const wanted = symbol?.toUpperCase();
+      const wanted = normalizeSymbolFilter(symbol);
       const markets = await discoverOpenMarkets(ctx.chain.program);
       const filtered = wanted
         ? markets.filter((m) => m.symbol === wanted)
