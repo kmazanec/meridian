@@ -2,8 +2,7 @@
 
 import { useMemo } from "react";
 import { Ticker, TICKER_SYMBOLS } from "@meridian/sdk";
-import { useMarkets } from "@/lib/useChain";
-import { useAllBooks } from "@/lib/useAllBooks";
+import { useMarkets, useAllBooks } from "@/lib/useChain";
 import { usePriceHistory } from "@/lib/usePriceHistory";
 import { groupByTicker } from "@/lib/discovery";
 import { buildTickerView, type TickerView } from "@/lib/marketStats";

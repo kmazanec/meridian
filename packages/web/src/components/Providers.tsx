@@ -13,6 +13,7 @@ import {
   LocalDevWalletAdapter,
   localWalletConfigured,
 } from "@/lib/localWallet";
+import { ChainDataProvider } from "@/lib/ChainDataProvider";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -82,7 +83,10 @@ export function Providers({
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={walletList} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
+        <WalletModalProvider>
+          {/* Shared chain-data store: one poll each for markets/books/config, app-wide. */}
+          <ChainDataProvider>{children}</ChainDataProvider>
+        </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
   );

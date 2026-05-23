@@ -145,8 +145,8 @@ export function tickerAggregate(
 
 /**
  * The representative open market for a ticker: the median-strike open market (a liquidity
- * proxy), or null if none are open. Mirrors `representativeMarkets` selection in
- * {@link useTickerPrices}, but reuses already-fetched books rather than re-fetching.
+ * proxy), or null if none are open. A coin-flip-ish strike is usually the most liquid, so
+ * its book is the best single "price of the stock" for the grid/strip.
  */
 export function representativeMarket(
   markets: DiscoveredMarket[]
@@ -174,6 +174,34 @@ export function representativeMid(
 ): BN | null {
   const rep = representativeMarket(markets);
   return rep ? midPrice(yesView(rep, books)) : null;
+}
+
+/** A live Yes price per ticker, keyed by ticker ordinal. */
+export type LivePrices = Partial<Record<Ticker, BN>>;
+
+/**
+ * Derive a live Yes price per ticker from the already-fetched shared markets + books — the
+ * Landing/strip price source. Each ticker's price is its representative open market's price
+ * (or omitted if it has no open market). This reuses the shared `allBooks` map, so the
+ * Landing page makes **no** RPC calls of its own (this replaced the old per-ticker price
+ * hook, which fired one `fetchOrderBook` per ticker every 30s).
+ */
+export function livePricesByTicker(
+  markets: DiscoveredMarket[],
+  books: BookMap
+): LivePrices {
+  const prices: LivePrices = {};
+  const byTicker = new Map<Ticker, DiscoveredMarket[]>();
+  for (const m of markets) {
+    const list = byTicker.get(m.ticker);
+    if (list) list.push(m);
+    else byTicker.set(m.ticker, [m]);
+  }
+  for (const [ticker, list] of byTicker) {
+    const price = representativeYesPrice(list, books);
+    if (price) prices[ticker] = price;
+  }
+  return prices;
 }
 
 // --- Per-ticker view-model (what the Markets page passes to MarketCard) ---

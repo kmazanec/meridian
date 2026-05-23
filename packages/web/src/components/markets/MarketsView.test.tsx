@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import BN from "bn.js";
 import { Ticker, TICKER_SYMBOLS } from "@meridian/sdk";
 import type { TickerView } from "@/lib/marketStats";
@@ -72,23 +71,15 @@ describe("MarketsView", () => {
     expect(screen.getByText("2 active")).toBeInTheDocument();
   });
 
-  it("reveals the trade link when a card is expanded", async () => {
+  it("links each card to the stock's trade/detail page", () => {
     render(<MarketsView tickers={allTickers()} />);
-    // Trade links are inside the expanded ladder; none shown until a card opens.
-    expect(screen.queryByLabelText("Trade NVDA")).not.toBeInTheDocument();
-    await userEvent.click(screen.getByText("NVDA"));
-    expect(screen.getByLabelText("Trade NVDA")).toHaveAttribute(
+    expect(screen.getByLabelText("View NVDA")).toHaveAttribute(
       "href",
       "/trade/NVDA"
     );
-  });
-
-  it("keeps only one ticker expanded at a time", async () => {
-    render(<MarketsView tickers={allTickers()} />);
-    await userEvent.click(screen.getByText("NVDA"));
-    expect(screen.getByLabelText("Trade NVDA")).toBeInTheDocument();
-    await userEvent.click(screen.getByText("TSLA"));
-    expect(screen.queryByLabelText("Trade NVDA")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Trade TSLA")).toBeInTheDocument();
+    expect(screen.getByLabelText("View TSLA")).toHaveAttribute(
+      "href",
+      "/trade/TSLA"
+    );
   });
 });

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Ticker, TICKER_SYMBOLS } from "@meridian/sdk";
-import type { LivePrices } from "@/lib/useTickerPrices";
+import type { LivePrices } from "@/lib/marketStats";
 import { formatPrice } from "@/lib/format";
 import { Panel, Price, Button } from "@/components/ui";
 import { MeridianMark } from "@/components/Logo";

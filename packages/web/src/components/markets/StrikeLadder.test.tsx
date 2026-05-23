@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import BN from "bn.js";
 import { PublicKey } from "@solana/web3.js";
 import { Outcome, type BookView } from "@meridian/sdk";
@@ -60,5 +61,50 @@ describe("StrikeLadder", () => {
     const r = screen.getByTestId("ladder-row-700000000");
     expect(within(r).getByText(/Yes won/)).toBeInTheDocument();
     expect(within(r).getByText(/\$712\.34/)).toBeInTheDocument();
+  });
+
+  it("selects an open row when clicked (onSelect provided)", async () => {
+    const onSelect = vi.fn();
+    const open = row(660_000_000);
+    render(<StrikeLadder rows={[open]} onSelect={onSelect} />);
+    const r = screen.getByTestId("ladder-row-660000000");
+    expect(r).toHaveAttribute("data-selectable", "true");
+    await userEvent.click(r);
+    expect(onSelect).toHaveBeenCalledWith(open.address);
+  });
+
+  it("highlights the selected row", () => {
+    const open = row(660_000_000);
+    render(
+      <StrikeLadder
+        rows={[open]}
+        onSelect={() => {}}
+        selectedAddress={open.address}
+      />
+    );
+    expect(screen.getByTestId("ladder-row-660000000")).toHaveAttribute(
+      "data-selected",
+      "true"
+    );
+  });
+
+  it("does not select settled rows", async () => {
+    const onSelect = vi.fn();
+    const settled = row(700_000_000, {
+      state: "settled",
+      outcome: Outcome.NoWins,
+    });
+    render(<StrikeLadder rows={[settled]} onSelect={onSelect} />);
+    const r = screen.getByTestId("ladder-row-700000000");
+    expect(r).not.toHaveAttribute("data-selectable");
+    await userEvent.click(r);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("is read-only when no onSelect is given", () => {
+    render(<StrikeLadder rows={[row(660_000_000)]} />);
+    expect(screen.getByTestId("ladder-row-660000000")).not.toHaveAttribute(
+      "data-selectable"
+    );
   });
 });

@@ -7,17 +7,25 @@ import { PublicKey } from "@solana/web3.js";
 import { dualBook, symbolToTicker, TICKER_SYMBOLS } from "@meridian/sdk";
 import {
   useMarkets,
+  useAllBooks,
   useMarket,
-  useOrderBook,
   useUserPosition,
   useUsdcMint,
 } from "@/lib/useChain";
+import { useChainData } from "@/lib/ChainDataProvider";
 import { useProgram } from "@/lib/useProgram";
 import { useSendIx } from "@/lib/useSendIx";
+import { usePriceHistory } from "@/lib/usePriceHistory";
 import { priceFromBook } from "@/lib/market-math";
+import {
+  strikeLadderRows,
+  representativeYesPrice,
+  type BookMap,
+} from "@/lib/marketStats";
 import { recordTradeFill } from "@/lib/recordTradeFill";
-import type { DiscoveredMarket } from "@/lib/discovery";
-import { StrikeList } from "@/components/trade/StrikeList";
+import { formatPrice, formatProbability } from "@/lib/format";
+import { StrikeLadder } from "@/components/markets/StrikeLadder";
+import { Sparkline } from "@/components/markets/Sparkline";
 import { DualBookView } from "@/components/trade/DualBookView";
 import { PayoffLine } from "@/components/trade/PayoffLine";
 import { Countdown } from "@/components/trade/Countdown";
@@ -41,6 +49,11 @@ export default function TradePageClient() {
   const { publicKey } = useWallet();
   const usdcMint = useUsdcMint();
   const { data: allMarkets } = useMarkets();
+  const { data: allBooks } = useAllBooks();
+  const { refreshAll } = useChainData();
+  const history = usePriceHistory(ticker === null ? null : symbol).data;
+  const books: BookMap = useMemo(() => allBooks ?? new Map(), [allBooks]);
+
   const strikes = useMemo(
     () =>
       ticker === null
@@ -49,20 +62,46 @@ export default function TradePageClient() {
     [allMarkets, ticker]
   );
 
+  // The strike ladder doubles as the picker: open rows select, settled rows are muted.
+  const ladderRows = useMemo(
+    () => strikeLadderRows(strikes, books),
+    [strikes, books]
+  );
+
   const [selectedAddr, setSelectedAddr] = useState<PublicKey | null>(null);
   const selected = useMemo(() => {
     if (selectedAddr) return selectedAddr;
+    // Default to the first open strike (ladder is strike-sorted, open before settled).
     const open = strikes.find((m) => m.state === "open") ?? strikes[0];
     return open?.address ?? null;
   }, [selectedAddr, strikes]);
 
   const { data: market } = useMarket(selected);
-  const { data: rawBook, refresh: refreshBook } = useOrderBook(selected);
   const { data: position, refresh: refreshPosition } = useUserPosition(market);
   const tx = useSendIx();
 
+  // The selected strike's book comes from the shared allBooks map (its orderBook addr),
+  // so the page makes no extra per-strike book fetch.
+  const selectedDiscovered = useMemo(
+    () => strikes.find((m) => m.address.equals(selected ?? PublicKey.default)),
+    [strikes, selected]
+  );
+  const rawBook = useMemo(() => {
+    if (!selectedDiscovered) return null;
+    return books.get(selectedDiscovered.orderBook.toBase58()) ?? null;
+  }, [books, selectedDiscovered]);
   const dual = useMemo(() => (rawBook ? dualBook(rawBook) : null), [rawBook]);
   const yesPrice = dual ? priceFromBook(dual.yes) : new BN(500_000);
+
+  // Header "price of the stock": the representative open strike's Yes price.
+  const repPrice = useMemo(
+    () => representativeYesPrice(strikes, books),
+    [strikes, books]
+  );
+  const headerTradingDay =
+    market?.tradingDay ??
+    strikes.find((m) => m.state === "open")?.tradingDay ??
+    null;
 
   if (ticker === null) {
     return (
@@ -74,39 +113,64 @@ export default function TradePageClient() {
     );
   }
 
-  const onSelect = (m: DiscoveredMarket) => setSelectedAddr(m.address);
-
   const onSubmit = async (
     instructions: import("@solana/web3.js").TransactionInstruction[],
     fill: TradeFill
   ) => {
     await tx.send(instructions);
-    // Record cost basis (display-only) and refresh book + balances after confirm.
+    // Record cost basis (display-only) and refresh shared chain data + balances on confirm.
     if (publicKey && selected) {
       recordTradeFill(publicKey.toBase58(), selected.toBase58(), fill);
     }
-    refreshBook();
+    refreshAll();
     refreshPosition();
   };
 
+  const closes = history?.map((p) => p.close) ?? [];
+
   return (
     <div className="space-y-6">
-      <header className="flex items-baseline justify-between">
-        <h1 className="font-serif text-3xl text-fg">{symbol}</h1>
-        <span className="text-sm text-fg-dim">
-          {strikes.length} strikes today
-        </span>
+      {/* Header: symbol, representative price + implied, close-history chart, countdown. */}
+      <header className="panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-5">
+          <div>
+            <h1 className="font-serif text-3xl text-fg">{symbol}</h1>
+            <div className="mt-1 text-xs uppercase tracking-wide text-fg-faint">
+              {strikes.length} strikes today
+            </div>
+          </div>
+          <div>
+            <div className="text-xs uppercase tracking-wide text-fg-faint">
+              Yes price
+            </div>
+            <div className="stat-mono text-2xl text-yes">
+              {repPrice ? formatPrice(repPrice) : "—"}
+            </div>
+            <div className="stat-mono mt-0.5 text-xs text-fg-faint">
+              {repPrice
+                ? `${formatProbability(repPrice)} implied`
+                : "no open market"}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-5">
+          <Sparkline values={closes} width={180} height={48} />
+          {headerTradingDay && <Countdown tradingDay={headerTradingDay} />}
+        </div>
       </header>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
-        <aside className="space-y-4">
-          <StrikeList
-            strikes={strikes}
-            selected={selected}
-            onSelect={onSelect}
+      {/* Ladder-left (also the strike picker), trade-right for the selected strike. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(360px,1fr)_minmax(0,1fr)]">
+        <section className="panel p-5">
+          <h2 className="mb-3 text-xs uppercase tracking-wide text-fg-faint">
+            Strike ladder
+          </h2>
+          <StrikeLadder
+            rows={ladderRows}
+            selectedAddress={selected?.toBase58() ?? null}
+            onSelect={(addr) => setSelectedAddr(new PublicKey(addr))}
           />
-          {market && <Countdown tradingDay={market.tradingDay} />}
-        </aside>
+        </section>
 
         <section className="space-y-6">
           {market && selected ? (
@@ -140,7 +204,7 @@ export default function TradePageClient() {
             </>
           ) : (
             <Panel>
-              <p className="text-fg-dim">Select a strike to trade.</p>
+              <p className="text-fg-dim">Select an open strike to trade.</p>
             </Panel>
           )}
         </section>

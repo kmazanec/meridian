@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import {
-  fetchConfig,
   fetchMarket,
   fetchOrderBook,
   fetchUserPosition,
@@ -15,7 +14,9 @@ import {
 } from "@meridian/sdk";
 import { useProgram } from "./useProgram";
 import { configuredUsdcMint } from "./env";
-import { discoverMarkets, type DiscoveredMarket } from "./discovery";
+import { useChainData } from "./ChainDataProvider";
+import type { DiscoveredMarket } from "./discovery";
+import type { BookMap } from "./marketStats";
 
 /** Standard async-resource state for the read hooks. */
 export interface AsyncResource<T> {
@@ -116,12 +117,18 @@ export function usePolled<T>(
   return { data, loading, error, refresh };
 }
 
-/** The singleton on-chain Config (admin, USDC mint, ticker feed ids). */
+/**
+ * The shared reads below — Config, USDC mint, all markets, all order books — are polled
+ * **once app-wide** by {@link ChainDataProvider}. These hooks just read that context, so
+ * any number of components/pages share a single poll (no per-caller fan-out, which is what
+ * was tripping the devnet rate limit). Per-instance reads (`useMarket`, `useOrderBook`,
+ * `useUserPosition`) below keep their own `usePolled` — they're correctly scoped, not
+ * app-wide.
+ */
+
+/** The singleton on-chain Config (admin, USDC mint, ticker feed ids) — from the store. */
 export function useConfig(): AsyncResource<ConfigAccount> {
-  const program = useProgram();
-  return usePolled(() => fetchConfig(program), [program], {
-    pollMs: 60_000,
-  });
+  return useChainData().config;
 }
 
 /**
@@ -133,13 +140,14 @@ export function useUsdcMint(): PublicKey | null {
   return config?.usdcMint ?? configuredUsdcMint();
 }
 
-/** All markets discovered via getProgramAccounts. */
+/** All markets (one shared getProgramAccounts poll) — from the store. */
 export function useMarkets(): AsyncResource<DiscoveredMarket[]> {
-  const program = useProgram();
-  return usePolled(() => discoverMarkets(program), [program], {
-    // getProgramAccounts is the heaviest call; poll slowly (explicit refresh after trades).
-    pollMs: 45_000,
-  });
+  return useChainData().markets;
+}
+
+/** Every market's order book (one shared getProgramAccounts poll) — from the store. */
+export function useAllBooks(): AsyncResource<BookMap> {
+  return useChainData().allBooks;
 }
 
 /** One market account by address. */

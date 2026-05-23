@@ -17,6 +17,7 @@ import {
   strikeLadderRows,
   tickerAggregate,
   representativeYesPrice,
+  livePricesByTicker,
   type BookMap,
 } from "./marketStats";
 
@@ -207,5 +208,45 @@ describe("representativeYesPrice", () => {
         new Map()
       )
     ).toBeNull();
+  });
+});
+
+describe("livePricesByTicker", () => {
+  it("maps each ticker to its representative open price from the shared books", () => {
+    const aaplOb = PublicKey.unique();
+    const tslaOb = PublicKey.unique();
+    const books: BookMap = new Map([
+      [
+        aaplOb.toBase58(),
+        book(
+          [order(OrderSide.Bid, 400_000, 1_000_000, 1)],
+          [order(OrderSide.Ask, 500_000, 1_000_000, 2)]
+        ),
+      ],
+      // TSLA's only open market has an empty book → 50/50 fallback.
+      [tslaOb.toBase58(), book([], [])],
+    ]);
+    const markets = [
+      market({ ticker: Ticker.Aapl, strike: 100, orderBook: aaplOb }),
+      market({ ticker: Ticker.Tsla, strike: 200, orderBook: tslaOb }),
+    ];
+    const prices = livePricesByTicker(markets, books);
+    expect(prices[Ticker.Aapl]?.toNumber()).toBe(450_000); // mid 0.40/0.50
+    expect(prices[Ticker.Tsla]?.toNumber()).toBe(PRICE_SCALE.toNumber() / 2);
+  });
+
+  it("omits tickers with no open market", () => {
+    const prices = livePricesByTicker(
+      [
+        market({
+          ticker: Ticker.Nvda,
+          strike: 100,
+          state: "settled",
+          orderBook: PublicKey.unique(),
+        }),
+      ],
+      new Map()
+    );
+    expect(prices[Ticker.Nvda]).toBeUndefined();
   });
 });
