@@ -169,6 +169,11 @@ bots: ## Spawn one background process per bot in packages/traders/bots.config.js
 	  echo "✗ No $(BOTS_CONFIG). Copy $(BOTS_DIR)/bots.config.example.json to it and edit."; exit 1; fi
 	@if [ -z "$$OPENROUTER_API_KEY" ]; then echo "✗ OPENROUTER_API_KEY is not set."; exit 1; fi
 	@if [ -z "$$RPC_URL" ]; then echo "✗ RPC_URL is not set (e.g. https://api.devnet.solana.com)."; exit 1; fi
+	@# Refuse to start on top of a running fleet — that's how an OLD build ends up running
+	@# next to a new one. Stop first so the rebuilt code is the only code running.
+	@if pgrep -f 'dist/bin/run-bot.js' >/dev/null 2>&1; then \
+	  echo "✗ Bots already running. Stop them first: make bots-stop"; exit 1; fi
+	@# Build to completion BEFORE spawning, so no bot loads a half-written dist.
 	@$(YARN) workspace @meridian/sdk build >/dev/null
 	@$(YARN) workspace @meridian/traders build >/dev/null
 	@mkdir -p $(BOTS_LOG_DIR)
@@ -181,12 +186,25 @@ bots: ## Spawn one background process per bot in packages/traders/bots.config.js
 	done; \
 	echo "✓ Fleet running. Watch them: make bots-logs   Stop them: make bots-stop"
 
-bots-stop: ## Stop all running bots (kills the PIDs recorded by `make bots`).
-	@if [ ! -f $(BOTS_PIDS) ]; then echo "No $(BOTS_PIDS); nothing to stop."; exit 0; fi
-	@while read -r pid; do \
-	  if kill "$$pid" 2>/dev/null; then echo "  ▪ stopped pid $$pid"; fi; \
-	done < $(BOTS_PIDS); \
-	rm -f $(BOTS_PIDS); echo "✓ Fleet stopped."
+bots-stop: ## Stop all running bots (recorded PIDs + any stray run-bot processes).
+	@if [ -f $(BOTS_PIDS) ]; then \
+	  while read -r pid; do \
+	    if kill "$$pid" 2>/dev/null; then echo "  ▪ TERM pid $$pid"; fi; \
+	  done < $(BOTS_PIDS); \
+	  rm -f $(BOTS_PIDS); \
+	fi
+	@sleep 1
+	@# Safety net: bots are spawned detached, so they can outlive the pids file or reparent to
+	@# init. Sweep any survivor run-bot processes and force-kill them. Without this, a
+	@# "stop + restart" can silently leave an OLD build running alongside the new one.
+	@stray=$$(pgrep -f 'dist/bin/run-bot.js' 2>/dev/null || true); \
+	if [ -n "$$stray" ]; then \
+	  echo "  ▪ force-killing stray run-bot pids: $$stray"; \
+	  kill -9 $$stray 2>/dev/null || true; sleep 1; \
+	fi
+	@if pgrep -f 'dist/bin/run-bot.js' >/dev/null 2>&1; then \
+	  echo "✗ some bots still running — inspect: pgrep -fl run-bot.js"; exit 1; \
+	else echo "✓ Fleet stopped (none running)."; fi
 
 bots-logs: ## Tail the combined reasoning logs of all running bots.
 	@if [ ! -d $(BOTS_LOG_DIR) ] || [ -z "$$(ls -A $(BOTS_LOG_DIR)/*.log 2>/dev/null)" ]; then \
