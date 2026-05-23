@@ -45,7 +45,7 @@ export function SpotLine({
     changePct == null
       ? "text-fg-faint"
       : changePct >= 0
-      ? "text-accent"
+      ? "text-yes"
       : "text-no";
 
   return (

@@ -8,10 +8,10 @@ describe("LandingView", () => {
   it("explains the product in the brand voice", () => {
     render(<LandingView prices={{}} connect={<button>Connect</button>} />);
     expect(
-      screen.getByRole("heading", { name: /One book\. Four actions\./i })
+      screen.getByRole("heading", { name: /Daily stock verdicts\./i })
     ).toBeInTheDocument();
-    // The core relation is stated.
-    expect(screen.getByText(/Yes \+ No = \$1\.00/)).toBeInTheDocument();
+    // The differentiator — deterministic, by-the-bell settlement — is stated.
+    expect(screen.getByText(/no human oracle/i)).toBeInTheDocument();
   });
 
   it("renders the injected connect-wallet control", () => {

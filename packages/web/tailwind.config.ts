@@ -1,29 +1,33 @@
 import type { Config } from "tailwindcss";
 
 /**
- * The design tokens are the product's brand contract (the pitch deck). Colors and
- * type scale mirror it exactly so the app reads as one surface with the deck:
- * a dark fintech palette, mint-green "Yes", coral "No", blue USDC, amber warnings.
+ * The design tokens are the product's brand contract — the "Editorial Fintech / Gold & Teal"
+ * identity. A warm near-black surface, GOLD as the brand accent (logo, primary CTAs, the
+ * settlement countdown), TEAL "Yes" and TERRACOTTA "No" semantics, blue USDC, amber warnings.
+ *
+ * Crucial split: `accent` is the BRAND color (gold) and is deliberately a *different* hex from
+ * `yes` (teal). Up-trends and the "Yes" side read teal; the gold accent never stands in for Yes.
+ * Type is editorial: Fraunces serif display, Inter body, JetBrains Mono for all numbers.
  */
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        ink: { DEFAULT: "#070b14", 2: "#0c121f" },
-        panel: { DEFAULT: "#0f1726", 2: "#131d30" },
-        line: { DEFAULT: "#243349", soft: "#18243a" },
-        fg: { DEFAULT: "#e8edf5", dim: "#93a3bd", faint: "#5e6f8c" },
-        accent: { DEFAULT: "#4ff0a8", dim: "#2bbd80" },
-        amber: { DEFAULT: "#ffb454", dim: "#c9893b" },
-        yes: "#4ff0a8",
-        no: "#ff7a8a",
+        ink: { DEFAULT: "#0f1115", 2: "#16181d" },
+        panel: { DEFAULT: "#14161b", 2: "#1a1d23" },
+        line: { DEFAULT: "#272a31", soft: "#20232a" },
+        fg: { DEFAULT: "#e9e5dc", dim: "#b3ad9f", faint: "#7d776b" },
+        accent: { DEFAULT: "#e8b14c", dim: "#b8853a" },
+        amber: { DEFAULT: "#d99a4e", dim: "#a8763a" },
+        yes: "#4ac9a2",
+        no: "#e08a6c",
         usdc: "#5aa6ff",
       },
       fontFamily: {
-        sans: ["Archivo", "Helvetica Neue", "sans-serif"],
+        sans: ["Inter", "Helvetica Neue", "sans-serif"],
         serif: ["Fraunces", "Georgia", "serif"],
-        mono: ["Space Mono", "ui-monospace", "monospace"],
+        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
       },
       maxWidth: {
         page: "1180px",

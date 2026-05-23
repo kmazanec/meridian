@@ -22,37 +22,39 @@ export function LandingView({
     <div className="space-y-16 py-8">
       <section className="text-center">
         <MeridianMark size={48} className="mx-auto mb-6" />
-        <h1 className="font-serif text-5xl leading-tight text-fg">
-          One book. Four actions.
-          <br />
-          Two perspectives.
+        <div className="text-xs uppercase tracking-widest text-accent">
+          The prediction market for what stocks do today
+        </div>
+        <h1 className="mt-3 font-serif text-5xl leading-[1.05] tracking-tight text-fg sm:text-6xl">
+          Daily stock verdicts.
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-lg text-fg-dim">
-          Trade <span className="text-fg">Yes</span> or{" "}
-          <span className="text-fg">No</span> on whether a MAG7 stock closes at
-          or above a strike today. Each contract pays{" "}
-          <Price tone="usdc">$1.00</Price> to the winning side — always{" "}
-          <span className="font-mono text-fg">Yes + No = $1.00</span>.
+          Take a side on whether a stock closes above the line today. Each
+          contract pays <Price tone="usdc">$1.00</Price> to the winning side and
+          settles the instant the market closes — deterministic, by the bell, no
+          human oracle.
         </p>
         <div className="mt-8 flex items-center justify-center gap-3">
           {connect}
           <Link href="/markets">
-            <Button variant="ghost">Browse markets</Button>
+            <Button variant="ghost">Browse today's markets</Button>
           </Link>
         </div>
       </section>
 
       <section>
         <div className="mb-3 text-center text-xs uppercase tracking-widest text-fg-faint">
-          Live Yes prices
+          Today's odds
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
           {TICKER_SYMBOLS.map((symbol, ordinal) => {
             const price = prices[ordinal as Ticker] ?? null;
             return (
               <Link key={symbol} href={`/trade/${symbol}`}>
-                <Panel className="p-3 text-center transition-colors hover:border-line">
-                  <div className="font-mono text-sm text-fg">{symbol}</div>
+                <Panel className="p-3 text-center transition-colors hover:border-accent/30">
+                  <div className="font-serif text-base tracking-tight text-fg">
+                    {symbol}
+                  </div>
                   <Price tone="yes" className="mt-1 block text-lg">
                     {price ? formatPrice(price) : "—"}
                   </Price>
@@ -66,25 +68,31 @@ export function LandingView({
       <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Panel>
           <h3 className="font-serif text-lg text-fg">
-            Non-custodial by design
+            Settled by the bell, not by a person
           </h3>
           <p className="mt-2 text-sm text-fg-dim">
-            The program is the only thing that can move funds. Your wallet signs
-            every action; no operator ever holds your collateral.
+            The closing price decides it — read straight from an on-chain oracle
+            at 4:00 PM ET. No proposer, no dispute window, no waiting on a human
+            to call the outcome.
           </p>
         </Panel>
         <Panel>
-          <h3 className="font-serif text-lg text-fg">Four buttons, one book</h3>
+          <h3 className="font-serif text-lg text-fg">
+            Pick a side, pay a price
+          </h3>
           <p className="mt-2 text-sm text-fg-dim">
-            Buy Yes, Buy No, Sell Yes, Sell No — all resolve onto a single
-            on-chain order book. Selling a Yes is buying a No.
+            Buy <span className="text-yes">Yes</span> if you think it closes
+            above the strike, <span className="text-no">No</span> if you don't.
+            Trade out anytime against a live on-chain order book.
           </p>
         </Panel>
         <Panel>
-          <h3 className="font-serif text-lg text-fg">Settles at the close</h3>
+          <h3 className="font-serif text-lg text-fg">
+            Non-custodial by construction
+          </h3>
           <p className="mt-2 text-sm text-fg-dim">
-            At 4:00 PM ET the market settles against an on-chain oracle. Winners
-            redeem each token for <Price tone="usdc">$1.00</Price>.
+            Your wallet signs every action and the program is the only thing that
+            can move funds. No operator ever holds your collateral.
           </p>
         </Panel>
       </section>

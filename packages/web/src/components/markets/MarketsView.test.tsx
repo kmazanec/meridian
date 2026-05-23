@@ -62,13 +62,13 @@ describe("MarketsView", () => {
     expect(screen.getByText("65% implied")).toBeInTheDocument();
   });
 
-  it("counts active (open) contracts per ticker", () => {
+  it("counts open contracts per ticker", () => {
     render(
       <MarketsView
         tickers={allTickers({ [Ticker.Aapl]: { activeCount: 2 } })}
       />
     );
-    expect(screen.getByText("2 active")).toBeInTheDocument();
+    expect(screen.getByText("2 open")).toBeInTheDocument();
   });
 
   it("links each card to the stock's trade/detail page", () => {

@@ -34,15 +34,27 @@ export function HistoryView({
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="font-serif text-3xl text-fg">History</h1>
-        <p className="mt-1 text-fg-dim">Your trade execution log.</p>
+        <div className="text-xs uppercase tracking-widest text-accent">
+          Activity
+        </div>
+        <h1 className="mt-2 font-serif text-3xl tracking-tight text-fg">
+          History
+        </h1>
+        <p className="mt-1 text-fg-dim">
+          Every order, fill, mint, and redemption your wallet has signed.
+        </p>
       </header>
 
       {entries.length === 0 ? (
-        <Panel>
-          <p className="text-sm text-fg-faint">
-            {loading ? "Loading…" : "No activity yet."}
+        <Panel className="py-10 text-center">
+          <p className="text-sm text-fg-dim">
+            {loading ? "Loading your activity…" : "No activity yet."}
           </p>
+          {!loading && (
+            <p className="mt-1 text-xs text-fg-faint">
+              Your trades will show up here as you make them.
+            </p>
+          )}
         </Panel>
       ) : (
         <div

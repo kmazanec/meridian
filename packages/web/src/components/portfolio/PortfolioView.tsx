@@ -39,7 +39,12 @@ export function PortfolioView({
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="font-serif text-3xl text-fg">Portfolio</h1>
+        <div className="text-xs uppercase tracking-widest text-accent">
+          Your book
+        </div>
+        <h1 className="mt-2 font-serif text-3xl tracking-tight text-fg">
+          Portfolio
+        </h1>
       </header>
 
       <section>
@@ -47,8 +52,11 @@ export function PortfolioView({
           Open positions
         </h2>
         {open.length === 0 ? (
-          <Panel>
-            <p className="text-sm text-fg-faint">No open positions.</p>
+          <Panel className="py-10 text-center">
+            <p className="text-sm text-fg-dim">No open positions yet.</p>
+            <p className="mt-1 text-xs text-fg-faint">
+              Pick a stock and take a side to get started.
+            </p>
           </Panel>
         ) : (
           <div className="space-y-2" data-testid="open-positions">
@@ -64,8 +72,11 @@ export function PortfolioView({
           Settled
         </h2>
         {settled.length === 0 ? (
-          <Panel>
-            <p className="text-sm text-fg-faint">No settled positions.</p>
+          <Panel className="py-10 text-center">
+            <p className="text-sm text-fg-dim">Nothing settled yet.</p>
+            <p className="mt-1 text-xs text-fg-faint">
+              Settled markets and their payouts will appear here after the close.
+            </p>
           </Panel>
         ) : (
           <div className="space-y-2" data-testid="settled-positions">

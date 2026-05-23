@@ -23,7 +23,7 @@ import {
   type BookMap,
 } from "@/lib/marketStats";
 import { recordTradeFill } from "@/lib/recordTradeFill";
-import { formatPrice, formatProbability } from "@/lib/format";
+import { formatPrice, formatProbability, formatUsdc } from "@/lib/format";
 import { StrikeLadder } from "@/components/markets/StrikeLadder";
 import { PriceChart } from "@/components/markets/PriceChart";
 import { SpotLine } from "@/components/markets/SpotLine";
@@ -130,49 +130,57 @@ export default function TradePageClient() {
   const closes = history?.map((p) => p.close) ?? [];
   const spot = spotFromHistory(history ?? []);
 
+  // The hero question reads as the actual contract: prefer the selected strike, else the
+  // representative open strike, else a generic framing when nothing is open today.
+  const heroStrike = market?.strike ?? null;
+  const heroQuestion = heroStrike
+    ? `Will ${symbol} close ≥ ${formatUsdc(heroStrike, 0)} today?`
+    : `Will ${symbol} close above today's strike?`;
+
   return (
     <div className="space-y-6">
-      {/* Header: symbol, representative Yes price + implied, spot (last close), countdown. */}
-      <header className="panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-5">
-          <div>
-            <h1 className="font-serif text-3xl text-fg">{symbol}</h1>
-            <SpotLine spot={spot} showOpen className="mt-1 block" />
+      {/* Question hero: the contract in plain language + the three numbers that matter. */}
+      <header className="panel p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="text-xs uppercase tracking-widest text-accent">
+              {symbol} · today's verdict
+            </div>
+            <h1 className="mt-2 font-serif text-3xl leading-tight tracking-tight text-fg sm:text-4xl">
+              {heroQuestion}
+            </h1>
+            <SpotLine spot={spot} showOpen className="mt-3 block" />
           </div>
-          <div>
-            <div className="text-xs uppercase tracking-wide text-fg-faint">
-              Yes price
+          <div className="flex items-end gap-8">
+            <div>
+              <div className="text-xs uppercase tracking-wide text-fg-faint">
+                Yes price
+              </div>
+              <div className="stat-mono text-3xl text-yes">
+                {repPrice ? formatPrice(repPrice) : "—"}
+              </div>
+              <div className="stat-mono mt-0.5 text-xs text-fg-faint">
+                {repPrice
+                  ? `${formatProbability(repPrice)} implied`
+                  : "no open market"}
+              </div>
             </div>
-            <div className="stat-mono text-2xl text-yes">
-              {repPrice ? formatPrice(repPrice) : "—"}
-            </div>
-            <div className="stat-mono mt-0.5 text-xs text-fg-faint">
-              {repPrice
-                ? `${formatProbability(repPrice)} implied`
-                : "no open market"}
-            </div>
+            {headerTradingDay && (
+              <Countdown tradingDay={headerTradingDay} variant="inline" />
+            )}
           </div>
         </div>
-        {headerTradingDay && <Countdown tradingDay={headerTradingDay} />}
       </header>
 
-      {/* Full-width interactive close-price chart. */}
-      <section className="panel p-5">
-        <div className="mb-2 flex items-baseline justify-between">
-          <h2 className="text-xs uppercase tracking-wide text-fg-faint">
-            {symbol} · last {closes.length} sessions
-          </h2>
-          <SpotLine spot={spot} />
-        </div>
-        <PriceChart points={history ?? []} />
-      </section>
-
-      {/* Ladder-left (also the strike picker), trade-right for the selected strike. */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(360px,1fr)_minmax(0,1fr)]">
-        <section className="panel p-5">
+      {/* Persistent trading terminal: strikes · chart + book · ticket.
+          Three columns at xl; ladder + (chart/book) at lg with the ticket below;
+          a single focus-mode stack on mobile. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(280px,320px)_minmax(0,1fr)] xl:grid-cols-[minmax(280px,320px)_minmax(0,1fr)_minmax(340px,380px)]">
+        {/* Left: strike ladder (the picker). */}
+        <section className="panel order-2 p-5 lg:order-1">
           <div className="mb-3 flex items-baseline justify-between">
             <h2 className="text-xs uppercase tracking-wide text-fg-faint">
-              Strike ladder
+              Strikes
             </h2>
             <SpotLine spot={spot} />
           </div>
@@ -184,7 +192,32 @@ export default function TradePageClient() {
           />
         </section>
 
-        <section className="space-y-6">
+        {/* Center: price chart over the order book for the selected strike. */}
+        <section className="order-1 space-y-6 lg:order-2">
+          <div className="panel p-5">
+            <div className="mb-2 flex items-baseline justify-between">
+              <h2 className="text-xs uppercase tracking-wide text-fg-faint">
+                {symbol} · last {closes.length} sessions
+              </h2>
+              <SpotLine spot={spot} />
+            </div>
+            <PriceChart points={history ?? []} />
+          </div>
+          {market && selected ? (
+            dual ? (
+              <DualBookView book={dual} />
+            ) : (
+              <Panel>
+                <p className="text-sm text-fg-faint">
+                  No order book yet for this strike.
+                </p>
+              </Panel>
+            )
+          ) : null}
+        </section>
+
+        {/* Right: the trade ticket (drops below the chart at lg, beside it at xl). */}
+        <section className="order-3 space-y-6 lg:col-span-2 xl:col-span-1">
           {market && selected ? (
             <>
               <PayoffLine
@@ -192,15 +225,6 @@ export default function TradePageClient() {
                 strike={market.strike}
                 yesPrice={yesPrice}
               />
-              {dual ? (
-                <DualBookView book={dual} />
-              ) : (
-                <Panel>
-                  <p className="text-sm text-fg-faint">
-                    No order book yet for this strike.
-                  </p>
-                </Panel>
-              )}
               <TxStatusBanner state={tx} />
               <TradePanel
                 program={program}

@@ -232,8 +232,11 @@ export function TradePanel({
         {ACTIONS.map((a) => (
           <Button
             key={a.action}
-            variant={action === a.action ? a.variant : "ghost"}
+            variant={action === a.action ? a.variant : "default"}
             aria-pressed={action === a.action}
+            className={cx(
+              action !== a.action && "text-fg-dim hover:text-fg"
+            )}
             onClick={() => setAction(a.action)}
           >
             {a.label}

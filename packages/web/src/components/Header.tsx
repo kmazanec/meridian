@@ -25,13 +25,13 @@ const NAV = [
 export function Header() {
   const pathname = usePathname();
   return (
-    <header className="relative z-10 border-b border-line-soft">
-      <div className="mx-auto flex max-w-page items-center justify-between gap-6 px-5 py-4">
-        <div className="flex items-center gap-8">
+    <header className="sticky top-0 z-20 border-b border-line-soft bg-ink/80 backdrop-blur">
+      <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-4">
+        <div className="flex items-center gap-4 sm:gap-8">
           <Link href="/" aria-label="Meridian home">
             <Logo />
           </Link>
-          <nav className="flex items-center gap-5 text-sm">
+          <nav className="order-3 flex w-full items-center gap-5 overflow-x-auto text-sm sm:order-none sm:w-auto">
             {NAV.map((item) => {
               const active =
                 pathname === item.href || pathname.startsWith(item.href + "/");
@@ -40,11 +40,14 @@ export function Header() {
                   key={item.href}
                   href={item.href}
                   className={cx(
-                    "transition-colors",
+                    "relative shrink-0 py-1 transition-colors",
                     active ? "text-fg" : "text-fg-dim hover:text-fg"
                   )}
                 >
                   {item.label}
+                  {active && (
+                    <span className="absolute -bottom-px left-0 h-0.5 w-full rounded-full bg-accent" />
+                  )}
                 </Link>
               );
             })}

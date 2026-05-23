@@ -116,7 +116,7 @@ export function PriceChart({
   }
 
   const up = points[points.length - 1].close >= points[0].close;
-  const stroke = up ? "text-accent" : "text-no";
+  const stroke = up ? "text-yes" : "text-no";
 
   // Map a pointer x (in viewBox units) to the nearest data point index.
   const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -227,7 +227,13 @@ export function PriceChart({
               strokeOpacity={0.35}
               strokeDasharray="3 3"
             />
-            <circle cx={hoverPt.x} cy={hoverPt.y} r={3.5} fill="currentColor" />
+            {/* Gold marker: the brand color marks the moment of interaction. */}
+            <circle
+              cx={hoverPt.x}
+              cy={hoverPt.y}
+              r={4}
+              className="fill-accent"
+            />
           </g>
         )}
       </svg>

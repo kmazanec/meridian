@@ -53,7 +53,7 @@ export function Sparkline({
   const geo = sparklineGeometry(values, width, height);
   // Direction tone: up vs the first observed close (or neutral with no data).
   const up = values.length >= 2 && values[values.length - 1] >= values[0];
-  const stroke = up ? "text-accent" : "text-no";
+  const stroke = up ? "text-yes" : "text-no";
 
   if (!geo) {
     return (

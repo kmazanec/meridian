@@ -12,10 +12,15 @@ export function MarketsView({ tickers }: { tickers: TickerView[] }) {
   return (
     <div>
       <header className="mb-6">
-        <h1 className="font-serif text-3xl text-fg">Markets</h1>
-        <p className="mt-1 text-fg-dim">
-          Seven stocks. Will it close at or above the strike today? Open a stock
-          for its full strike ladder, depth, and settlement history.
+        <div className="text-xs uppercase tracking-widest text-accent">
+          Today's verdicts
+        </div>
+        <h1 className="mt-2 font-serif text-3xl tracking-tight text-fg">
+          Will it close above the line?
+        </h1>
+        <p className="mt-1 max-w-2xl text-fg-dim">
+          Seven stocks, one question each. Take a side on where they close — open
+          a stock for its full strike ladder, depth, and live order book.
         </p>
       </header>
 

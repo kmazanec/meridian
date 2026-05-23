@@ -1,11 +1,14 @@
 import { cx } from "./ui";
 
 /**
- * The Meridian mark: a ring (the market / the globe) crossed by a meridian arc that
- * crests at a single peak point — "meridian" as both a line of longitude and the highest
- * point a price crosses in a session. Drawn as inline SVG so it stays crisp at any size,
- * inherits the brand mint via `currentColor`, and ships with zero asset requests. The
- * same geometry is exported to `public/favicon.svg`.
+ * The Meridian mark: the sun at its meridian — the instant it crosses its highest point —
+ * rising in an arc above the horizon line of the daily close. "Meridian" is solar noon
+ * (the apex) and a line of longitude both; the product settles at the close, so the mark
+ * is the sun cresting over the close line with the brand gold disc at the apex.
+ *
+ * Drawn as inline SVG so it stays crisp at any size, inherits the brand gold via
+ * `currentColor` (`text-accent`), and ships with zero asset requests. The same geometry is
+ * mirrored in `public/favicon.svg` (with hardcoded hex, since favicons can't inherit color).
  */
 export function MeridianMark({
   size = 24,
@@ -24,24 +27,27 @@ export function MeridianMark({
       aria-label="Meridian"
       className={cx("text-accent", className)}
     >
-      {/* The ring — the market. */}
-      <circle
-        cx="16"
-        cy="16"
-        r="13"
+      {/* The arc the sun travels — rising to and falling from its meridian. */}
+      <path
+        d="M4 22 C 8 8, 24 8, 28 22"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeOpacity="0.45"
+      />
+      {/* The horizon — the daily close the price must cross. */}
+      <line
+        x1="3"
+        y1="24"
+        x2="29"
+        y2="24"
         stroke="currentColor"
         strokeWidth="2"
-        strokeOpacity="0.35"
-      />
-      {/* The meridian arc, cresting toward the top-right peak. */}
-      <path
-        d="M5 22 C 10 22, 12 8, 20 7"
-        stroke="currentColor"
-        strokeWidth="2.5"
         strokeLinecap="round"
+        strokeOpacity="0.8"
       />
-      {/* The peak marker at the meridian's crest. */}
-      <circle cx="20" cy="7" r="3" fill="currentColor" />
+      {/* The sun at its meridian: the solid gold disc at the arc's apex. */}
+      <circle cx="16" cy="11" r="4.2" fill="currentColor" />
     </svg>
   );
 }

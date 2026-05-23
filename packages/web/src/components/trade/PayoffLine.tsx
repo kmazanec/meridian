@@ -4,9 +4,10 @@ import { formatPrice, formatProbability, formatUsdc } from "@/lib/format";
 import { impliedComplement } from "@/lib/market-math";
 
 /**
- * The plain-language payoff explainer for a strike, plus the implied No price
- * ($1.00 − Yes). Translates the mechanics into "if X closes ≥ strike, Yes pays $1.00"
- * so a user never has to reason about the token math.
+ * The payoff explainer for the selected strike: the two complementary prices (Yes and
+ * No = $1.00 − Yes) shown side by side with the "each winning token redeems for $1.00"
+ * rule spelled out. The "Will X close above the strike?" question itself now lives in the
+ * trade page hero, so this is the just-the-payoff companion that sits above the ticket.
  */
 export function PayoffLine({
   ticker,
@@ -25,24 +26,42 @@ export function PayoffLine({
 
   return (
     <div className="panel p-4">
-      <p className="text-sm text-fg-dim">
-        Will <span className="font-mono text-fg">{symbol}</span> close at or
-        above <span className="font-mono text-fg">{strikeLabel}</span> today? If
-        yes, each <span className="text-yes">Yes</span> token pays{" "}
-        <span className="font-mono text-usdc">$1.00</span>; if no, each{" "}
-        <span className="text-no">No</span> token pays{" "}
-        <span className="font-mono text-usdc">$1.00</span>.
-      </p>
-      <div className="mt-3 flex gap-6 font-mono text-sm">
-        <span className="text-yes" data-testid="yes-price">
-          Yes {formatPrice(yesPrice)}{" "}
-          <span className="text-fg-faint">({formatProbability(yesPrice)})</span>
-        </span>
-        <span className="text-no" data-testid="no-price">
-          No {formatPrice(noPrice)}{" "}
-          <span className="text-fg-faint">({formatProbability(noPrice)})</span>
-        </span>
+      <div className="flex items-stretch gap-3">
+        <div className="flex-1 rounded-lg border border-yes/30 bg-yes/5 p-3">
+          <div className="text-[0.65rem] uppercase tracking-wide text-yes/80">
+            Yes · closes ≥ {strikeLabel}
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span
+              className="stat-mono text-2xl text-yes"
+              data-testid="yes-price"
+            >
+              {formatPrice(yesPrice)}
+            </span>
+            <span className="stat-mono text-xs text-fg-faint">
+              {formatProbability(yesPrice)}
+            </span>
+          </div>
+        </div>
+        <div className="flex-1 rounded-lg border border-no/30 bg-no/5 p-3">
+          <div className="text-[0.65rem] uppercase tracking-wide text-no/80">
+            No · closes below
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="stat-mono text-2xl text-no" data-testid="no-price">
+              {formatPrice(noPrice)}
+            </span>
+            <span className="stat-mono text-xs text-fg-faint">
+              {formatProbability(noPrice)}
+            </span>
+          </div>
+        </div>
       </div>
+      <p className="mt-3 text-xs text-fg-faint">
+        Each winning {symbol} token redeems for{" "}
+        <span className="font-mono text-usdc">$1.00</span> at the close — Yes + No
+        always equals <span className="font-mono text-fg-dim">$1.00</span>.
+      </p>
     </div>
   );
 }

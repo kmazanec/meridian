@@ -6,11 +6,11 @@ import { MeridianMark } from "@/components/Logo";
 
 export const metadata: Metadata = {
   title: {
-    default: "Meridian — binary stock markets on Solana",
+    default: "Meridian — daily stock verdicts",
     template: "%s · Meridian",
   },
   description:
-    "Trade Yes/No on whether a MAG7 stock closes at or above a strike today. One book. Four actions. Two perspectives.",
+    "The prediction market for what stocks do today. Take a side on whether a stock closes above the line — deterministic, settled by the bell, no human oracle.",
   applicationName: "Meridian",
   icons: {
     icon: [
@@ -20,16 +20,16 @@ export const metadata: Metadata = {
     apple: "/apple-touch-icon.png",
   },
   openGraph: {
-    title: "Meridian — binary stock markets on Solana",
+    title: "Meridian — daily stock verdicts",
     description:
-      "Trade Yes/No on whether a MAG7 stock closes at or above a strike today.",
+      "The prediction market for what stocks do today. Deterministic, settled by the bell, no human oracle.",
     siteName: "Meridian",
     type: "website",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#070b14",
+  themeColor: "#0f1115",
 };
 
 export default function RootLayout({

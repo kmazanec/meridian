@@ -25,11 +25,11 @@ function view(overrides: Partial<TickerView> = {}): TickerView {
 }
 
 describe("MarketCard", () => {
-  it("shows the summary: symbol, active count, Yes price, sparkline", () => {
+  it("shows the summary: symbol, open count, Yes price, sparkline", () => {
     render(<MarketCard view={view()} />);
     const card = screen.getByTestId("market-card-NVDA");
     expect(within(card).getByText("NVDA")).toBeInTheDocument();
-    expect(within(card).getByText("2 active")).toBeInTheDocument();
+    expect(within(card).getByText("2 open")).toBeInTheDocument();
     expect(within(card).getByText("$0.65")).toBeInTheDocument();
     expect(within(card).getByTestId("sparkline")).toBeInTheDocument();
   });

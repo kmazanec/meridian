@@ -29,25 +29,28 @@ export function MarketCard({ view }: { view: TickerView }) {
     <Link
       href={`/trade/${symbol}`}
       aria-label={`View ${symbol}`}
-      className="panel block p-5 transition-colors hover:border-line"
+      className="panel block p-5 transition-colors hover:border-accent/30"
       data-testid={`market-card-${symbol}`}
     >
       <div className="flex items-baseline justify-between">
-        <span className="font-mono text-lg text-fg">{symbol}</span>
+        <span className="font-serif text-xl tracking-tight text-fg">
+          {symbol}
+        </span>
         <span
           className={cx(
             "text-xs uppercase tracking-wide",
             hasOpen ? "text-accent" : "text-fg-faint"
           )}
         >
-          {activeCount} active
+          {hasOpen ? `${activeCount} open` : "closed"}
         </span>
       </div>
+      <p className="mt-1 text-sm text-fg-dim">Will it close above the line?</p>
 
       <div className="mt-4 flex items-end justify-between gap-4">
         <div>
           <div className="text-xs uppercase tracking-wide text-fg-faint">
-            Yes price
+            Yes
           </div>
           <div className="stat-mono text-2xl text-yes">
             {repYesPrice ? formatPrice(repYesPrice) : "—"}
