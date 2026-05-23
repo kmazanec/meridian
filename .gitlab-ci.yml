@@ -287,3 +287,24 @@ deploy-web:
           corepack yarn@4.10.2 workspace @meridian/web build &&
           npx --yes wrangler@4 pages deploy packages/web/out --project-name meridian --branch "'"$CI_DEFAULT_BRANCH"'"
         '
+
+# Deploy the automation service (morning + settlement jobs) to THIS droplet — the
+# gauntlet-droplet runner is a shell executor on the same host, so the job builds the
+# image with the host's Docker and installs the cron entries directly. No registry, no SSH.
+#
+# The jobs are one-shot CLIs (no resident scheduler): the cron fragment runs
+# `docker run --rm --env-file <file> meridian-automation <bin>` at ~08:00 and ~16:05 ET.
+# Secrets/config (the automation keypair, RPC, feeds) live ONLY in a root-owned env file on
+# the droplet (default /etc/meridian/automation.env) — never in the repo, image, or CI.
+# That file must exist on the box before the first scheduled run (see
+# packages/automation/deploy/automation.env.example).
+deploy-automation:
+  stage: deploy
+  needs: ["lint-ts"]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    # Build the image on the host (shell executor → host Docker is available directly).
+    - docker build -f packages/automation/Dockerfile -t meridian-automation:latest .
+    # Install/refresh the cron entries on this host (idempotent; managed fragment).
+    - bash packages/automation/deploy/install-cron.sh
