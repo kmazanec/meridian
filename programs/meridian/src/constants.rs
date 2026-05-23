@@ -58,7 +58,16 @@ pub const NUM_TICKERS: usize = 7;
 /// Delay after close before the admin override (`admin_settle`) becomes callable.
 /// 1 hour (ADR-004/§7.5): long enough that the permissionless `settle_market`
 /// path is the default, short enough that a stuck market still settles same-day.
+///
+/// The `demo-fast-settle` build feature shortens this to 5 minutes so a compressed
+/// demo/dev "trading day" (where the bots trade on a synthetic price feed and the
+/// market is closed via `admin_settle`) can settle promptly after close. This is a
+/// LOCALNET/DEVNET-DEMO build switch only — a default (mainnet) build keeps the full
+/// 1-hour safety bound; nothing reads it at runtime.
+#[cfg(not(feature = "demo-fast-settle"))]
 pub const ADMIN_OVERRIDE_DELAY: i64 = 60 * 60;
+#[cfg(feature = "demo-fast-settle")]
+pub const ADMIN_OVERRIDE_DELAY: i64 = 5 * 60;
 
 /// Maximum age (seconds) of a Pyth price update accepted by `settle_market`.
 /// Equity feeds update during market hours; settlement fires right after close,

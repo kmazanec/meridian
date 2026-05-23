@@ -131,6 +131,20 @@ Each bot runs as its own OS process, so the fleet trades **concurrently** and on
 doesn't take down the others. Output goes to `packages/traders/logs/<name>.log`; PIDs are tracked
 in `packages/traders/logs/bots.pids`.
 
+### Closing the day
+
+When the (compressed) trading day ends, settle the markets at the **synthetic close** the bots
+traded against:
+
+```bash
+WEB_BASE_URL=http://localhost:8788 make settle-due        # settle all due markets, once
+```
+
+This settles each open, past-its-day market via `admin_settle` at `/api/price`'s end-of-session
+value (`≥ strike → Yes wins`). `admin_settle` is on-chain time-gated; build the program once with
+`make build-demo` (the `demo-fast-settle` feature → 5-min delay instead of 1h) and re-deploy so
+`settle-due` works promptly after close. See `docs/local-development.md` for the full flow.
+
 To run a single bot in the foreground (handy for development):
 
 ```bash

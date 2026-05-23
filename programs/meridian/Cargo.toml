@@ -10,6 +10,9 @@ name = "meridian"
 
 [features]
 default = []
+# Shorten ADMIN_OVERRIDE_DELAY (1h → 5min) for compressed demo/dev trading days. Build with
+# `--features demo-fast-settle` on localnet/devnet-demo; a default (mainnet) build keeps 1h.
+demo-fast-settle = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []

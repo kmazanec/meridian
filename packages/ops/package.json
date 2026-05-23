@@ -9,7 +9,8 @@
     "meridian-create-markets": "./src/bin/create-markets.ts",
     "meridian-deploy": "./src/bin/deploy.ts",
     "meridian-dev-up": "./src/bin/dev-up.ts",
-    "meridian-lifecycle": "./src/bin/lifecycle.ts"
+    "meridian-lifecycle": "./src/bin/lifecycle.ts",
+    "meridian-settle-due": "./src/bin/settle-due.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -19,7 +20,8 @@
     "bootstrap": "ts-node src/bin/bootstrap.ts",
     "create-markets": "ts-node src/bin/create-markets.ts",
     "lifecycle": "ts-node src/bin/lifecycle.ts",
-    "dev-up": "ts-node src/bin/dev-up.ts"
+    "dev-up": "ts-node src/bin/dev-up.ts",
+    "settle-due": "ts-node src/bin/settle-due.ts"
   },
   "dependencies": {
     "@meridian/automation": "workspace:^",

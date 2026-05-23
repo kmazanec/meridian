@@ -113,8 +113,18 @@ close into `admin_settle` for full coherence, out of scope here.)
    No-book bids fill in (combined with the earlier SELL fix).
 5. Endpoint unit-ish check (vitest, like history) for the curve interpolation + progress math.
 
+## Settlement (closing the day) — implemented
+
+After the compressed day ends, `make settle-due` closes markets at the synthetic close. Because
+the production path (`settle_market` + a Pyth-Receiver-owned `PriceUpdateV2`) can't run on
+localnet and can't be fed a synthetic value on devnet, the demo settles via **`admin_settle`**
+(the only instruction accepting an arbitrary price), at `/api/price` progress=1. `admin_settle`'s
+on-chain `ADMIN_OVERRIDE_DELAY` (1h) is shortened to 5 min by the `demo-fast-settle` Cargo feature
+(`make build-demo`; default/mainnet build keeps 1h). `packages/ops/src/settleDue.ts` +
+`bin/settle-due.ts`; idempotent; settles all due open markets in one run.
+
 ## Out of scope (now)
 
-- Feeding synthetic prices into on-chain settlement (`admin_settle`).
 - Per-bot price noise (we explicitly want the *same* price per tick).
 - Real-time streaming; polling per tick is sufficient.
+- Redeeming winning positions after settle (settle-due settles; redemption is separate).

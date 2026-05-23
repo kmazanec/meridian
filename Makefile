@@ -44,9 +44,9 @@ TRADERS_8 := ~/.config/solana/trader1.json,~/.config/solana/trader2.json,~/.conf
 .DEFAULT_GOAL := help
 .PHONY: help dev stop demo deploy bootstrap create-markets create-markets-live lifecycle \
         deploy-devnet bootstrap-devnet create-markets-devnet create-markets-live-devnet lifecycle-devnet \
-        fund-traders fund-traders-devnet \
+        fund-traders fund-traders-devnet settle-due settle-due-devnet \
         bots bots-stop bots-logs \
-        build test lint clean _require-devnet-keypair _validator-up
+        build build-demo test lint clean _require-devnet-keypair _validator-up
 
 help: ## Show this help.
 	@echo "Meridian — make targets:"
@@ -143,6 +143,10 @@ create-markets-live: ## Create markets seeded from REAL last close via /api/hist
 	@RPC_URL=$(LOCAL_RPC) DEPLOYER_KEYPAIR=$(abspath $(LOCAL_DEPLOYER)) $(LOCAL_MOCK_CLOSES) \
 	  WEB_BASE_URL=$${WEB_BASE_URL:-http://localhost:3000} LIVE_CLOSES=1 \
 	  $(YARN) workspace @meridian/ops create-markets
+settle-due: ## Close (settle) all open markets past their day, at the synthetic close (set WEB_BASE_URL).
+	@RPC_URL=$(LOCAL_RPC) DEPLOYER_KEYPAIR=$(abspath $(LOCAL_DEPLOYER)) \
+	  WEB_BASE_URL=$${WEB_BASE_URL:-http://localhost:8788} \
+	  $(YARN) workspace @meridian/ops settle-due
 lifecycle: demo ## Alias for `make demo`.
 
 fund-traders: ## Fund the persistent test traders (trader{1..8}.json) on the local stack.
@@ -166,6 +170,10 @@ create-markets-live-devnet: _require-devnet-keypair ## Create devnet markets see
 	  $(YARN) workspace @meridian/ops create-markets
 fund-traders-devnet: _require-devnet-keypair ## Fund the persistent test traders (trader{1..8}.json) on devnet.
 	@RPC_URL=$${RPC_URL:-https://api.devnet.solana.com} TRADERS="$(TRADERS_8)" node scripts/fund-test-traders.mjs
+settle-due-devnet: _require-devnet-keypair ## Close due markets on devnet at the synthetic close (set WEB_BASE_URL).
+	@RPC_URL=$${RPC_URL:-https://api.devnet.solana.com} \
+	  WEB_BASE_URL=$${WEB_BASE_URL:?set WEB_BASE_URL to your deployed dashboard (for /api/price)} \
+	  $(YARN) workspace @meridian/ops settle-due
 lifecycle-devnet: _require-devnet-keypair ## Run the full lifecycle on devnet.
 	@RPC_URL=$${RPC_URL:-https://api.devnet.solana.com} $(YARN) workspace @meridian/ops lifecycle
 
@@ -236,6 +244,11 @@ build: ## Build the program (.so) and the TS workspaces.
 	$(YARN) workspace @meridian/sdk build
 	$(YARN) workspace @meridian/automation build
 	$(YARN) workspace @meridian/traders build
+
+build-demo: ## Build the program with demo-fast-settle (5-min admin_settle delay) for local/demo.
+	anchor build -- --features demo-fast-settle
+	@echo "✓ Built with demo-fast-settle. Re-deploy (make deploy / deploy-devnet) to apply, then"
+	@echo "  'make settle-due' is callable ~5 min after a market's close (vs the 1h default)."
 
 test: ## Run the Rust tests + the off-chain workspace tests.
 	cargo test
