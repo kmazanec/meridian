@@ -13,14 +13,19 @@
 SHELL := /bin/bash
 YARN  := corepack yarn@4.10.2
 
-# Local-stack state (gitignored). The validator pid/ledger and the ephemeral local deployer
-# keypair live here so subsequent `make demo`/`make create-markets` reuse the SAME admin that
-# initialized Config.
+# Local-stack state (gitignored). The validator pid/ledger live here so subsequent
+# `make demo`/`make create-markets` reuse the SAME on-chain state; `make stop` wipes this dir.
 LOCALNET_DIR     := .localnet
 VALIDATOR_PID    := $(LOCALNET_DIR)/validator.pid
 VALIDATOR_LEDGER := $(LOCALNET_DIR)/ledger
-LOCAL_DEPLOYER   := $(LOCALNET_DIR)/deployer.json
 LOCAL_RPC        := http://127.0.0.1:8899
+
+# Local admin/deployer keypair. Lives OUTSIDE $(LOCALNET_DIR) on purpose: `make stop` does
+# `rm -rf $(LOCALNET_DIR)`, so keeping it here gives you a STABLE local admin pubkey that
+# survives stop/start. Generated on first `make dev` and reused after. Override with
+# `LOCAL_DEPLOYER=/path/to/key.json make dev` (or export it). Note: the validator still starts
+# with --reset, so each `make dev` re-inits Config from scratch — just signed by the same admin.
+LOCAL_DEPLOYER   ?= $(HOME)/.config/solana/meridian-local-admin.json
 
 # Default mock closes for the local demo markets — one per MAG7 ticker so `make dev` creates
 # markets for all seven (each close drives that ticker's ±3/6/9% strikes). Override by passing
@@ -107,8 +112,11 @@ _validator-up: ## (internal) Ensure a local validator is running + an ephemeral 
 	    || { echo "✗ validator did not come up (see $(LOCALNET_DIR)/validator.log)"; exit 1; }; \
 	fi
 	@if [ ! -f $(LOCAL_DEPLOYER) ]; then \
-	  echo "▶ Generating an ephemeral local deployer keypair..."; \
+	  echo "▶ Generating a persistent local admin keypair at $(LOCAL_DEPLOYER)..."; \
+	  mkdir -p "$$(dirname $(LOCAL_DEPLOYER))"; \
 	  solana-keygen new --no-bip39-passphrase --silent --force --outfile $(LOCAL_DEPLOYER) >/dev/null; \
+	else \
+	  echo "▶ Reusing persistent local admin keypair at $(LOCAL_DEPLOYER)."; \
 	fi
 	@echo "▶ Funding the local deployer..."
 	@DEPLOYER_PUBKEY=$$(solana-keygen pubkey $(LOCAL_DEPLOYER)); \
@@ -138,7 +146,7 @@ stop: ## Stop the local validator and remove local-stack state.
 	@echo "✓ Local stack stopped + state removed."
 
 demo: ## Run the headless lifecycle (create -> mint -> trade -> settle -> redeem) against the local stack.
-	@if [ ! -f $(LOCAL_DEPLOYER) ]; then echo "✗ No local stack — run 'make dev' first."; exit 1; fi
+	@if [ ! -f $(LOCALNET_DIR)/dev.json ]; then echo "✗ No local stack — run 'make dev' first."; exit 1; fi
 	@RPC_URL=$(LOCAL_RPC) DEPLOYER_KEYPAIR=$(abspath $(LOCAL_DEPLOYER)) \
 	  $(YARN) workspace @meridian/ops lifecycle
 
@@ -162,7 +170,7 @@ settle-due: ## Close (settle) all open markets past their day, at the synthetic 
 lifecycle: demo ## Alias for `make demo`.
 
 fund-traders: ## Fund the persistent test traders (trader{1..8}.json) on the local stack.
-	@if [ ! -f $(LOCAL_DEPLOYER) ]; then echo "✗ No local stack — run 'make dev' first."; exit 1; fi
+	@if [ ! -f $(LOCALNET_DIR)/dev.json ]; then echo "✗ No local stack — run 'make dev' first."; exit 1; fi
 	@RPC_URL=$(LOCAL_RPC) DEPLOYER_KEYPAIR=$(abspath $(LOCAL_DEPLOYER)) \
 	  USDC_MINT=$$(node -e "console.log(require('./.localnet/dev.json').usdcMint)") \
 	  TRADERS="$(TRADERS_8)" node scripts/fund-test-traders.mjs

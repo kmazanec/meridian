@@ -246,10 +246,13 @@ Noted as a known constraint rather than a new vulnerability.
 
 - **The Makefile owns the local validator lifecycle; the ops bins own everything else.**
   `make dev` starts `solana-test-validator` (detached, pid in `.localnet/`), generates +
-  airdrops an **ephemeral local deployer** (persisted to `.localnet/deployer.json` so
-  later `make demo`/`make create-markets` reuse the *same* Config admin), then runs the
+  airdrops a **persistent local admin** (default `~/.config/solana/meridian-local-admin.json`,
+  overridable via `LOCAL_DEPLOYER`; kept *outside* `.localnet/` so it survives `make stop` and
+  gives you a stable local admin pubkey across runs), then runs the
   `dev-up` bin (deploy → bootstrap → create-markets → seed demo wallet → write web
-  `.env.local`). `make stop` kills it and wipes `.localnet/`. This keeps the long-lived
+  `.env.local`). `make stop` kills the validator and wipes `.localnet/` (the admin keypair is
+  left in place; the validator still starts with `--reset`, so each run re-inits Config under
+  that same admin). This keeps the long-lived
   process under the operator's direct control (not buried in a Node process across `make`
   recipe lines).
 - **`dev-up` refuses any non-local RPC** (it airdrops + mints mock USDC) — a guard so the
