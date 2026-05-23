@@ -123,6 +123,12 @@ create-markets: ## Create the day's markets on the local validator (from MOCK_CL
 	  $(YARN) workspace @meridian/ops create-markets
 lifecycle: demo ## Alias for `make demo`.
 
+fund-traders: ## Fund 2 persistent test traders (~/.config/solana/trader{1,2}.json) on the local stack.
+	@if [ ! -f $(LOCAL_DEPLOYER) ]; then echo "✗ No local stack — run 'make dev' first."; exit 1; fi
+	@RPC_URL=$(LOCAL_RPC) DEPLOYER_KEYPAIR=$(abspath $(LOCAL_DEPLOYER)) \
+	  USDC_MINT=$$(node -e "console.log(require('./.localnet/dev.json').usdcMint)") \
+	  node scripts/fund-test-traders.mjs
+
 # ── Devnet (operator-run; uses YOUR funded DEPLOYER_KEYPAIR + RPC_URL from .env) ─
 # These deliberately do NOT default the keypair or airdrop. See docs/devnet-deployment.md.
 
@@ -132,6 +138,8 @@ bootstrap-devnet: _require-devnet-keypair ## Initialize Config + USDC on devnet.
 	@RPC_URL=$${RPC_URL:-https://api.devnet.solana.com} $(YARN) workspace @meridian/ops bootstrap
 create-markets-devnet: _require-devnet-keypair ## Create the day's markets on devnet (from MOCK_CLOSE_*).
 	@RPC_URL=$${RPC_URL:-https://api.devnet.solana.com} $(YARN) workspace @meridian/ops create-markets
+fund-traders-devnet: _require-devnet-keypair ## Fund 2 persistent test traders on devnet (faucet SOL + mock USDC).
+	@RPC_URL=$${RPC_URL:-https://api.devnet.solana.com} node scripts/fund-test-traders.mjs
 lifecycle-devnet: _require-devnet-keypair ## Run the full lifecycle on devnet.
 	@RPC_URL=$${RPC_URL:-https://api.devnet.solana.com} $(YARN) workspace @meridian/ops lifecycle
 

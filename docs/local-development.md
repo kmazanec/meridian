@@ -143,6 +143,34 @@ same way against a local validator and against devnet. In a git worktree whose `
 empty, point them at a `.so` built elsewhere via `MERIDIAN_SO` / `MERIDIAN_PROGRAM_KEYPAIR`
 (the same overrides the convergence harness honors).
 
+### Test trader accounts (`make fund-traders`)
+
+`make dev` seeds one internal demo wallet (with pre-built positions) so the app is instantly
+demoable. To place *pretend trades between two parties* — one posts an order, the other fills
+it — fund two persistent, importable accounts:
+
+```bash
+make fund-traders          # local: 2 keypairs in ~/.config/solana/trader{1,2}.json,
+                           #        each given 10 SOL + 1000 mock USDC
+make fund-traders-devnet   # same two keypairs, funded on devnet (faucet SOL + mock USDC)
+```
+
+The script (`scripts/fund-test-traders.mjs`) generates the keypairs on first run and reuses
+them after, so the same two traders work on both clusters. The mock USDC mint authority is the
+deployer/admin, so it mints test USDC directly; SOL is an airdrop locally and the faucet on
+devnet (if rate-limited, top up with `solana transfer`). Override with `TRADERS=`, `SOL_EACH=`,
+`USDC_EACH=`.
+
+To trade as them in the browser, convert each keypair to a base58 private key and import it
+into your wallet (Phantom/Solflare), then switch accounts:
+
+```bash
+node -e "console.log(require('bs58').encode(Buffer.from(JSON.parse(require('fs').readFileSync(process.argv[1])))))" ~/.config/solana/trader1.json
+```
+
+> These keypair files hold real (test-only) secrets — keep them out of commits. The repo only
+> ships the funding script, never the keys.
+
 ### Ops reproducibility test
 
 `@meridian/ops` has a **validator-gated** test that runs the *actual* deploy → bootstrap →
