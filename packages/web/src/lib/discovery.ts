@@ -23,6 +23,12 @@ export interface DiscoveredMarket {
   tradingDay: BN;
   state: "open" | "settled";
   outcome: Outcome;
+  /** Back-reference to this market's OrderBook account (the join key for books). */
+  orderBook: PublicKey;
+  /** Yes/No pairs minted; each pair locks exactly $1 of collateral (open interest). */
+  pairsMinted: BN;
+  /** Closing price written at settlement (USDC base units); null while open. */
+  settlementPrice: BN | null;
 }
 
 /** Shape of a raw decoded `Market` account from Anchor's `.all()`. */
@@ -34,6 +40,10 @@ interface RawMarketAccount {
     tradingDay: BN;
     state: Record<string, unknown>;
     outcome: Record<string, unknown>;
+    // The three below ride along in the same decoded account — no extra RPC.
+    orderBook: PublicKey;
+    pairsMinted: BN;
+    settlementPrice: BN | null;
   };
 }
 
@@ -61,6 +71,9 @@ export function normalizeDiscovered(raw: RawMarketAccount): DiscoveredMarket {
     tradingDay: raw.account.tradingDay,
     state: enumKey(raw.account.state) === "settled" ? "settled" : "open",
     outcome: normalizeOutcome(raw.account.outcome),
+    orderBook: raw.account.orderBook,
+    pairsMinted: raw.account.pairsMinted,
+    settlementPrice: raw.account.settlementPrice ?? null,
   };
 }
 

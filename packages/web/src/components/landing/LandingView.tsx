@@ -1,9 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Ticker, TICKER_SYMBOLS } from "@meridian/sdk";
-import type { LivePrices } from "@/components/markets/MarketsView";
+import type { LivePrices } from "@/lib/useTickerPrices";
 import { formatPrice } from "@/lib/format";
 import { Panel, Price, Button } from "@/components/ui";
+import { MeridianMark } from "@/components/Logo";
 
 /**
  * The Landing page: explains the product in the brand voice, shows a live-price strip,
@@ -20,6 +21,7 @@ export function LandingView({
   return (
     <div className="space-y-16 py-8">
       <section className="text-center">
+        <MeridianMark size={48} className="mx-auto mb-6" />
         <h1 className="font-serif text-5xl leading-tight text-fg">
           One book. Four actions.
           <br />

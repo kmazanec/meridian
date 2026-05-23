@@ -208,6 +208,43 @@ export async function fetchOrderBook(
   };
 }
 
+/** Shape of one raw `OrderBook` account from Anchor's `.all()` (publicKey + account). */
+interface RawOrderBookEntry {
+  publicKey: PublicKey;
+  account: {
+    market: PublicKey;
+    nextSeq: BN;
+    bids: Parameters<typeof normalizeOrder>[0][];
+    asks: Parameters<typeof normalizeOrder>[0][];
+    bump: number;
+  };
+}
+
+/**
+ * Fetch and decode *every* order book in one `getProgramAccounts` call, keyed by the
+ * order book's own account address (base58). This is the batched read behind the
+ * Markets-page strike ladder: instead of one `fetchOrderBook` per strike (N RPC calls),
+ * one call returns them all. Join to markets via `Market.orderBook`. Orders are
+ * normalized identically to {@link fetchOrderBook} (same `normalizeOrder`).
+ */
+export async function fetchAllOrderBooks(
+  program: MeridianProgram
+): Promise<Map<string, OrderBookAccount>> {
+  const raw =
+    (await program.account.orderBook.all()) as unknown as RawOrderBookEntry[];
+  const byAddress = new Map<string, OrderBookAccount>();
+  for (const { publicKey, account } of raw) {
+    byAddress.set(publicKey.toBase58(), {
+      market: account.market,
+      nextSeq: account.nextSeq,
+      bids: account.bids.map(normalizeOrder),
+      asks: account.asks.map(normalizeOrder),
+      bump: account.bump,
+    });
+  }
+  return byAddress;
+}
+
 // --- Dual-perspective book ---
 
 /** A price level aggregated for display (price + total size at that price). */

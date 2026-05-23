@@ -39,7 +39,7 @@ const DEFAULT_POLL_MS = 8_000;
  * closes over an un-listed mutable value would read it stale; that's the price of not
  * re-subscribing on every render.
  */
-function usePolled<T>(
+export function usePolled<T>(
   load: () => Promise<T | null>,
   deps: React.DependencyList,
   {

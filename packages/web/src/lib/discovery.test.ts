@@ -16,6 +16,8 @@ function rawMarket(opts: {
   tradingDay: number;
   state?: "open" | "settled";
   outcome?: string;
+  pairsMinted?: number;
+  settlementPrice?: number | null;
 }) {
   return {
     publicKey: PublicKey.default,
@@ -25,6 +27,10 @@ function rawMarket(opts: {
       tradingDay: new BN(opts.tradingDay),
       state: { [opts.state ?? "open"]: {} },
       outcome: { [opts.outcome ?? "unsettled"]: {} },
+      orderBook: PublicKey.unique(),
+      pairsMinted: new BN(opts.pairsMinted ?? 0),
+      settlementPrice:
+        opts.settlementPrice == null ? null : new BN(opts.settlementPrice),
     },
   };
 }
@@ -45,12 +51,24 @@ describe("discovery", () => {
         tradingDay: 1_716_321_600,
         state: "settled",
         outcome: "yesWins",
+        pairsMinted: 5_000_000,
+        settlementPrice: 712_340_000,
       })
     );
     expect(d.ticker).toBe(Ticker.Meta);
     expect(d.strike.toNumber()).toBe(680_000_000);
     expect(d.state).toBe("settled");
     expect(d.outcome).toBe(Outcome.YesWins);
+    expect(d.pairsMinted.toNumber()).toBe(5_000_000);
+    expect(d.settlementPrice?.toNumber()).toBe(712_340_000);
+  });
+
+  it("leaves settlementPrice null while a market is open", () => {
+    const d = normalizeDiscovered(
+      rawMarket({ ticker: "aapl", strike: 180_000_000, tradingDay: 1 })
+    );
+    expect(d.settlementPrice).toBeNull();
+    expect(d.pairsMinted.toNumber()).toBe(0);
   });
 
   it("discovers + sorts markets by ticker, strike, then day", async () => {

@@ -1,12 +1,21 @@
-# Cloudflare Pages config for the Meridian frontend (static export).
+# Cloudflare Pages config for the Meridian frontend.
 #
-# The app is a fully client-side SPA (next.config.mjs `output: 'export'`), so Pages serves
-# the static `out/` directory — no edge runtime / Functions. Deploy with:
+# The app is a client-side SPA (next.config.mjs `output: 'export'`) served as the static
+# `out/` directory, PLUS one lightweight Pages Function (`functions/api/history.ts`) that
+# proxies stock-close history server-side (CORS). The static export is untouched — the
+# function is bundled by wrangler alongside `out/` from the same deploy.
+#
+# Deploy (run FROM packages/web so wrangler finds both `out/` and `functions/`):
 #
 #   yarn workspace @meridian/sdk build && yarn workspace @meridian/web build
-#   npx wrangler pages deploy packages/web/out --project-name meridian
+#   cd packages/web && npx wrangler pages deploy --project-name meridian
 #
-# `wrangler login` (interactive, browser auth) must be run once first.
+# (`pages_build_output_dir = "out"` below tells wrangler the static dir; `functions/` is
+# auto-detected as its sibling. `wrangler login` must be run once first.)
+#
+# Local check of the function: `cd packages/web && npx wrangler pages dev out`, then GET
+# http://localhost:8788/api/history?symbol=NVDA. Plain `next dev` serves NO functions, so
+# the history sparkline falls back to its empty state there — that's expected.
 #
 # Runtime config (the RPC, USDC mint, cluster label) is supplied as NEXT_PUBLIC_* env vars
 # at BUILD time — not here. Set them in the Pages project (dashboard → Settings → Env vars)

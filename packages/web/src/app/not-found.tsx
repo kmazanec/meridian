@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { TICKER_SYMBOLS } from "@meridian/sdk";
 import { Panel } from "@/components/ui";
+import { MeridianMark } from "@/components/Logo";
 
 /**
  * App-level 404. With static export, a `/trade/<x>` URL for an unknown stock (only the 7
@@ -11,6 +12,7 @@ import { Panel } from "@/components/ui";
 export default function NotFound() {
   return (
     <Panel className="mx-auto max-w-lg text-center">
+      <MeridianMark size={40} className="mx-auto mb-4" />
       <h1 className="font-serif text-3xl text-fg">Market not found</h1>
       <p className="mt-3 text-fg-dim">
         That page doesn’t exist. Meridian trades the MAG7:{" "}

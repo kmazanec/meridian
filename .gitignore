@@ -24,6 +24,8 @@ packages/web/.next
 packages/web/out
 packages/web/playwright-report
 packages/web/test-results
+# Cloudflare wrangler local dev state (pages dev cache/session).
+packages/web/.wrangler
 packages/web/.env.local
 packages/web/tsconfig.tsbuildinfo
 packages/web/e2e/.localnet.json

@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { dualBook, fetchOrderBook } from "@meridian/sdk";
+import BN from "bn.js";
+import { dualBook, fetchOrderBook, type Ticker } from "@meridian/sdk";
 import { useProgram } from "./useProgram";
 import { groupByTicker, type DiscoveredMarket } from "./discovery";
 import { priceFromBook } from "./market-math";
-import type { LivePrices } from "@/components/markets/MarketsView";
+
+/** A live Yes price per ticker, keyed by ticker ordinal (from book mids). */
+export type LivePrices = Partial<Record<Ticker, BN>>;
 
 /**
  * A live Yes price per ticker for the Markets grid. There's one book per market, so

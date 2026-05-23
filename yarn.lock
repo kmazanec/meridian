@@ -97,6 +97,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@cloudflare/workers-types@npm:^4.20260523.1":
+  version: 4.20260523.1
+  resolution: "@cloudflare/workers-types@npm:4.20260523.1"
+  checksum: 10c0/8e69edecbd464dc55d413e38de7ff16efcf694c5d459bb30b21eb5e107f78ee3ed6ec3fb4e980e72710163d49e471b736f853ca32f349932f3e2f3ad12510a8a
+  languageName: node
+  linkType: hard
+
 "@coral-xyz/anchor@npm:^0.29.0":
   version: 0.29.0
   resolution: "@coral-xyz/anchor@npm:0.29.0"
@@ -555,6 +562,7 @@ __metadata:
   resolution: "@meridian/web@workspace:packages/web"
   dependencies:
     "@anchor-lang/core": "npm:^1.0.2"
+    "@cloudflare/workers-types": "npm:^4.20260523.1"
     "@meridian/sdk": "workspace:^"
     "@playwright/test": "npm:^1.47.0"
     "@solana/spl-token": "npm:^0.4.9"

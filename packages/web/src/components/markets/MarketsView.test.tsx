@@ -1,29 +1,43 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import BN from "bn.js";
-import { PublicKey } from "@solana/web3.js";
-import { Outcome, Ticker } from "@meridian/sdk";
-import type { DiscoveredMarket } from "@/lib/discovery";
-import { MarketsView, type LivePrices } from "./MarketsView";
+import { Ticker, TICKER_SYMBOLS } from "@meridian/sdk";
+import type { TickerView } from "@/lib/marketStats";
+import { MarketsView } from "./MarketsView";
 
-function market(
-  ticker: Ticker,
-  strike: number,
-  state: "open" | "settled" = "open"
-): DiscoveredMarket {
+/** A minimal TickerView for one symbol; overrides tune the fields under test. */
+function ticker(
+  ordinal: Ticker,
+  overrides: Partial<TickerView> = {}
+): TickerView {
   return {
-    address: PublicKey.unique(),
-    ticker,
-    strike: new BN(strike),
-    tradingDay: new BN(1_716_321_600),
-    state,
-    outcome: Outcome.Unsettled,
+    ticker: ordinal,
+    symbol: TICKER_SYMBOLS[ordinal],
+    tradingDay: null,
+    activeCount: 0,
+    repYesPrice: null,
+    totalRestingSize: new BN(0),
+    totalPairsMinted: new BN(0),
+    totalCollateral: new BN(0),
+    rows: [],
+    history: null,
+    ...overrides,
   };
+}
+
+/** All seven tickers, with optional per-ordinal overrides. */
+function allTickers(
+  overrides: Partial<Record<Ticker, Partial<TickerView>>> = {}
+): TickerView[] {
+  return TICKER_SYMBOLS.map((_, ordinal) =>
+    ticker(ordinal as Ticker, overrides[ordinal as Ticker] ?? {})
+  );
 }
 
 describe("MarketsView", () => {
   it("renders all seven MAG7 tickers", () => {
-    render(<MarketsView markets={[]} prices={{}} />);
+    render(<MarketsView tickers={allTickers()} />);
     for (const sym of [
       "AAPL",
       "MSFT",
@@ -38,33 +52,41 @@ describe("MarketsView", () => {
   });
 
   it("shows the live Yes price and implied probability per ticker", () => {
-    const prices: LivePrices = { [Ticker.Meta]: new BN(650_000) };
     render(
       <MarketsView
-        markets={[market(Ticker.Meta, 680_000_000)]}
-        prices={prices}
+        tickers={allTickers({
+          [Ticker.Meta]: { activeCount: 1, repYesPrice: new BN(650_000) },
+        })}
       />
     );
     expect(screen.getByText("$0.65")).toBeInTheDocument();
-    expect(screen.getByText("65%")).toBeInTheDocument();
+    expect(screen.getByText("65% implied")).toBeInTheDocument();
   });
 
   it("counts active (open) contracts per ticker", () => {
-    const markets = [
-      market(Ticker.Aapl, 180_000_000, "open"),
-      market(Ticker.Aapl, 190_000_000, "open"),
-      market(Ticker.Aapl, 200_000_000, "settled"),
-    ];
-    render(<MarketsView markets={markets} prices={{}} />);
-    // AAPL has 2 open of 3 total.
+    render(
+      <MarketsView tickers={allTickers({ [Ticker.Aapl]: { activeCount: 2 } })} />
+    );
     expect(screen.getByText("2 active")).toBeInTheDocument();
   });
 
-  it("links each card to its trade page", () => {
-    render(<MarketsView markets={[]} prices={{}} />);
+  it("reveals the trade link when a card is expanded", async () => {
+    render(<MarketsView tickers={allTickers()} />);
+    // Trade links are inside the expanded ladder; none shown until a card opens.
+    expect(screen.queryByLabelText("Trade NVDA")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByText("NVDA"));
     expect(screen.getByLabelText("Trade NVDA")).toHaveAttribute(
       "href",
       "/trade/NVDA"
     );
+  });
+
+  it("keeps only one ticker expanded at a time", async () => {
+    render(<MarketsView tickers={allTickers()} />);
+    await userEvent.click(screen.getByText("NVDA"));
+    expect(screen.getByLabelText("Trade NVDA")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("TSLA"));
+    expect(screen.queryByLabelText("Trade NVDA")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Trade TSLA")).toBeInTheDocument();
   });
 });

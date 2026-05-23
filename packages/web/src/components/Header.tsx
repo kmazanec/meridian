@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { CLUSTER_LABEL } from "@/lib/env";
 import { cx } from "./ui";
+import { Logo } from "./Logo";
 
 // The wallet button touches `window`; load it client-only to avoid SSR mismatch.
 const WalletMultiButton = dynamic(
@@ -27,8 +28,8 @@ export function Header() {
     <header className="relative z-10 border-b border-line-soft">
       <div className="mx-auto flex max-w-page items-center justify-between gap-6 px-5 py-4">
         <div className="flex items-center gap-8">
-          <Link href="/" className="font-serif text-xl text-fg">
-            Meridian
+          <Link href="/" aria-label="Meridian home">
+            <Logo />
           </Link>
           <nav className="flex items-center gap-5 text-sm">
             {NAV.map((item) => {

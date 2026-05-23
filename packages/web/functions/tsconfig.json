@@ -1,0 +1,17 @@
+{
+  "comment": "Cloudflare Pages Functions run on the Workers runtime (not Next/DOM). They are excluded from the app tsconfig and typed against @cloudflare/workers-types here. Wrangler bundles this directory at deploy time; check it locally with `yarn typecheck:functions`.",
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["**/*.ts"]
+}

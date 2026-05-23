@@ -1,85 +1,41 @@
-import Link from "next/link";
-import BN from "bn.js";
-import { Ticker, TICKER_SYMBOLS } from "@meridian/sdk";
-import type { DiscoveredMarket } from "@/lib/discovery";
-import { activeCount, groupByTicker } from "@/lib/discovery";
-import { formatPrice, formatProbability } from "@/lib/format";
-import { Panel, Price, cx } from "@/components/ui";
+"use client";
 
-/** A live Yes price per ticker, keyed by ticker ordinal (from book mids upstream). */
-export type LivePrices = Partial<Record<Ticker, BN>>;
+import { useState } from "react";
+import { Ticker } from "@meridian/sdk";
+import type { TickerView } from "@/lib/marketStats";
+import { MarketCard } from "./MarketCard";
 
 /**
- * The Markets grid: all 7 MAG7 stocks, each with its live Yes price (implied
- * probability) and its count of active (open) contracts. Presentational — data is
- * passed in so it renders identically in tests and against live RPC.
+ * The Markets grid: all 7 MAG7 stocks as expandable cards. Each card summarizes its
+ * stock (live Yes price, implied probability, a close-price sparkline, open interest,
+ * settlement countdown) and expands to a full strike ladder. Presentational — the per-
+ * ticker {@link TickerView} models are derived upstream — but it owns one piece of view
+ * state: which ticker is expanded (one at a time).
  */
-export function MarketsView({
-  markets,
-  prices,
-  loading,
-}: {
-  markets: DiscoveredMarket[];
-  prices: LivePrices;
-  loading?: boolean;
-}) {
-  const grouped = groupByTicker(markets);
+export function MarketsView({ tickers }: { tickers: TickerView[] }) {
+  const [expanded, setExpanded] = useState<Ticker | null>(null);
 
   return (
     <div>
       <header className="mb-6">
         <h1 className="font-serif text-3xl text-fg">Markets</h1>
         <p className="mt-1 text-fg-dim">
-          Seven stocks. Will it close at or above the strike today?
+          Seven stocks. Will it close at or above the strike today? Expand a stock
+          for its full strike ladder, depth, and settlement history.
         </p>
       </header>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {TICKER_SYMBOLS.map((symbol, ordinal) => {
-          const ticker = ordinal as Ticker;
-          const list = grouped.get(ticker) ?? [];
-          const open = activeCount(list);
-          const price = prices[ticker] ?? null;
-          return (
-            <Link
-              key={symbol}
-              href={`/trade/${symbol}`}
-              aria-label={`Trade ${symbol}`}
-            >
-              <Panel className="transition-colors hover:border-line">
-                <div className="flex items-baseline justify-between">
-                  <span className="font-mono text-lg text-fg">{symbol}</span>
-                  <span
-                    className={cx(
-                      "text-xs uppercase tracking-wide",
-                      open > 0 ? "text-accent" : "text-fg-faint"
-                    )}
-                  >
-                    {open} active
-                  </span>
-                </div>
-                <div className="mt-4 flex items-end justify-between">
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-fg-faint">
-                      Yes price
-                    </div>
-                    <Price tone="yes" className="text-2xl">
-                      {price ? formatPrice(price) : loading ? "—" : "n/a"}
-                    </Price>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs uppercase tracking-wide text-fg-faint">
-                      Implied
-                    </div>
-                    <Price className="text-lg">
-                      {price ? formatProbability(price) : "—"}
-                    </Price>
-                  </div>
-                </div>
-              </Panel>
-            </Link>
-          );
-        })}
+      <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {tickers.map((view) => (
+          <MarketCard
+            key={view.symbol}
+            view={view}
+            expanded={expanded === view.ticker}
+            onToggle={() =>
+              setExpanded((cur) => (cur === view.ticker ? null : view.ticker))
+            }
+          />
+        ))}
       </div>
     </div>
   );

@@ -16,7 +16,20 @@ body {
   background: #070b14;
   color: #e8edf5;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   overflow-x: hidden;
+}
+
+/* Brand selection + a single accessible focus ring across interactive elements. */
+::selection {
+  background: rgba(79, 240, 168, 0.25);
+  color: #e8edf5;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(79, 240, 168, 0.6);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* The deck's atmosphere: faint accent glows behind the content. */

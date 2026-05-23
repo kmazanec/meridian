@@ -17,6 +17,9 @@ function market(
     tradingDay: new BN(1),
     state,
     outcome: Outcome.Unsettled,
+    orderBook: PublicKey.unique(),
+    pairsMinted: new BN(0),
+    settlementPrice: null,
   };
 }
 

@@ -48,12 +48,33 @@ NEXT_PUBLIC_CLUSTER=devnet \
   yarn workspace @meridian/sdk build && \
   yarn workspace @meridian/web build
 
-# publish the static output
-npx wrangler pages deploy packages/web/out --project-name meridian
+# publish — run FROM packages/web so wrangler bundles both `out/` and `functions/`
+cd packages/web && npx wrangler pages deploy --project-name meridian
 ```
+
+> **Run the deploy from `packages/web/`.** The repo now ships one Pages Function
+> (`packages/web/functions/api/history.ts`, a server-side proxy for stock-close history —
+> see "Price-history function" below). Wrangler auto-detects a `functions/` directory that
+> is a sibling of the build output dir, so the deploy must run from `packages/web` (where
+> `wrangler.toml` sets `pages_build_output_dir = "out"`). Deploying `packages/web/out` from
+> the repo root would ship the static site **without** the function.
 
 Or connect the GitHub repo in the Pages dashboard with the build command + output dir above
 for push-to-deploy.
+
+## Price-history function
+
+`functions/api/history.ts` is a Cloudflare Pages Function serving
+`GET /api/history?symbol=NVDA` → `[{ "date": "YYYY-MM-DD", "close": 123.45 }]` (last ~30
+daily closes). It proxies a public market-data source server-side because that source
+sends no CORS headers, so the browser can't call it directly. The static export is
+unaffected — the function rides along in the same deploy.
+
+- **Local check:** `cd packages/web && npx wrangler pages dev out`, then open
+  `http://localhost:8788/api/history?symbol=NVDA`.
+- **Plain `next dev` serves no Functions**, so the Markets-page sparkline falls back to its
+  empty-state baseline there. That's expected; use `wrangler pages dev` to exercise it, or
+  point `NEXT_PUBLIC_HISTORY_BASE` at a deployed preview.
 
 ## Clean URLs
 
