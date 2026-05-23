@@ -78,6 +78,8 @@ describe("LandingView", () => {
     expect(card).toHaveTextContent(/Will\s+NVDA\s+close at or above\s+\$1,180/);
     expect(within(card).getByText("52%")).toBeInTheDocument(); // Yes
     expect(within(card).getByText("48%")).toBeInTheDocument(); // No = 1 − Yes
+    // Deep-links to this exact strike (dollars), not just the symbol.
+    expect(card).toHaveAttribute("href", "/trade/NVDA?strike=1180");
   });
 
   it("shows a graceful note when no markets are open", () => {

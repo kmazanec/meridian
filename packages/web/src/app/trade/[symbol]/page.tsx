@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { TICKER_SYMBOLS } from "@meridian/sdk";
 import TradePageClient from "./TradePageClient";
 
@@ -9,11 +10,18 @@ import TradePageClient from "./TradePageClient";
  * falls through to the app's `not-found` page. This server component carries
  * `generateStaticParams` (which cannot live in the `"use client"` component) and renders the
  * unchanged client UI.
+ *
+ * The client reads `?strike=` via `useSearchParams`, which a static export requires be wrapped
+ * in a Suspense boundary — provided here.
  */
 export function generateStaticParams() {
   return TICKER_SYMBOLS.map((symbol) => ({ symbol }));
 }
 
 export default function TradePage() {
-  return <TradePageClient />;
+  return (
+    <Suspense>
+      <TradePageClient />
+    </Suspense>
+  );
 }

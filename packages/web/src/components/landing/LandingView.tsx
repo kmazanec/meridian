@@ -182,9 +182,12 @@ function FeaturedCard({ call }: { call: FeaturedCall }) {
   const yesPct = formatProbability(call.yesPrice);
   const noPct = formatProbability(impliedComplement(call.yesPrice));
   const up = (call.changePct ?? 0) >= 0;
+  // Deep-link straight to this featured strike (dollars), so the detail page opens on the
+  // same bet the card shows rather than its default strike.
+  const strikeDollars = call.strike.toNumber() / 1_000_000;
   return (
     <Link
-      href={`/trade/${call.symbol}`}
+      href={`/trade/${call.symbol}?strike=${strikeDollars}`}
       className="panel block p-5 transition-colors hover:border-accent/30"
       data-testid={`featured-${call.symbol}`}
     >

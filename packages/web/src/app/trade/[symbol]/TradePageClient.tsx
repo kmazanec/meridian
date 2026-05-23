@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { dualBook, symbolToTicker, TICKER_SYMBOLS } from "@meridian/sdk";
@@ -37,7 +37,12 @@ import BN from "bn.js";
 
 export default function TradePageClient() {
   const params = useParams<{ symbol: string }>();
+  const searchParams = useSearchParams();
   const symbol = (params.symbol ?? "").toUpperCase();
+  // Deep link to a specific strike: `/trade/NVDA?strike=270` selects the $270 market.
+  // Strike value (dollars) is used rather than the market address so links survive the
+  // daily market recreation and stay human-readable. Resolved against loaded strikes below.
+  const strikeParam = searchParams.get("strike");
 
   let ticker: ReturnType<typeof symbolToTicker> | null = null;
   try {
@@ -71,11 +76,24 @@ export default function TradePageClient() {
 
   const [selectedAddr, setSelectedAddr] = useState<PublicKey | null>(null);
   const selected = useMemo(() => {
+    // An explicit ladder click always wins.
     if (selectedAddr) return selectedAddr;
+    // Otherwise honor a `?strike=<dollars>` deep link: match the open market at that strike.
+    // Resolved here (not at mount) so it works once `strikes` has loaded after navigation.
+    if (strikeParam) {
+      const dollars = Number(strikeParam);
+      if (Number.isFinite(dollars)) {
+        const base = new BN(Math.round(dollars * 1_000_000));
+        const match =
+          strikes.find((m) => m.state === "open" && m.strike.eq(base)) ??
+          strikes.find((m) => m.strike.eq(base));
+        if (match) return match.address;
+      }
+    }
     // Default to the first open strike (ladder is strike-sorted, open before settled).
     const open = strikes.find((m) => m.state === "open") ?? strikes[0];
     return open?.address ?? null;
-  }, [selectedAddr, strikes]);
+  }, [selectedAddr, strikeParam, strikes]);
 
   const { data: market } = useMarket(selected);
   const { data: position, refresh: refreshPosition } = useUserPosition(market);
