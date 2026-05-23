@@ -2,11 +2,19 @@ import { expect } from "chai";
 import { FleetConfigSchema, resolveBot, loadEnvironment } from "../src/config";
 
 describe("fleet config validation", () => {
-  it("accepts a valid fleet and defaults intervalSec", () => {
+  it("accepts a valid fleet and defaults intervalSec + maxStepsPerTick", () => {
     const parsed = FleetConfigSchema.parse({
       bots: [{ name: "a", wallet: "~/x.json", model: "openai/gpt-4o" }],
     });
     expect(parsed.bots[0].intervalSec).to.equal(60);
+    expect(parsed.bots[0].maxStepsPerTick).to.equal(60);
+  });
+
+  it("honors an explicit maxStepsPerTick", () => {
+    const parsed = FleetConfigSchema.parse({
+      bots: [{ name: "a", wallet: "w", model: "m", maxStepsPerTick: 100 }],
+    });
+    expect(parsed.bots[0].maxStepsPerTick).to.equal(100);
   });
 
   it("rejects filename-unsafe bot names", () => {

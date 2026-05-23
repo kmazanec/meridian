@@ -72,6 +72,7 @@ export async function prepareBot(
     tools: makeTools(ctx),
     persona: bot.persona,
     log,
+    recursionLimit: bot.maxStepsPerTick,
   });
   return { ctx, agent };
 }
@@ -106,9 +107,18 @@ export async function runBot(
     try {
       await agent.runTick(goalPrompt(bot, ctx.chain.pubkey.toBase58()));
     } catch (err) {
-      log.error(
-        `tick failed: ${err instanceof Error ? err.message : String(err)}`
-      );
+      const msg = err instanceof Error ? err.message : String(err);
+      // Hitting the step limit isn't a crash: the orders placed earlier in the tick did
+      // execute on-chain, the agent just ran out of round-trips before wrapping up. Log it
+      // as a tunable warning (raise maxStepsPerTick) rather than an error.
+      if (/recursion limit/i.test(msg)) {
+        log.warn(
+          `tick ${tick} hit the step limit (${bot.maxStepsPerTick}); orders placed so far ` +
+            `stand. Raise maxStepsPerTick in bots.config.json if this recurs.`
+        );
+      } else {
+        log.error(`tick failed: ${msg}`);
+      }
     }
     if (signal?.aborted) break;
     await sleep(bot.intervalSec * 1000);

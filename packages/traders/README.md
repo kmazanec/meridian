@@ -51,6 +51,7 @@ Edit it — one entry per bot:
       "wallet": "~/.config/solana/trader1.json", // a funded trader keypair
       "model": "anthropic/claude-3.5-sonnet", // any OpenRouter model id
       "intervalSec": 60, // seconds between trading ticks
+      "maxStepsPerTick": 60, // max agent⇄tool round-trips per tick (raise if quoting many strikes)
       "persona": "A disciplined value trader…" // optional flavor for the system prompt
     }
   ]

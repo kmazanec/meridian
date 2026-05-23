@@ -33,6 +33,13 @@ export const BotConfigSchema = z.object({
   model: z.string().min(1),
   /** Seconds between trading ticks. Default 60. */
   intervalSec: z.number().int().positive().default(60),
+  /**
+   * Max agent⇄tool round-trips in one tick (LangGraph recursion limit). A market-maker
+   * quoting both sides of dozens of strikes legitimately takes many steps, so the default
+   * is generous; it still bounds a genuinely-looping model so it can't burn credits forever.
+   * Raise it if a bot quotes many strikes and hits the limit; lower it to cap spend per tick.
+   */
+  maxStepsPerTick: z.number().int().positive().default(60),
   /** Optional flavor injected into the system prompt to differentiate strategies. */
   persona: z.string().optional(),
 });

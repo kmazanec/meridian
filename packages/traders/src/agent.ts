@@ -102,7 +102,7 @@ export function createTradingAgent(opts: {
       let logged = 0;
       const stream = await agent.stream(
         { messages: [new HumanMessage(goalPrompt)] },
-        { recursionLimit: opts.recursionLimit ?? 25, streamMode: "values" }
+        { recursionLimit: opts.recursionLimit ?? 60, streamMode: "values" }
       );
       for await (const snapshot of stream) {
         const messages = (snapshot.messages ?? []) as (

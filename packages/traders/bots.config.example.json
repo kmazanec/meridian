@@ -6,6 +6,7 @@
       "wallet": "~/.config/solana/trader1.json",
       "model": "anthropic/claude-3.5-sonnet",
       "intervalSec": 60,
+      "maxStepsPerTick": 60,
       "persona": "A disciplined value trader. Looks for strikes whose order-book implied probability disagrees with where spot sits relative to the strike, and takes the cheaper side."
     },
     {
