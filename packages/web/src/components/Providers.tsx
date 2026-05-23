@@ -34,13 +34,16 @@ if (
   );
 }
 
-// On a LOCAL validator we register a built-in keypair wallet (the pre-funded demo wallet
-// `make dev` seeds), so a developer can connect and trade with no browser extension. Like
-// the e2e adapter it carries a real (disposable, localnet-only) secret, so it is gated the
-// same way: enabled only when the cluster is `localnet` AND not a production build. On
-// devnet/mainnet this stays off and users connect a real Wallet-Standard wallet (Phantom,
-// etc.) — exactly as the empty static list intends.
+// Optional built-in keypair wallet (the pre-funded demo wallet `make dev` seeds), so a
+// developer can connect and trade with no browser extension. It is **opt-in**: enabled only
+// when `NEXT_PUBLIC_LOCAL_WALLET=1` is set, AND the cluster is `localnet`, AND not a
+// production build, AND a secret is configured. The default workflow uses a real
+// Wallet-Standard wallet (Phantom/Solflare/Backpack) — which also lets you switch between an
+// admin account and a trader account, the reason this is now off by default. Like the e2e
+// adapter it carries a real (disposable, localnet-only) secret, so the same prod guard below
+// applies. On devnet/mainnet it stays off regardless.
 const LOCAL_DEV_WALLET =
+  process.env.NEXT_PUBLIC_LOCAL_WALLET === "1" &&
   process.env.NEXT_PUBLIC_CLUSTER === "localnet" &&
   process.env.NODE_ENV !== "production" &&
   localWalletConfigured();
