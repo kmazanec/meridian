@@ -1,0 +1,18 @@
+# Cloudflare Pages config for the Meridian frontend (static export).
+#
+# The app is a fully client-side SPA (next.config.mjs `output: 'export'`), so Pages serves
+# the static `out/` directory — no edge runtime / Functions. Deploy with:
+#
+#   yarn workspace @meridian/sdk build && yarn workspace @meridian/web build
+#   npx wrangler pages deploy packages/web/out --project-name meridian
+#
+# `wrangler login` (interactive, browser auth) must be run once first.
+#
+# Runtime config (the RPC, USDC mint, cluster label) is supplied as NEXT_PUBLIC_* env vars
+# at BUILD time — not here. Set them in the Pages project (dashboard → Settings → Env vars)
+# or inline before the build. The program id needs no env var (it is compiled from the IDL).
+# See docs/cloudflare-pages.md.
+
+name = "meridian"
+pages_build_output_dir = "out"
+compatibility_date = "2026-05-22"
