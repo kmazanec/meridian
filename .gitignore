@@ -41,3 +41,6 @@ packages/web/e2e/.localnet.json
 !/target/deploy/meridian-keypair.json
 /.vscode/*
 /.claude/*
+
+# Brainstorming visual-companion mockups (local only).
+.superpowers/
