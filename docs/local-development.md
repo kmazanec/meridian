@@ -135,7 +135,13 @@ make help   # list every target
 
 `make dev` leaves a local validator running and writes `packages/web/.env.local`, so
 `yarn workspace @meridian/web dev` immediately points the frontend at the local stack
-(with a pre-seeded demo wallet — its secret is in the gitignored `.localnet/dev.json`).
+(with a funded demo wallet — its secret is in the gitignored `.localnet/dev.json`).
+
+> By default the demo wallet is funded with USDC but holds **no pre-built positions**, and the
+> only markets are the live-seeded ones (a clean board — best for bot trading). For the
+> one-click browser demo with pre-built Yes/No/redeemable positions in fixed demo markets, run
+> `SEED_DEMO_WALLET=1 make dev`. (Those fixed demo strikes are off the live ladder, which is why
+> they're opt-in.)
 
 These targets are powered by the **`@meridian/ops`** package — environment-agnostic,
 `RPC_URL`-driven scripts (`deploy`, `bootstrap`, `create-markets`, `lifecycle`) that run the
@@ -145,8 +151,9 @@ empty, point them at a `.so` built elsewhere via `MERIDIAN_SO` / `MERIDIAN_PROGR
 
 ### Test trader accounts (`make fund-traders`)
 
-`make dev` seeds one internal demo wallet (with pre-built positions) so the app is instantly
-demoable. To place *pretend trades between parties* — and to back the trading-bot fleet below —
+`make dev` funds one internal demo wallet (USDC; pre-built positions only with
+`SEED_DEMO_WALLET=1`). To place *pretend trades between parties* — and to back the trading-bot
+fleet below —
 fund a set of persistent, importable accounts:
 
 ```bash

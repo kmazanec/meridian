@@ -53,6 +53,14 @@ export interface SeedDevStackOptions {
   deployer: Keypair;
   usdcMint: PublicKey;
   programId: PublicKey;
+  /**
+   * Create the fixed demo markets (META $680 / AAPL $190 / settled NVDA $120) and seed the
+   * demo wallet with pre-built positions for the one-click browser demo. Default false: those
+   * fixed-price strikes are off the live-seeded ladder and just add noise for bot trading. The
+   * demo wallet itself is always created + funded and the env files always written (so the
+   * frontend and `fund-traders` work); only the pre-built positions are gated.
+   */
+  seedDemo?: boolean;
   log?: ConsoleLog;
 }
 
@@ -103,22 +111,25 @@ export async function seedDevStack(
     tradingDay: now - 2 * 3600,
   };
 
-  log?.section("Dev stack: provision demo markets");
-  for (const m of [yesMarket, noMarket, settledMarket]) {
-    // Skip if it already exists. `make dev` reuses a running validator, so a second `make dev`
-    // (without `make stop`) hits the same fixed demo-market identities; creating again would
-    // fail. Re-seeding a fresh demo wallet into existing markets below is harmless.
-    const marketAddr = marketPda(m.ticker, m.strike, m.tradingDay);
-    const exists = (await fetchMarket(fx.program, marketAddr)) !== null;
-    if (exists) {
-      log?.detail(`market ${Ticker[m.ticker]}`, "exists — reusing");
-      continue;
+  const seedDemo = opts.seedDemo ?? false;
+  if (seedDemo) {
+    log?.section("Dev stack: provision demo markets");
+    for (const m of [yesMarket, noMarket, settledMarket]) {
+      // Skip if it already exists. `make dev` reuses a running validator, so a second `make dev`
+      // (without `make stop`) hits the same fixed demo-market identities; creating again would
+      // fail. Re-seeding a fresh demo wallet into existing markets below is harmless.
+      const marketAddr = marketPda(m.ticker, m.strike, m.tradingDay);
+      const exists = (await fetchMarket(fx.program, marketAddr)) !== null;
+      if (exists) {
+        log?.detail(`market ${Ticker[m.ticker]}`, "exists — reusing");
+        continue;
+      }
+      await fx.createMarket({
+        ticker: m.ticker,
+        strike: m.strike,
+        tradingDay: m.tradingDay,
+      });
     }
-    await fx.createMarket({
-      ticker: m.ticker,
-      strike: m.strike,
-      tradingDay: m.tradingDay,
-    });
   }
 
   // The browser demo wallet: SOL (airdrop, local-only) + 100 USDC.
@@ -159,38 +170,63 @@ export async function seedDevStack(
     usdc: walletUsdc.address,
   };
 
-  // Single-side inventory: mint 2 pairs in each open market, move the unwanted side to the
-  // deployer so the wallet holds only Yes (yesMarket) / only No (noMarket). Keeps the four
-  // trade buttons valid without tripping the position-constraint guard.
-  await fundSingleSide(
-    connection,
-    fx,
-    opts.deployer,
-    user,
-    yesMarket,
-    "yes",
-    2
-  );
-  await fundSingleSide(connection, fx, opts.deployer, user, noMarket, "no", 2);
-  log?.step("Demo wallet given single-side inventory in the two open markets");
+  // Pre-built positions for the one-click browser demo — only when seedDemo is on.
+  const demoMarkets: { symbol: string; address: string; state: string }[] = [];
+  if (seedDemo) {
+    // Single-side inventory: mint 2 pairs in each open market, move the unwanted side to the
+    // deployer so the wallet holds only Yes (yesMarket) / only No (noMarket). Keeps the four
+    // trade buttons valid without tripping the position-constraint guard.
+    await fundSingleSide(
+      connection,
+      fx,
+      opts.deployer,
+      user,
+      yesMarket,
+      "yes",
+      2
+    );
+    await fundSingleSide(
+      connection,
+      fx,
+      opts.deployer,
+      user,
+      noMarket,
+      "no",
+      2
+    );
+    log?.step(
+      "Demo wallet given single-side inventory in the two open markets"
+    );
 
-  // Redeemable position: wallet mints a pair in the settled market, admin settles it Yes-wins.
-  await sendTx(
-    connection,
-    wallet,
-    [
-      await mintPair(fx.program, {
-        user: wallet.publicKey,
-        usdcMint: opts.usdcMint,
-        market: settledMarket,
-      }),
-    ],
-    [wallet]
-  );
-  await fx.settleAdmin(settledMarket, settledMarket.strike.add(new BN(1)));
-  log?.step(
-    "Settled market seeded with a redeemable winning position (Yes wins)"
-  );
+    // Redeemable position: wallet mints a pair in the settled market, admin settles it Yes-wins.
+    await sendTx(
+      connection,
+      wallet,
+      [
+        await mintPair(fx.program, {
+          user: wallet.publicKey,
+          usdcMint: opts.usdcMint,
+          market: settledMarket,
+        }),
+      ],
+      [wallet]
+    );
+    await fx.settleAdmin(settledMarket, settledMarket.strike.add(new BN(1)));
+    log?.step(
+      "Settled market seeded with a redeemable winning position (Yes wins)"
+    );
+
+    demoMarkets.push(
+      { symbol: "META", address: addr(yesMarket), state: "open" },
+      { symbol: "AAPL", address: addr(noMarket), state: "open" },
+      { symbol: "NVDA", address: addr(settledMarket), state: "settled" }
+    );
+  } else {
+    log?.step(
+      "Demo wallet funded (USDC only); fixed demo markets + positions skipped " +
+        "(set SEED_DEMO_WALLET=1 for the one-click browser demo)."
+    );
+  }
 
   const info: DevStackInfo = {
     rpcUrl: opts.rpcUrl,
@@ -199,11 +235,7 @@ export async function seedDevStack(
     usdcMint: opts.usdcMint.toBase58(),
     walletPubkey: wallet.publicKey.toBase58(),
     walletSecret: Array.from(wallet.secretKey),
-    markets: [
-      { symbol: "META", address: addr(yesMarket), state: "open" },
-      { symbol: "AAPL", address: addr(noMarket), state: "open" },
-      { symbol: "NVDA", address: addr(settledMarket), state: "settled" },
-    ],
+    markets: demoMarkets,
   };
 
   writeWebEnv(info, log);

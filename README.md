@@ -126,7 +126,8 @@ six on-chain invariants these instructions preserve.
 
 ```bash
 make dev    # build the program → boot a local validator → deploy → init Config + USDC →
-            # create the day's markets → seed a demo wallet → write the frontend env
+            # create the day's markets → fund a demo wallet → write the frontend env
+            # (SEED_DEMO_WALLET=1 also seeds fixed demo markets + pre-built positions)
 make demo   # run the lifecycle headless: create → mint → trade → settle → redeem
 make stop   # tear it all down
 make help   # list every target

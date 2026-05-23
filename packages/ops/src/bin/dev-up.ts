@@ -87,12 +87,18 @@ async function main(): Promise<void> {
     log,
   });
 
-  // 3) seed a browser demo wallet + write the web env
+  // 3) create + fund the browser demo wallet + write the web env. The fixed demo markets and
+  // pre-built positions (off the live ladder) are opt-in via SEED_DEMO_WALLET=1, so the default
+  // board is just the live-seeded strikes — cleaner for bot trading.
+  const seedDemo = /^(1|true|yes)$/i.test(
+    (process.env.SEED_DEMO_WALLET ?? "").trim()
+  );
   const info = await seedDevStack({
     rpcUrl: env.rpcUrl,
     deployer: env.deployer,
     usdcMint,
     programId,
+    seedDemo,
     log,
   });
 
