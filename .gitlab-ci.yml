@@ -245,6 +245,11 @@ cursor_code_review:
 # not the Rust program (deployed to devnet separately), so it gates on lint-ts alone and
 # stays out of the heavy-rust resource_group (Node-only, no .so).
 #
+# The deploy `cd packages/web` first (not `pages deploy packages/web/out` from the root):
+# wrangler reads `pages_build_output_dir = "out"` from wrangler.toml AND bundles the sibling
+# `functions/` dir (the /api/history Pages Function) only when invoked from that directory.
+# Deploying the out/ path from the repo root would ship the static site WITHOUT the function.
+#
 # Auth + config come entirely from GitLab CI/CD variables (set in repo settings, masked/
 # protected — referenced by name only, never committed):
 #   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID  → wrangler reads these from the env
@@ -285,7 +290,8 @@ deploy-web:
           corepack yarn@4.10.2 install --immutable &&
           corepack yarn@4.10.2 workspace @meridian/sdk build &&
           corepack yarn@4.10.2 workspace @meridian/web build &&
-          npx --yes wrangler@4 pages deploy packages/web/out --project-name meridian --branch "'"$CI_DEFAULT_BRANCH"'"
+          cd packages/web &&
+          npx --yes wrangler@4 pages deploy --project-name meridian --branch "'"$CI_DEFAULT_BRANCH"'"
         '
 
 # Deploy the automation service (morning + settlement jobs) to THIS droplet — the
