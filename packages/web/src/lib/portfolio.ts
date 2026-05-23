@@ -108,3 +108,45 @@ export function buildPortfolio(
   }
   return rows;
 }
+
+/** Top-line portfolio numbers for the page header, folded from the rows. */
+export interface PortfolioSummary {
+  /** Σ current mark value of open positions (USDC base units). */
+  positionValue: BN;
+  /** Σ P&L across open positions with a known entry (null if none have one). */
+  openPnl: BN | null;
+  openCount: number;
+  /** Σ payout of redeemable (won, unredeemed) settled positions (USDC base units). */
+  claimable: BN;
+  claimableCount: number;
+}
+
+/** Fold rows into the header summary. Pure — unit-tested directly. */
+export function portfolioSummary(rows: PortfolioRow[]): PortfolioSummary {
+  let positionValue = new BN(0);
+  let pnlSum = new BN(0);
+  let hasPnl = false;
+  let openCount = 0;
+  let claimable = new BN(0);
+  let claimableCount = 0;
+  for (const r of rows) {
+    if (r.kind === "open") {
+      openCount += 1;
+      positionValue = positionValue.add(r.value);
+      if (r.pnl !== null) {
+        pnlSum = pnlSum.add(r.pnl);
+        hasPnl = true;
+      }
+    } else if (r.redeemable) {
+      claimable = claimable.add(r.payout);
+      claimableCount += 1;
+    }
+  }
+  return {
+    positionValue,
+    openPnl: hasPnl ? pnlSum : null,
+    openCount,
+    claimable,
+    claimableCount,
+  };
+}

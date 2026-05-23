@@ -36,12 +36,29 @@ describe("PortfolioView", () => {
     expect(screen.getByText(/connect a wallet/i)).toBeInTheDocument();
   });
 
-  it("shows an open position's entry, mark, and P&L", () => {
+  it("shows an open position's entry, mark, value, and P&L", () => {
     render(<PortfolioView rows={[openRow]} onRedeem={() => {}} connected />);
     expect(screen.getByTestId("open-positions")).toBeInTheDocument();
-    expect(screen.getByText("$0.50")).toBeInTheDocument(); // entry
-    expect(screen.getByText("$0.60")).toBeInTheDocument(); // mark
-    expect(screen.getByTestId("pnl").textContent).toBe("+$0.20");
+    // The responsive view renders a desktop table and mobile cards, so values can appear
+    // more than once — assert presence via getAllBy.
+    expect(screen.getAllByText("$0.50").length).toBeGreaterThan(0); // entry
+    expect(screen.getAllByText("$0.60").length).toBeGreaterThan(0); // mark
+    expect(screen.getAllByText("$1.20").length).toBeGreaterThan(0); // value
+    expect(screen.getAllByTestId("pnl")[0].textContent).toBe("+$0.20");
+  });
+
+  it("summarizes the book (position value, open P&L, claimable)", () => {
+    render(
+      <PortfolioView
+        rows={[openRow, settledWinner]}
+        onRedeem={() => {}}
+        connected
+      />
+    );
+    const summary = screen.getByTestId("portfolio-summary");
+    expect(summary).toHaveTextContent("$1.20"); // position value
+    expect(summary).toHaveTextContent("+$0.20"); // open P&L
+    expect(summary).toHaveTextContent("$3.00"); // claimable
   });
 
   it("renders a redeem button for a settled winner and fires onRedeem", async () => {
@@ -49,7 +66,7 @@ describe("PortfolioView", () => {
     render(
       <PortfolioView rows={[settledWinner]} onRedeem={onRedeem} connected />
     );
-    const btn = screen.getByTestId("redeem-MKT2:yes");
+    const btn = screen.getAllByTestId("redeem-MKT2:yes")[0];
     expect(btn).toBeInTheDocument();
     await userEvent.click(btn);
     expect(onRedeem).toHaveBeenCalledWith(settledWinner);
@@ -63,7 +80,7 @@ describe("PortfolioView", () => {
         connected
       />
     );
-    expect(screen.getByText("Lost")).toBeInTheDocument();
+    expect(screen.getAllByText("Lost").length).toBeGreaterThan(0);
     expect(screen.queryByTestId("redeem-MKT2:yes")).not.toBeInTheDocument();
   });
 });
