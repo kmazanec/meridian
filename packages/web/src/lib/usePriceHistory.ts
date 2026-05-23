@@ -11,10 +11,12 @@ import { useEffect, useState } from "react";
  * no Functions) — the sparkline simply renders its empty-state baseline.
  */
 
-/** One trading day's close. `date` is ISO `YYYY-MM-DD`; `close` is in dollars. */
+/** One trading day. `date` is ISO `YYYY-MM-DD`; prices in dollars. */
 export interface ClosePoint {
   date: string;
   close: number;
+  /** Day's opening price; omitted if the feed didn't report a finite value. */
+  open?: number;
 }
 
 /** Base for the history endpoint. Same-origin in prod; overridable for local dev. */
@@ -30,13 +32,46 @@ export function parseHistory(json: unknown): ClosePoint[] {
   const out: ClosePoint[] = [];
   for (const row of json) {
     if (!row || typeof row !== "object") continue;
-    const { date, close } = row as { date?: unknown; close?: unknown };
+    const { date, close, open } = row as {
+      date?: unknown;
+      close?: unknown;
+      open?: unknown;
+    };
     if (typeof date !== "string") continue;
     if (typeof close !== "number" || !Number.isFinite(close)) continue;
-    out.push({ date, close });
+    const point: ClosePoint = { date, close };
+    if (typeof open === "number" && Number.isFinite(open)) point.open = open;
+    out.push(point);
   }
   out.sort((a, b) => a.date.localeCompare(b.date));
   return out;
+}
+
+/** The latest day's spot: its close/open and the % change in close vs the prior day. */
+export interface Spot {
+  date: string;
+  close: number;
+  open: number | null;
+  /** Close change vs the previous day's close, as a fraction (0.012 = +1.2%); null if N/A. */
+  changePct: number | null;
+}
+
+/**
+ * Derive the most recent spot (last close + open + day-over-day % change) from an
+ * ascending `ClosePoint[]`. Returns null for empty history. Pure — unit-tested directly.
+ */
+export function spotFromHistory(points: ClosePoint[]): Spot | null {
+  if (points.length === 0) return null;
+  const last = points[points.length - 1];
+  const prev = points.length >= 2 ? points[points.length - 2] : null;
+  const changePct =
+    prev && prev.close !== 0 ? (last.close - prev.close) / prev.close : null;
+  return {
+    date: last.date,
+    close: last.close,
+    open: last.open ?? null,
+    changePct,
+  };
 }
 
 // Session cache + in-flight dedupe, keyed by symbol — expand/collapse never refetches.

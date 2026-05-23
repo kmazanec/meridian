@@ -7,8 +7,10 @@ import {
 } from "@/lib/format";
 import { Stat, cx } from "@/components/ui";
 import type { TickerView } from "@/lib/marketStats";
+import { spotFromHistory } from "@/lib/usePriceHistory";
 import { Countdown } from "@/components/trade/Countdown";
 import { Sparkline } from "./Sparkline";
+import { SpotLine } from "./SpotLine";
 
 /**
  * One per-ticker summary card on the Markets grid. It's a link into the stock's full detail
@@ -20,6 +22,7 @@ import { Sparkline } from "./Sparkline";
 export function MarketCard({ view }: { view: TickerView }) {
   const { symbol, repYesPrice, activeCount } = view;
   const closes = view.history?.map((p) => p.close) ?? [];
+  const spot = spotFromHistory(view.history ?? []);
   const hasOpen = activeCount > 0;
 
   return (
@@ -55,7 +58,10 @@ export function MarketCard({ view }: { view: TickerView }) {
               : "no open market"}
           </div>
         </div>
-        <Sparkline values={closes} className="shrink-0" />
+        <div className="flex flex-col items-end gap-1">
+          <Sparkline values={closes} className="shrink-0" />
+          <SpotLine spot={spot} />
+        </div>
       </div>
 
       <div className="mt-4 flex gap-6">

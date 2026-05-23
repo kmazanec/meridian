@@ -15,7 +15,7 @@ import {
 import { useChainData } from "@/lib/ChainDataProvider";
 import { useProgram } from "@/lib/useProgram";
 import { useSendIx } from "@/lib/useSendIx";
-import { usePriceHistory } from "@/lib/usePriceHistory";
+import { usePriceHistory, spotFromHistory } from "@/lib/usePriceHistory";
 import { priceFromBook } from "@/lib/market-math";
 import {
   strikeLadderRows,
@@ -25,7 +25,8 @@ import {
 import { recordTradeFill } from "@/lib/recordTradeFill";
 import { formatPrice, formatProbability } from "@/lib/format";
 import { StrikeLadder } from "@/components/markets/StrikeLadder";
-import { Sparkline } from "@/components/markets/Sparkline";
+import { PriceChart } from "@/components/markets/PriceChart";
+import { SpotLine } from "@/components/markets/SpotLine";
 import { DualBookView } from "@/components/trade/DualBookView";
 import { PayoffLine } from "@/components/trade/PayoffLine";
 import { Countdown } from "@/components/trade/Countdown";
@@ -127,17 +128,16 @@ export default function TradePageClient() {
   };
 
   const closes = history?.map((p) => p.close) ?? [];
+  const spot = spotFromHistory(history ?? []);
 
   return (
     <div className="space-y-6">
-      {/* Header: symbol, representative price + implied, close-history chart, countdown. */}
+      {/* Header: symbol, representative Yes price + implied, spot (last close), countdown. */}
       <header className="panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-5">
           <div>
             <h1 className="font-serif text-3xl text-fg">{symbol}</h1>
-            <div className="mt-1 text-xs uppercase tracking-wide text-fg-faint">
-              {strikes.length} strikes today
-            </div>
+            <SpotLine spot={spot} showOpen className="mt-1 block" />
           </div>
           <div>
             <div className="text-xs uppercase tracking-wide text-fg-faint">
@@ -153,18 +153,29 @@ export default function TradePageClient() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-5">
-          <Sparkline values={closes} width={180} height={48} />
-          {headerTradingDay && <Countdown tradingDay={headerTradingDay} />}
-        </div>
+        {headerTradingDay && <Countdown tradingDay={headerTradingDay} />}
       </header>
+
+      {/* Full-width interactive close-price chart. */}
+      <section className="panel p-5">
+        <div className="mb-2 flex items-baseline justify-between">
+          <h2 className="text-xs uppercase tracking-wide text-fg-faint">
+            {symbol} · last {closes.length} sessions
+          </h2>
+          <SpotLine spot={spot} />
+        </div>
+        <PriceChart points={history ?? []} />
+      </section>
 
       {/* Ladder-left (also the strike picker), trade-right for the selected strike. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(360px,1fr)_minmax(0,1fr)]">
         <section className="panel p-5">
-          <h2 className="mb-3 text-xs uppercase tracking-wide text-fg-faint">
-            Strike ladder
-          </h2>
+          <div className="mb-3 flex items-baseline justify-between">
+            <h2 className="text-xs uppercase tracking-wide text-fg-faint">
+              Strike ladder
+            </h2>
+            <SpotLine spot={spot} />
+          </div>
           <StrikeLadder
             rows={ladderRows}
             selectedAddress={selected?.toBase58() ?? null}

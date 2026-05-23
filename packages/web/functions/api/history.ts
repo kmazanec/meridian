@@ -33,7 +33,12 @@ interface YahooChart {
   chart?: {
     result?: Array<{
       timestamp?: number[];
-      indicators?: { quote?: Array<{ close?: Array<number | null> }> };
+      indicators?: {
+        quote?: Array<{
+          open?: Array<number | null>;
+          close?: Array<number | null>;
+        }>;
+      };
     }>;
     error?: unknown;
   };
@@ -42,6 +47,8 @@ interface YahooChart {
 interface ClosePoint {
   date: string;
   close: number;
+  /** Day's opening price; omitted if Yahoo didn't report a finite value. */
+  open?: number;
 }
 
 function json(body: unknown, status: number, cacheSeconds = 0): Response {
@@ -54,17 +61,26 @@ function json(body: unknown, status: number, cacheSeconds = 0): Response {
   return new Response(JSON.stringify(body), { status, headers });
 }
 
-/** Map a Yahoo chart payload to ascending daily closes, dropping incomplete days. */
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Map a Yahoo chart payload to ascending daily {open?, close}, dropping closeless days. */
 function toClosePoints(data: YahooChart): ClosePoint[] {
   const result = data.chart?.result?.[0];
   const stamps = result?.timestamp ?? [];
-  const closes = result?.indicators?.quote?.[0]?.close ?? [];
+  const quote = result?.indicators?.quote?.[0];
+  const closes = quote?.close ?? [];
+  const opens = quote?.open ?? [];
   const out: ClosePoint[] = [];
   for (let i = 0; i < stamps.length; i++) {
     const close = closes[i];
     if (typeof close !== "number" || !Number.isFinite(close)) continue;
     const date = new Date(stamps[i] * 1000).toISOString().slice(0, 10);
-    out.push({ date, close: Math.round(close * 100) / 100 });
+    const open = opens[i];
+    const point: ClosePoint = { date, close: round2(close) };
+    if (typeof open === "number" && Number.isFinite(open)) {
+      point.open = round2(open);
+    }
+    out.push(point);
   }
   return out;
 }
