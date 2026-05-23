@@ -18,7 +18,12 @@ import {
   tickerAggregate,
   representativeYesPrice,
   livePricesByTicker,
+  nearestTheMoneyRow,
+  featuredCalls,
+  activitySummary,
   type BookMap,
+  type StrikeRow,
+  type TickerView,
 } from "./marketStats";
 
 function order(
@@ -248,5 +253,141 @@ describe("livePricesByTicker", () => {
       new Map()
     );
     expect(prices[Ticker.Nvda]).toBeUndefined();
+  });
+});
+
+// --- Home page selectors: nearestTheMoneyRow / featuredCalls / activitySummary ---
+
+const HALF = PRICE_SCALE.divn(2).toNumber(); // 50¢ in price-scale units
+
+/** A minimal open StrikeRow at a dollar strike with a Yes price as a fraction (0..1). */
+function strikeRowAt(strikeDollars: number, yesFraction: number): StrikeRow {
+  const yesPrice = new BN(Math.round(yesFraction * PRICE_SCALE.toNumber()));
+  return {
+    address: PublicKey.unique().toBase58(),
+    strike: new BN(strikeDollars * 1_000_000),
+    state: "open",
+    outcome: Outcome.Unsettled,
+    yesPrice,
+    noPrice: PRICE_SCALE.sub(yesPrice),
+    spread: null,
+    restingSize: new BN(0),
+    depth: { bids: [], asks: [] },
+    settlementPrice: null,
+  };
+}
+
+function tickerView(
+  ticker: Ticker,
+  symbol: string,
+  rows: StrikeRow[],
+  opts: { openInterest?: number; activeCount?: number } = {}
+): TickerView {
+  return {
+    ticker,
+    symbol,
+    tradingDay: new BN(1_700_000_000),
+    activeCount: opts.activeCount ?? rows.filter((r) => r.state === "open").length,
+    repYesPrice: rows[0]?.yesPrice ?? null,
+    totalRestingSize: new BN(0),
+    totalPairsMinted: new BN(opts.openInterest ?? 0),
+    totalCollateral: new BN(opts.openInterest ?? 0),
+    rows,
+    history: null,
+  };
+}
+
+describe("nearestTheMoneyRow", () => {
+  const view = tickerView(Ticker.Nvda, "NVDA", [
+    strikeRowAt(200, 0.92),
+    strikeRowAt(210, 0.6),
+    strikeRowAt(220, 0.3),
+    strikeRowAt(230, 0.07),
+  ]);
+
+  it("picks the strike closest to spot", () => {
+    expect(nearestTheMoneyRow(view, 212)?.strike.toNumber()).toBe(210 * 1e6);
+    expect(nearestTheMoneyRow(view, 228)?.strike.toNumber()).toBe(230 * 1e6);
+  });
+
+  it("returns null without a spot or open rows", () => {
+    expect(nearestTheMoneyRow(view, null)).toBeNull();
+    const settled = tickerView(Ticker.Nvda, "NVDA", [
+      { ...strikeRowAt(210, 0.5), state: "settled" },
+    ]);
+    expect(nearestTheMoneyRow(settled, 210)).toBeNull();
+  });
+});
+
+describe("featuredCalls", () => {
+  // NVDA's near-money strike is a near coin-flip; AAPL's is lopsided; MSFT has no spot.
+  const nvda = tickerView(
+    Ticker.Nvda,
+    "NVDA",
+    [strikeRowAt(210, 0.52), strikeRowAt(220, 0.2)],
+    { openInterest: 9_400_000000 }
+  );
+  const aapl = tickerView(Ticker.Aapl, "AAPL", [strikeRowAt(310, 0.78)], {
+    openInterest: 6_000_000000,
+  });
+  const tsla = tickerView(
+    Ticker.Tsla,
+    "TSLA",
+    [strikeRowAt(430, 0.46)],
+    { openInterest: 7_000_000000 }
+  );
+
+  const spots = {
+    [Ticker.Nvda]: { close: 211, changePct: -0.019 },
+    [Ticker.Aapl]: { close: 308, changePct: 0.013 },
+    [Ticker.Tsla]: { close: 431, changePct: 0.02 },
+  };
+
+  it("features the nearest-the-money strike per ticker, ranked by closeness to 50/50", () => {
+    // NVDA Yes 0.52 (|Δ|=0.02) is closer to a coin-flip than TSLA 0.46 (|Δ|=0.04); AAPL 0.78 last.
+    const calls = featuredCalls([nvda, aapl, tsla], spots, 3);
+    expect(calls.map((c) => c.symbol)).toEqual(["NVDA", "TSLA", "AAPL"]);
+    // NVDA features the $210 strike (nearest its $211 spot), not the $220.
+    expect(calls.find((c) => c.symbol === "NVDA")?.strike.toNumber()).toBe(
+      210 * 1e6
+    );
+  });
+
+  it("respects the count and skips tickers without a spot or open market", () => {
+    const msft = tickerView(Ticker.Msft, "MSFT", [strikeRowAt(400, 0.5)]); // no spot provided
+    const calls = featuredCalls([nvda, aapl, tsla, msft], spots, 2);
+    expect(calls).toHaveLength(2);
+    expect(calls.some((c) => c.symbol === "MSFT")).toBe(false);
+  });
+
+  it("uses each featured call's distance from the 50¢ midpoint", () => {
+    const calls = featuredCalls([nvda], spots, 1);
+    expect(Math.abs(calls[0].yesPrice.toNumber() - HALF)).toBeLessThan(
+      0.05 * PRICE_SCALE.toNumber()
+    );
+  });
+});
+
+describe("activitySummary", () => {
+  it("sums open interest and counts open markets / active stocks", () => {
+    const nvda = tickerView(
+      Ticker.Nvda,
+      "NVDA",
+      [strikeRowAt(210, 0.5), strikeRowAt(220, 0.3)],
+      { openInterest: 9_000_000000, activeCount: 2 }
+    );
+    const aapl = tickerView(Ticker.Aapl, "AAPL", [strikeRowAt(310, 0.6)], {
+      openInterest: 6_000_000000,
+      activeCount: 1,
+    });
+    const tsla = tickerView(Ticker.Tsla, "TSLA", [], {
+      openInterest: 0,
+      activeCount: 0,
+    });
+    const sum = activitySummary([nvda, aapl, tsla]);
+    expect(sum.openInterest.toNumber()).toBe(15_000_000000);
+    expect(sum.openMarkets).toBe(3);
+    expect(sum.stockCount).toBe(2); // TSLA has no open markets
+    expect(sum.tradingDay).not.toBeNull();
   });
 });

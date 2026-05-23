@@ -2,6 +2,7 @@ import BN from "bn.js";
 import {
   dualBook,
   Outcome,
+  PRICE_SCALE,
   type BookView,
   type OrderBookAccount,
   type Ticker,
@@ -256,4 +257,123 @@ export function buildTickerView(opts: {
     rows: strikeLadderRows(markets, books),
     history,
   };
+}
+
+// --- Home page: "today's closest calls" + activity summary ---
+
+/** Strike is in USDC base units (6dp); a spot close is plain dollars. */
+const STRIKE_SCALE = 1_000_000;
+
+/**
+ * The open strike nearest a spot price — the genuine coin-flip for that stock, and the most
+ * engaging single bet to feature ("could go either way today"). Returns null when the ticker
+ * has no open strike or no spot to anchor on. Ties (spot exactly between two strikes) resolve
+ * to the lower strike, which reads as the slightly-more-likely "Yes".
+ */
+export function nearestTheMoneyRow(
+  view: TickerView,
+  spot: number | null
+): StrikeRow | null {
+  if (spot == null) return null;
+  const open = view.rows.filter((r) => r.state === "open");
+  if (open.length === 0) return null;
+  let best = open[0];
+  let bestDist = Infinity;
+  for (const r of open) {
+    const dist = Math.abs(r.strike.toNumber() / STRIKE_SCALE - spot);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = r;
+    }
+  }
+  return best;
+}
+
+/** One featured bet on the home page: a concrete, nearest-the-money question + its market. */
+export interface FeaturedCall {
+  ticker: Ticker;
+  symbol: string;
+  /** Strike in USDC base units (6dp). */
+  strike: BN;
+  /** Live Yes price (integer price scale) for the featured strike. */
+  yesPrice: BN;
+  /** Last close (dollars) and day-over-day change, for context on the card. */
+  spot: number;
+  changePct: number | null;
+  /** Open interest for the whole ticker (USDC base units). */
+  openInterest: BN;
+  /** Settlement instant (unix seconds, BN) for the per-card countdown. */
+  tradingDay: BN | null;
+}
+
+/** Distance of a Yes price from a true 50/50 (PRICE_SCALE/2), as an integer. */
+function distanceFromCoinFlip(yesPrice: BN): number {
+  return Math.abs(yesPrice.sub(PRICE_SCALE.divn(2)).toNumber());
+}
+
+/**
+ * The home page's "today's closest calls": for each ticker that has an open market and a spot,
+ * feature its nearest-the-money strike, then take the `count` whose Yes price is closest to a
+ * coin flip (the most interesting bets). Ties broken by open interest (the more active bet
+ * wins). Returns fewer than `count` when the board is sparse — the caller renders what's there.
+ *
+ * `spots` maps a ticker ordinal to its last close (dollars); pass `usePriceHistory` results.
+ */
+export function featuredCalls(
+  views: TickerView[],
+  spots: Partial<Record<Ticker, { close: number; changePct: number | null }>>,
+  count = 3
+): FeaturedCall[] {
+  const calls: FeaturedCall[] = [];
+  for (const view of views) {
+    const spot = spots[view.ticker] ?? null;
+    const row = nearestTheMoneyRow(view, spot?.close ?? null);
+    if (!row || !spot) continue;
+    calls.push({
+      ticker: view.ticker,
+      symbol: view.symbol,
+      strike: row.strike,
+      yesPrice: row.yesPrice,
+      spot: spot.close,
+      changePct: spot.changePct,
+      openInterest: view.totalCollateral,
+      tradingDay: view.tradingDay,
+    });
+  }
+  calls.sort(
+    (a, b) =>
+      distanceFromCoinFlip(a.yesPrice) - distanceFromCoinFlip(b.yesPrice) ||
+      b.openInterest.cmp(a.openInterest)
+  );
+  return calls.slice(0, count);
+}
+
+/** Board-wide activity totals for the home page's live stats bar. */
+export interface ActivitySummary {
+  /** Σ open interest across all tickers (USDC base units). */
+  openInterest: BN;
+  /** Count of open markets (strike levels) across the whole board. */
+  openMarkets: number;
+  /** Number of stocks with at least one open market today. */
+  stockCount: number;
+  /** A representative settlement instant for the board countdown (unix seconds, BN) or null. */
+  tradingDay: BN | null;
+}
+
+/** Roll the per-ticker views up into the board-wide activity summary. */
+export function activitySummary(views: TickerView[]): ActivitySummary {
+  let openInterest = new BN(0);
+  let openMarkets = 0;
+  let stockCount = 0;
+  let tradingDay: BN | null = null;
+  for (const view of views) {
+    openInterest = openInterest.add(view.totalCollateral);
+    openMarkets += view.activeCount;
+    if (view.activeCount > 0) {
+      stockCount += 1;
+      // All of today's markets share the same 4:00 PM close, so any open ticker's works.
+      if (!tradingDay && view.tradingDay) tradingDay = view.tradingDay;
+    }
+  }
+  return { openInterest, openMarkets, stockCount, tradingDay };
 }
