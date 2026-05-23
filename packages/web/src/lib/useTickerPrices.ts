@@ -62,8 +62,9 @@ export function useTickerPrices(markets: DiscoveredMarket[]): LivePrices {
   return prices;
 }
 
-/** How often the Markets/Landing live prices refresh. */
-const PRICE_POLL_MS = 15_000;
+/** How often the Markets/Landing live prices refresh. Slow — they're best-effort
+ * decoration, and the public devnet RPC rate-limits aggressive polling. */
+const PRICE_POLL_MS = 30_000;
 
 /** One representative open market per ticker: the median-strike open market. */
 export function representativeMarkets(

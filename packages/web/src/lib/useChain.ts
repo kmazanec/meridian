@@ -81,10 +81,35 @@ function usePolled<T>(
   }, [...deps, tick, enabled]);
 
   // Separate effect drives the poll cadence without re-running load on every render.
+  // Pauses while the tab is hidden (no point polling an unseen page — and it sharply cuts
+  // RPC load, which matters on the rate-limited public devnet endpoint) and does one
+  // immediate refresh when the tab becomes visible again so the data isn't stale on return.
   useEffect(() => {
     if (!enabled || pollMs <= 0) return;
-    const id = setInterval(() => setTick((t) => t + 1), pollMs);
-    return () => clearInterval(id);
+    let id: ReturnType<typeof setInterval> | undefined;
+    const start = () => {
+      if (id === undefined) id = setInterval(() => setTick((t) => t + 1), pollMs);
+    };
+    const stop = () => {
+      if (id !== undefined) {
+        clearInterval(id);
+        id = undefined;
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        setTick((t) => t + 1); // refresh immediately on return
+        start();
+      } else {
+        stop();
+      }
+    };
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [enabled, pollMs]);
 
   return { data, loading, error, refresh };
@@ -111,7 +136,8 @@ export function useUsdcMint(): PublicKey | null {
 export function useMarkets(): AsyncResource<DiscoveredMarket[]> {
   const program = useProgram();
   return usePolled(() => discoverMarkets(program), [program], {
-    pollMs: 30_000,
+    // getProgramAccounts is the heaviest call; poll slowly (explicit refresh after trades).
+    pollMs: 45_000,
   });
 }
 
@@ -145,7 +171,7 @@ export function useOrderBook(
         ? fetchOrderBook(program, market)
         : Promise.resolve<OrderBookAccount | null>(null),
     [program, market?.toBase58()],
-    { enabled: !!market, pollMs: 5_000 }
+    { enabled: !!market, pollMs: 12_000 }
   );
 }
 
@@ -168,6 +194,6 @@ export function useUserPosition(
       market?.yesMint.toBase58(),
       usdcMint?.toBase58(),
     ],
-    { enabled, pollMs: 5_000 }
+    { enabled, pollMs: 12_000 }
   );
 }

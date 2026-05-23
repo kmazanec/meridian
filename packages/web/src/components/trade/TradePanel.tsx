@@ -6,6 +6,7 @@ import { PublicKey } from "@solana/web3.js";
 import {
   buildTradeIntent,
   TradeAction,
+  PAYOFF_UNIT,
   type MarketAccount,
   type OrderBookAccount,
   type UserPosition,
@@ -20,6 +21,13 @@ import {
   parsePrice,
   parseSize,
 } from "@/lib/tradeForm";
+import {
+  tradeCost,
+  costSummary,
+  formatAmount,
+  type TradeCost,
+} from "@/lib/tradeAffordability";
+import { marketOrderHasNoLiquidity, readableTradeError } from "@/lib/tradeErrors";
 import { checkPositionConstraint } from "@/lib/positionGuard";
 import { Button, Panel, cx } from "@/components/ui";
 
@@ -80,21 +88,30 @@ export function TradePanel({
   // wallet send starts, but `buildTradeIntent` awaits *before* that — so a second click
   // during the build would slip through. This is set synchronously at the top of submit.
   const [submitting, setSubmitting] = useState(false);
+  // A prepared, validated+affordable trade awaiting confirmation. Holds the built
+  // instructions so "Confirm" just sends (no rebuild between preview and send).
+  const [pending, setPending] = useState<{
+    instructions: import("@solana/web3.js").TransactionInstruction[];
+    fill: TradeFill;
+    cost: TradeCost;
+  } | null>(null);
 
   const guard = useMemo(
     () => checkPositionConstraint(action, position),
     [action, position]
   );
 
-  const submit = async () => {
-    if (submitting || busy) return;
+  const balances = position ?? { usdc: new BN(0), yes: new BN(0), no: new BN(0) };
+
+  // Step 1: validate, check affordability + liquidity, build, and open the confirmation.
+  const prepare = async () => {
+    if (submitting || busy || pending) return;
     setFormError(null);
     if (!user || !usdcMint) {
       setFormError("Connect a wallet to trade.");
       return;
     }
     const price = parsePrice(priceInput);
-    // For a limit order a price is required; a market order ignores it (cross at any).
     if (!isMarket && !price) {
       setFormError("Enter a valid price.");
       return;
@@ -105,18 +122,25 @@ export function TradePanel({
       setFormError("Enter a valid size.");
       return;
     }
-    const valid = validateTradeForm({
-      action,
-      price: effectivePrice,
-      size,
-      isMarket,
-    });
+    const valid = validateTradeForm({ action, price: effectivePrice, size, isMarket });
     if (!valid.ok) {
       setFormError(valid.error ?? "Invalid trade.");
       return;
     }
     if (guard.blocked) {
       setFormError(guard.message ?? "Close the opposite position first.");
+      return;
+    }
+
+    // Pre-trade affordability check — catches the "insufficient funds" cause BEFORE the
+    // wallet shows a generic error.
+    const cost = tradeCost({ action, price: effectivePrice, size, isMarket, balances });
+    if (!cost.affordable) {
+      setFormError(
+        `Insufficient ${cost.asset}: this needs ${formatAmount(
+          cost.required
+        )} but you have ${formatAmount(cost.have)}.`
+      );
       return;
     }
 
@@ -136,6 +160,14 @@ export function TradePanel({
             })
           : [];
 
+      // Empty-book guard: a market order with no crossable liquidity can't fill.
+      if (marketOrderHasNoLiquidity({ isMarket, makerCount: makerAccounts.length })) {
+        setFormError(
+          "No liquidity to fill a market order yet — place a limit order instead."
+        );
+        return;
+      }
+
       const built = await buildTradeIntent(program, user, {
         market: marketAddress,
         action,
@@ -145,15 +177,27 @@ export function TradePanel({
         usdcMint,
         makerAccounts,
       });
-      await onSubmit(built.instructions, {
-        action,
-        price: effectivePrice,
-        size,
+      setPending({
+        instructions: built.instructions,
+        fill: { action, price: effectivePrice, size },
+        cost,
       });
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : "Trade failed.");
+      setFormError(readableTradeError(e));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Step 2: the user confirmed — send the already-built instructions.
+  const confirm = async () => {
+    if (!pending) return;
+    const p = pending;
+    setPending(null);
+    try {
+      await onSubmit(p.instructions, p.fill);
+    } catch (e) {
+      setFormError(readableTradeError(e));
     }
   };
 
@@ -237,8 +281,8 @@ export function TradePanel({
         }
         className={cx("mt-4 w-full")}
         data-testid="submit-trade"
-        disabled={busy || submitting || guard.blocked || !user}
-        onClick={submit}
+        disabled={busy || submitting || guard.blocked || !user || !!pending}
+        onClick={prepare}
       >
         {!user
           ? "Connect wallet"
@@ -246,6 +290,44 @@ export function TradePanel({
           ? "Submitting…"
           : ACTIONS.find((a) => a.action === action)?.label}
       </Button>
+
+      {pending && (
+        <div
+          role="dialog"
+          aria-label="Confirm trade"
+          className="mt-4 rounded-lg border border-line bg-ink-2 p-4"
+        >
+          <p className="font-serif text-lg text-fg">Confirm trade</p>
+          <p className="mt-2 text-sm text-fg-dim">
+            {ACTIONS.find((a) => a.action === pending.fill.action)?.label}{" "}
+            {formatAmount(pending.fill.size)} token
+            {pending.fill.size.eq(PAYOFF_UNIT) ? "" : "s"}.
+          </p>
+          <p className="mt-1 text-sm text-fg">
+            {costSummary(pending.cost)} · balance{" "}
+            {formatAmount(pending.cost.have)} {pending.cost.asset}
+          </p>
+          <div className="mt-4 flex gap-2">
+            <Button
+              variant="accent"
+              className="flex-1"
+              data-testid="confirm-trade"
+              disabled={busy}
+              onClick={confirm}
+            >
+              {busy ? "Submitting…" : "Confirm"}
+            </Button>
+            <Button
+              variant="ghost"
+              className="flex-1"
+              disabled={busy}
+              onClick={() => setPending(null)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
     </Panel>
   );
 }

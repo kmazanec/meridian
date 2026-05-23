@@ -48,6 +48,15 @@ const market = {
 
 const program = {} as MeridianProgram;
 
+// A funded position so the affordability pre-check passes by default. Holds USDC + Yes but
+// NO No tokens — otherwise the position-constraint guard would block the default Buy Yes.
+// Tests that exercise No-side actions or the insufficient path override this.
+const funded = {
+  usdc: new BN(100_000_000), // $100
+  yes: new BN(100_000_000), // 100 Yes
+  no: new BN(0),
+};
+
 function renderPanel(props: Partial<Parameters<typeof TradePanel>[0]> = {}) {
   const onSubmit = vi.fn().mockResolvedValue(undefined);
   render(
@@ -57,7 +66,7 @@ function renderPanel(props: Partial<Parameters<typeof TradePanel>[0]> = {}) {
       market={market}
       marketAddress={marketAddress}
       book={null}
-      position={null}
+      position={funded}
       usdcMint={usdcMint}
       onSubmit={onSubmit}
       {...props}
@@ -92,25 +101,32 @@ describe("TradePanel", () => {
     const { onSubmit } = renderPanel();
     // Buy Yes is the default action; price 0.50, size 1 are the defaults.
     await userEvent.click(screen.getByTestId("submit-trade"));
+    // Prepare builds the intent and opens the confirmation dialog.
     expect(buildTradeIntent).toHaveBeenCalled();
     const [, signer, intent] = buildTradeIntent.mock.calls[0];
     expect(signer).toBe(user);
     expect(intent.action).toBe(TradeAction.BuyYes);
     expect(intent.price.toNumber()).toBe(500_000);
     expect(intent.size.toNumber()).toBe(1_000_000);
-    // onSubmit receives the built instructions plus the fill summary.
+    // Nothing is sent until the user confirms.
+    expect(onSubmit).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByTestId("confirm-trade"));
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit.mock.calls[0][0]).toEqual([{ marker: "ix" }]);
     expect(onSubmit.mock.calls[0][1].action).toBe(TradeAction.BuyYes);
   });
 
   it("routes each of the four actions through the SDK with the right action", async () => {
-    const cases: [string, TradeAction][] = [
-      ["Sell Yes", TradeAction.SellYes],
-      ["Buy No", TradeAction.BuyNo],
-      ["Sell No", TradeAction.SellNo],
+    // Each action has different needs: a per-action position that satisfies BOTH the
+    // affordability pre-check AND the position-constraint guard (Buy Yes blocked by No,
+    // Buy No blocked by Yes; sells need the token).
+    const big = new BN(100_000_000);
+    const cases: [string, TradeAction, { usdc: BN; yes: BN; no: BN }][] = [
+      ["Sell Yes", TradeAction.SellYes, { usdc: new BN(0), yes: big, no: new BN(0) }],
+      ["Buy No", TradeAction.BuyNo, { usdc: big, yes: new BN(0), no: new BN(0) }],
+      ["Sell No", TradeAction.SellNo, { usdc: big, yes: new BN(0), no: big }],
     ];
-    for (const [label, expected] of cases) {
+    for (const [label, expected, position] of cases) {
       buildTradeIntent.mockClear();
       const { unmount } = render(
         <TradePanel
@@ -119,12 +135,13 @@ describe("TradePanel", () => {
           market={market}
           marketAddress={marketAddress}
           book={null}
-          position={null}
+          position={position}
           usdcMint={usdcMint}
           onSubmit={vi.fn().mockResolvedValue(undefined)}
         />
       );
       await userEvent.click(screen.getByRole("button", { name: label }));
+      // Submit (prepare) builds the intent; confirm is a separate step.
       await userEvent.click(screen.getByTestId("submit-trade"));
       expect(buildTradeIntent.mock.calls[0][2].action).toBe(expected);
       unmount();
@@ -132,7 +149,8 @@ describe("TradePanel", () => {
   });
 
   it("passes the entered No price for a No action (reflected by the SDK)", async () => {
-    renderPanel();
+    // Buy No needs USDC and must NOT hold Yes (guard) — funded holds Yes, so override.
+    renderPanel({ position: { usdc: new BN(100_000_000), yes: new BN(0), no: new BN(0) } });
     await userEvent.click(screen.getByRole("button", { name: "Buy No" }));
     const price = screen.getByLabelText("No price ($)");
     await userEvent.clear(price);
@@ -157,7 +175,8 @@ describe("TradePanel", () => {
   });
 
   it("surfaces an invalid BUY_NO size instead of building", async () => {
-    renderPanel();
+    // USDC-only so the guard allows Buy No and the size error is what surfaces.
+    renderPanel({ position: { usdc: new BN(100_000_000), yes: new BN(0), no: new BN(0) } });
     await userEvent.click(screen.getByRole("button", { name: "Buy No" }));
     const size = screen.getByLabelText("Size (tokens)");
     await userEvent.clear(size);
@@ -176,11 +195,8 @@ describe("TradePanel", () => {
     expect(buildTradeIntent).not.toHaveBeenCalled();
   });
 
-  it("does not double-submit while a trade is being built/sent", async () => {
-    // onSubmit hangs until we release it, simulating an in-flight send.
-    let release!: () => void;
-    const gate = new Promise<void>((r) => (release = r));
-    const onSubmit = vi.fn().mockReturnValue(gate);
+  it("does not re-prepare once the confirmation dialog is open", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(
       <TradePanel
         program={program}
@@ -188,17 +204,29 @@ describe("TradePanel", () => {
         market={market}
         marketAddress={marketAddress}
         book={null}
-        position={null}
+        position={funded}
         usdcMint={usdcMint}
         onSubmit={onSubmit}
       />
     );
     const submit = screen.getByTestId("submit-trade");
     await userEvent.click(submit);
-    // A second click while the first is in flight must be ignored.
+    // The dialog is open; the submit button is disabled, so a second click can't rebuild.
+    expect(submit).toBeDisabled();
     await userEvent.click(submit);
-    release();
     expect(buildTradeIntent).toHaveBeenCalledTimes(1);
+    // Confirm sends exactly once.
+    await userEvent.click(screen.getByTestId("confirm-trade"));
     expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks an unaffordable trade with a clear message (no build)", async () => {
+    // Zero USDC → Buy No (needs full size USDC for the mint deposit) must be blocked.
+    renderPanel({ position: { usdc: new BN(0), yes: new BN(0), no: new BN(0) } });
+    await userEvent.click(screen.getByRole("button", { name: "Buy No" }));
+    await userEvent.click(screen.getByTestId("submit-trade"));
+    expect(screen.getByRole("alert").textContent).toMatch(/insufficient usdc/i);
+    expect(buildTradeIntent).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("confirm-trade")).not.toBeInTheDocument();
   });
 });
