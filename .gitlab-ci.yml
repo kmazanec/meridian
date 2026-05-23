@@ -37,6 +37,7 @@ stages:
   - review
   - build
   - check
+  - deploy
 
 # Automated code + security review on merge requests, via the shared
 # gitlab-cursor-review template (Cursor CLI). It runs on the dedicated
@@ -238,3 +239,51 @@ cursor_code_review:
   # ("Argument list too long"). Until that script feeds the diff via stdin/file,
   # don't let a big-diff review failure block the MR. Remove once infra is fixed.
   allow_failure: true
+
+# Build the static frontend and publish it to Cloudflare Pages. Runs only on the default
+# branch, after the TS checks pass — the deploy needs the SDK+web to build/test (lint-ts),
+# not the Rust program (deployed to devnet separately), so it gates on lint-ts alone and
+# stays out of the heavy-rust resource_group (Node-only, no .so).
+#
+# Auth + config come entirely from GitLab CI/CD variables (set in repo settings, masked/
+# protected — referenced by name only, never committed):
+#   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID  → wrangler reads these from the env
+#   NEXT_PUBLIC_RPC_URL, NEXT_PUBLIC_USDC_MINT, NEXT_PUBLIC_CLUSTER  → baked in at build time
+# NEXT_PUBLIC_LOCAL_WALLET_SECRET is deliberately NOT set: it's a localnet-only signing
+# backdoor and the production build throws if it's present (see Providers.tsx).
+deploy-web:
+  stage: deploy
+  needs: ["lint-ts"]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  cache:
+    key:
+      files:
+        - yarn.lock
+    paths:
+      - .yarn-cache/
+  script:
+    # The shared run_in_docker only forwards HOME/CARGO/npm vars, so this job runs its own
+    # `docker run` to also pass the build-time NEXT_PUBLIC_* and the CLOUDFLARE_* auth vars
+    # into the container (where the web build bakes them in and wrangler reads them). Same
+    # node:20 image + non-root UID + project-dir caches as run_in_docker.
+    - |
+      docker run --rm \
+        -v "$CI_PROJECT_DIR":/build -w /build \
+        -u "$(id -u):$(id -g)" \
+        -e HOME=/build/.home \
+        -e npm_config_cache=/build/.npm \
+        -e YARN_ENABLE_GLOBAL_CACHE=false \
+        -e YARN_CACHE_FOLDER=/build/.yarn-cache \
+        -e NEXT_PUBLIC_RPC_URL="$NEXT_PUBLIC_RPC_URL" \
+        -e NEXT_PUBLIC_USDC_MINT="$NEXT_PUBLIC_USDC_MINT" \
+        -e NEXT_PUBLIC_CLUSTER="$NEXT_PUBLIC_CLUSTER" \
+        -e CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" \
+        -e CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID" \
+        node:20 bash -c '
+          mkdir -p /build/.home &&
+          corepack yarn@4.10.2 install --immutable &&
+          corepack yarn@4.10.2 workspace @meridian/sdk build &&
+          corepack yarn@4.10.2 workspace @meridian/web build &&
+          npx --yes wrangler@4 pages deploy packages/web/out --project-name meridian --branch "'"$CI_DEFAULT_BRANCH"'"
+        '
