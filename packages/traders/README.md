@@ -141,9 +141,10 @@ WEB_BASE_URL=http://localhost:8788 make settle-due        # settle all due marke
 ```
 
 This settles each open, past-its-day market via `admin_settle` at `/api/price`'s end-of-session
-value (`≥ strike → Yes wins`). `admin_settle` is on-chain time-gated; build the program once with
-`make build-demo` (the `demo-fast-settle` feature → 5-min delay instead of 1h) and re-deploy so
-`settle-due` works promptly after close. See `docs/local-development.md` for the full flow.
+value (`≥ strike → Yes wins`). `admin_settle` is on-chain time-gated (1h by default), but when you
+ran the stack with `PRICE_SOURCE=synthetic`, `make dev` already built + deployed the program with
+the `demo-fast-settle` feature (5-min delay) — so `settle-due` works ~5 min after close with no
+extra build step. See `docs/local-development.md` for the full flow.
 
 To run a single bot in the foreground (handy for development):
 

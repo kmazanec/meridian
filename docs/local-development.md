@@ -252,17 +252,21 @@ takes an arbitrary price), settling each due market at the **synthetic close** f
 (progress=1) — coherent with what the bots traded against. `settlementPrice ≥ strike → Yes wins`.
 
 ```bash
-make build-demo            # build the program with the demo-fast-settle feature (5-min, not 1h,
-                           #   admin_settle delay), then re-deploy: make deploy  (or deploy-devnet)
+# Locally, nothing extra to build: when you start the stack with PRICE_SOURCE=synthetic,
+# `make dev` builds + deploys the program with the demo-fast-settle feature automatically.
 WEB_BASE_URL=http://localhost:8788 make settle-due        # settle ALL due open markets, once
-# devnet: WEB_BASE_URL=https://<dashboard> make settle-due-devnet
+# devnet: build once with `make build-demo`, deploy, then:
+#   WEB_BASE_URL=https://<dashboard> make settle-due-devnet
 ```
 
 `admin_settle` is on-chain time-gated at `trading_day + ADMIN_OVERRIDE_DELAY` — 1 hour by
-default, but `make build-demo` compiles the program with the `demo-fast-settle` Cargo feature
-that shortens it to 5 minutes (localnet/devnet-demo only; a default mainnet build keeps 1h).
-`settle-due` is idempotent (already-settled markets are skipped) and settles every open market
-whose day has passed in one run; `GRACE_SECONDS` widens "due" to markets closing within N seconds.
+default. The `demo-fast-settle` Cargo feature shortens it to 5 minutes (localnet/devnet-demo
+only; a default mainnet build keeps 1h). **You don't build this by hand for local dev:**
+`make dev` selects the feature from `PRICE_SOURCE` — `synthetic` → demo-fast-settle (compressed
+day, fast close), real prices → the default 1h program. (For a devnet synthetic demo, where you
+deploy separately, run `make build-demo` before `make deploy-devnet`.) `settle-due` is idempotent
+(already-settled markets skipped) and settles every open market whose day has passed in one run;
+`GRACE_SECONDS` widens "due" to markets closing within N seconds.
 
 ### Ops reproducibility test
 

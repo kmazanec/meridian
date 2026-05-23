@@ -62,6 +62,18 @@ help: ## Show this help.
 # ── Local one-command stack ───────────────────────────────────────────────────
 
 dev: _validator-up ## Bring up the full LOCAL stack (validator + deploy + markets + demo wallet + web env).
+	@# Build the program to match the price mode, then deploy that .so. With PRICE_SOURCE=synthetic
+	@# (the fake-price demo: bots trade a compressed synthetic day) build with demo-fast-settle so
+	@# admin_settle / `make settle-due` is callable ~5 min after close instead of 1h. With real
+	@# prices, build the default (1h-delay) program. Either way `make dev` deploys the matching .so,
+	@# so you never run a separate build step.
+	@if [ "$$PRICE_SOURCE" = "synthetic" ]; then \
+	  echo "▶ Building program with demo-fast-settle (PRICE_SOURCE=synthetic)..."; \
+	  anchor build -- --features demo-fast-settle; \
+	else \
+	  echo "▶ Building program (default settlement delay)..."; \
+	  anchor build; \
+	fi
 	@echo "▶ Deploying + seeding the local stack..."
 	@# Strikes seed via live (/api/history) → MOCK_CLOSE_* → hardcoded defaults. Set
 	@# WEB_BASE_URL (e.g. your deployed dashboard) to pull the REAL last close; otherwise the
@@ -245,10 +257,12 @@ build: ## Build the program (.so) and the TS workspaces.
 	$(YARN) workspace @meridian/automation build
 	$(YARN) workspace @meridian/traders build
 
-build-demo: ## Build the program with demo-fast-settle (5-min admin_settle delay) for local/demo.
+build-demo: ## Build the program with demo-fast-settle (5-min settle delay). For DEVNET demos —
+	@# `make dev` builds this automatically when PRICE_SOURCE=synthetic, so you don't need this
+	@# locally. Use it before a devnet synthetic-demo deploy (then: make deploy-devnet).
 	anchor build -- --features demo-fast-settle
-	@echo "✓ Built with demo-fast-settle. Re-deploy (make deploy / deploy-devnet) to apply, then"
-	@echo "  'make settle-due' is callable ~5 min after a market's close (vs the 1h default)."
+	@echo "✓ Built with demo-fast-settle. Re-deploy (make deploy-devnet) to apply, then"
+	@echo "  'make settle-due-devnet' is callable ~5 min after close (vs the 1h default)."
 
 test: ## Run the Rust tests + the off-chain workspace tests.
 	cargo test
