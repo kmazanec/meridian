@@ -4,6 +4,8 @@ import {
   interpolateCurve,
   curveIndexForDay,
   syntheticPrice,
+  sessionSeries,
+  liveIndexForProgress,
   type CurvePoint,
 } from "../../functions/api/_synthetic-price";
 
@@ -83,5 +85,40 @@ describe("syntheticPrice", () => {
     expect(syntheticPrice(200, curve, 0.5)).to.be.closeTo(204, 1e-9);
     // close (-1%) on a $200 open → $198
     expect(syntheticPrice(200, curve, 1)).to.be.closeTo(198, 1e-9);
+  });
+});
+
+describe("sessionSeries", () => {
+  const tradingDay = 1_000_000;
+  const synthDay = 5400;
+
+  it("maps each curve point to an absolute close at a spread-out timestamp", () => {
+    const series = sessionSeries(200, curve, tradingDay, synthDay);
+    expect(series).toHaveLength(curve.length);
+    // Prices = open × (1 + d): 200, 204, 198.
+    expect(series.map((p) => p.close)).to.deep.equal([200, 204, 198]);
+    // Timestamps run start → close across the compressed window by each point's t.
+    expect(series[0].timestamp).to.equal(tradingDay - synthDay); // t=0 → start
+    expect(series[1].timestamp).to.equal(tradingDay - synthDay / 2); // t=0.5 → mid
+    expect(series[2].timestamp).to.equal(tradingDay); // t=1 → close
+  });
+
+  it("returns ascending timestamps", () => {
+    const series = sessionSeries(100, curve, tradingDay, synthDay);
+    const ts = series.map((p) => p.timestamp);
+    expect([...ts].sort((a, b) => a - b)).to.deep.equal(ts);
+  });
+});
+
+describe("liveIndexForProgress", () => {
+  it("points at the last curve point reached so far", () => {
+    expect(liveIndexForProgress(curve, 0)).to.equal(0); // only t=0 reached
+    expect(liveIndexForProgress(curve, 0.49)).to.equal(0); // not yet at t=0.5
+    expect(liveIndexForProgress(curve, 0.5)).to.equal(1); // exactly t=0.5
+    expect(liveIndexForProgress(curve, 1)).to.equal(2); // session complete
+  });
+
+  it("is 0 for an empty curve", () => {
+    expect(liveIndexForProgress([], 0.5)).to.equal(0);
   });
 });

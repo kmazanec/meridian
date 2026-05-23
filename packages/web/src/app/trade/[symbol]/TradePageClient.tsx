@@ -25,7 +25,7 @@ import {
 import { recordTradeFill } from "@/lib/recordTradeFill";
 import { formatPrice, formatProbability, formatUsdc } from "@/lib/format";
 import { StrikeLadder } from "@/components/markets/StrikeLadder";
-import { PriceChart } from "@/components/markets/PriceChart";
+import { PriceChartPanel } from "@/components/markets/PriceChartPanel";
 import { SpotLine } from "@/components/markets/SpotLine";
 import { DualBookView } from "@/components/trade/DualBookView";
 import { PayoffLine } from "@/components/trade/PayoffLine";
@@ -127,7 +127,6 @@ export default function TradePageClient() {
     refreshPosition();
   };
 
-  const closes = history?.map((p) => p.close) ?? [];
   const spot = spotFromHistory(history ?? []);
 
   // The hero question reads as the actual contract: prefer the selected strike, else the
@@ -194,15 +193,14 @@ export default function TradePageClient() {
 
         {/* Center: price chart over the order book for the selected strike. */}
         <section className="order-1 space-y-6 lg:order-2">
-          <div className="panel p-5">
-            <div className="mb-2 flex items-baseline justify-between">
-              <h2 className="text-xs uppercase tracking-wide text-fg-faint">
-                {symbol} · last {closes.length} sessions
-              </h2>
-              <SpotLine spot={spot} />
-            </div>
-            <PriceChart points={history ?? []} />
-          </div>
+          <PriceChartPanel
+            symbol={symbol}
+            closes={history ?? []}
+            spot={spot}
+            tradingDay={
+              headerTradingDay != null ? Number(headerTradingDay) : null
+            }
+          />
           {market && selected ? (
             dual ? (
               <DualBookView book={dual} />

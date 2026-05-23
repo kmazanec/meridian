@@ -69,3 +69,51 @@ export function syntheticPrice(
 ): number {
   return open * (1 + interpolateCurve(points, progress));
 }
+
+/** One sample in a synthetic intraday session series. */
+export interface SessionPoint {
+  /** Fraction through the session, 0..1 (the curve point's `t`). */
+  t: number;
+  /** Unix seconds for this sample, mapped onto the real compressed window. */
+  timestamp: number;
+  /** Absolute price = open × (1 + d). */
+  close: number;
+}
+
+/**
+ * Build the whole session series in one shot from a day's curve, so a chart can render the
+ * complete intraday path without polling. Each curve point becomes a `{t, timestamp, close}`
+ * sample; timestamps are spread across the compressed window `[tradingDay − synthDay, tradingDay]`
+ * by each point's `t`. Points beyond the current `progress` are still returned (they're the
+ * deterministic future path); callers mark the live point via {@link liveIndexForProgress}.
+ */
+export function sessionSeries(
+  open: number,
+  points: CurvePoint[],
+  tradingDay: number,
+  synthDaySeconds: number
+): SessionPoint[] {
+  const start = tradingDay - synthDaySeconds;
+  return points.map((p) => ({
+    t: p.t,
+    timestamp: Math.round(start + p.t * synthDaySeconds),
+    close: open * (1 + p.d),
+  }));
+}
+
+/**
+ * Index of the last session point at or before `progress` — i.e. "where we are now" in the
+ * session. Returns the final index when the session is complete, 0 before it starts.
+ */
+export function liveIndexForProgress(
+  points: CurvePoint[],
+  progress: number
+): number {
+  if (points.length === 0) return 0;
+  let idx = 0;
+  for (let i = 0; i < points.length; i++) {
+    if (points[i].t <= progress) idx = i;
+    else break;
+  }
+  return idx;
+}
