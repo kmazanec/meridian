@@ -10,9 +10,9 @@
       "persona": "A disciplined value trader. Quotes both sides around fair value and takes the cheaper side when the book is mispriced."
     },
     {
-      "name": "nemotron-trader",
+      "name": "nova-trader",
       "wallet": "~/.config/solana/trader2.json",
-      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "model": "amazon/nova-micro-v1",
       "intervalSec": 60,
       "maxStepsPerTick": 60,
       "persona": "A patient market-maker. Posts tight resting quotes on many strikes and earns the spread."
@@ -60,7 +60,7 @@
     {
       "name": "haiku-trader",
       "wallet": "~/.config/solana/trader8.json",
-      "model": "anthropic/claude-haiku-latest",
+      "model": "anthropic/claude-haiku-4.5",
       "intervalSec": 60,
       "maxStepsPerTick": 60,
       "persona": "A careful value trader. Estimates fair probability from spot, recent closes, and time-to-close, then quotes around it."
