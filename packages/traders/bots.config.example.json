@@ -2,19 +2,68 @@
   "$schema": "./bots.schema.json",
   "bots": [
     {
-      "name": "claude-trader",
+      "name": "deepseek-trader",
       "wallet": "~/.config/solana/trader1.json",
-      "model": "anthropic/claude-3.5-sonnet",
+      "model": "deepseek/deepseek-v4-flash",
       "intervalSec": 60,
       "maxStepsPerTick": 60,
-      "persona": "A disciplined value trader. Looks for strikes whose order-book implied probability disagrees with where spot sits relative to the strike, and takes the cheaper side."
+      "persona": "A disciplined value trader. Quotes both sides around fair value and takes the cheaper side when the book is mispriced."
     },
     {
-      "name": "gpt-trader",
+      "name": "nemotron-trader",
       "wallet": "~/.config/solana/trader2.json",
-      "model": "openai/gpt-4o",
+      "model": "nvidia/nemotron-3-super-120b-a12b",
       "intervalSec": 60,
-      "persona": "An aggressive momentum trader. Leans into the direction the underlying has been moving over the last few days and is willing to pay up for conviction."
+      "maxStepsPerTick": 60,
+      "persona": "A patient market-maker. Posts tight resting quotes on many strikes and earns the spread."
+    },
+    {
+      "name": "gemma-trader",
+      "wallet": "~/.config/solana/trader3.json",
+      "model": "google/gemma-4-31b-it",
+      "intervalSec": 60,
+      "maxStepsPerTick": 60,
+      "persona": "A mean-reversion trader. Fades strikes whose implied probability looks overextended versus recent closes."
+    },
+    {
+      "name": "mistral-trader",
+      "wallet": "~/.config/solana/trader4.json",
+      "model": "mistralai/mistral-small-2603",
+      "intervalSec": 60,
+      "maxStepsPerTick": 60,
+      "persona": "A momentum trader. Leans into the direction the underlying has moved over the last few days."
+    },
+    {
+      "name": "gpt-nano-trader",
+      "wallet": "~/.config/solana/trader5.json",
+      "model": "openai/gpt-5.4-nano",
+      "intervalSec": 60,
+      "maxStepsPerTick": 60,
+      "persona": "A balanced trader. Splits between making markets on empty strikes and taking clear edges."
+    },
+    {
+      "name": "minimax-trader",
+      "wallet": "~/.config/solana/trader6.json",
+      "model": "minimax/minimax-m2.7",
+      "intervalSec": 60,
+      "maxStepsPerTick": 60,
+      "persona": "An aggressive taker. Hunts for the single most mispriced strike each tick and sizes up on conviction."
+    },
+    {
+      "name": "qwen-trader",
+      "wallet": "~/.config/solana/trader7.json",
+      "model": "qwen/qwen3.5-plus-20260420",
+      "intervalSec": 60,
+      "maxStepsPerTick": 60,
+      "persona": "A diversified trader. Spreads small quotes across every symbol to stay market-neutral."
+    },
+    {
+      "name": "haiku-trader",
+      "wallet": "~/.config/solana/trader8.json",
+      "model": "anthropic/claude-haiku-latest",
+      "intervalSec": 60,
+      "maxStepsPerTick": 60,
+      "persona": "A careful value trader. Estimates fair probability from spot, recent closes, and time-to-close, then quotes around it."
     }
   ]
 }

@@ -53,6 +53,14 @@ export interface OpsEnv {
   includeClose: boolean;
   /** Explicit trading-day (unix seconds) for create-markets; default = ~2h from now. */
   tradingDayOverride?: number;
+  /**
+   * Seed create-markets strikes from the *live* previous close (via {@link webBaseUrl}'s
+   * /api/history) instead of MOCK_CLOSE_*. When on, live wins and mock is the per-ticker
+   * fallback. Enabled by LIVE_CLOSES=1 (or implicitly when WEB_BASE_URL is set).
+   */
+  liveCloses: boolean;
+  /** Base URL of the web app, for the /api/history live-close source. */
+  webBaseUrl?: string;
 }
 
 function required(env: Env, key: string): string {
@@ -274,6 +282,10 @@ export function loadOpsEnv(env: Env = process.env): OpsEnv {
     tradingDayOverride = td;
   }
 
+  const webBaseUrl = env["WEB_BASE_URL"]?.trim() || undefined;
+  // Live mode is explicit (LIVE_CLOSES=1) or implied by having a web base URL to fetch from.
+  const liveCloses = parseBool(env["LIVE_CLOSES"]) || webBaseUrl !== undefined;
+
   return {
     deployer,
     rpcUrl,
@@ -284,6 +296,8 @@ export function loadOpsEnv(env: Env = process.env): OpsEnv {
     feedIdsHex,
     includeClose: parseBool(env["INCLUDE_CLOSE"]),
     tradingDayOverride,
+    liveCloses,
+    webBaseUrl,
   };
 }
 
@@ -319,5 +333,7 @@ export const OPS_ENV_KEYS = {
     "FEED_<SYMBOL> (devnet Pyth hex feed id per ticker; absent → local test pattern)",
     "INCLUDE_CLOSE (1/true to add the at-the-money strike)",
     "TRADING_DAY (unix seconds for create-markets; default ~2h from now)",
+    "LIVE_CLOSES (1/true: seed create-markets strikes from the real last close via /api/history)",
+    "WEB_BASE_URL (web app base URL for the /api/history live-close source)",
   ],
 } as const;
