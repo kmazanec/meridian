@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Static export: the app is fully client-side (no API routes/SSR), so it ships as
+  // plain static files to a CDN (Cloudflare Pages). `/trade/[symbol]` enumerates its
+  // pages via generateStaticParams (the 7 tickers); see app/trade/[symbol]/page.tsx.
+  output: "export",
   // The SDK is consumed as TypeScript source (no prebuilt dist), so Next must
   // transpile it alongside the app.
   transpilePackages: ["@meridian/sdk"],
