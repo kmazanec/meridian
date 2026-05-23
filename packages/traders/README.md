@@ -63,11 +63,19 @@ gitignored because it names wallet paths; the committed template is `bots.config
 Set the shared environment (see the root `.env.example` for the full list):
 
 ```bash
-export RPC_URL=https://api.devnet.solana.com
+# Recommended: run against your local validator — no RPC rate limits.
+export RPC_URL=http://127.0.0.1:8899
+# (public devnet works too, but two bots scanning it get heavily 429-rate-limited:
+#  export RPC_URL=https://api.devnet.solana.com)
 export OPENROUTER_API_KEY=sk-or-...
 export WEB_BASE_URL=http://localhost:3000   # optional: enables the 7-day-history tool
 # export DRY_RUN=1                          # optional: log intended trades without sending
 ```
+
+> **Cluster matters.** The bots trade on whatever `RPC_URL` points at — and your wallets'
+> USDC, the markets, and the program must all live on that same cluster. If you funded
+> traders and created markets on localnet, point `RPC_URL` at localnet (not devnet), or the
+> bots will load a different cluster's empty/foreign state.
 
 ## Run the fleet
 

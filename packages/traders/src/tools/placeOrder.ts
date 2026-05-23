@@ -68,8 +68,12 @@ const schema = z.object({
     ),
   isMarket: z
     .boolean()
+    .nullable()
     .optional()
-    .describe("If true, cross at any price (fill-or-cancel the remainder)."),
+    .describe(
+      "If true, cross at any price (fill-or-cancel the remainder). Omit/null/false " +
+        "posts a limit order that rests if it doesn't cross."
+    ),
 });
 
 /** The Yes-book side + price an action reduces to (for crossing). Mirrors intent.ts. */

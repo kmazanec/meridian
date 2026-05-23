@@ -51,12 +51,8 @@ interface RawMarketAll {
   };
 }
 
-/**
- * Discover every *open* market via `getProgramAccounts` (Anchor's `.all()` filters by the
- * Market discriminator). This mirrors the web app's discovery but is the bots' own code —
- * settled markets are filtered out since you can't open new positions on them.
- */
-export async function discoverOpenMarkets(
+/** Raw `getProgramAccounts` market scan + normalize to open markets (uncached). */
+async function scanOpenMarkets(
   program: MeridianProgram
 ): Promise<OpenMarket[]> {
   const raw = (await program.account.market.all()) as unknown as RawMarketAll[];
@@ -78,6 +74,47 @@ export async function discoverOpenMarkets(
     (a, b) => a.symbol.localeCompare(b.symbol) || a.strike.cmp(b.strike)
   );
   return open;
+}
+
+/** How long a market-list scan stays fresh. Markets are created ~once/day, so a short TTL
+ * is safe and collapses the many per-tick lookups (every read tool + place_order calls this)
+ * into a single `getProgramAccounts` — the chief source of the RPC 429s on shared endpoints. */
+export const MARKETS_TTL_MS = 30_000;
+
+interface CacheEntry {
+  at: number;
+  inflight?: Promise<OpenMarket[]>;
+  value?: OpenMarket[];
+}
+// Keyed by the program instance (one per bot), so bots don't share each other's cache.
+const marketsCache = new WeakMap<MeridianProgram, CacheEntry>();
+
+/**
+ * Discover every *open* market (settled ones are filtered out — you can't open new positions
+ * on them). Cached per program for {@link MARKETS_TTL_MS}: concurrent callers within a tick
+ * share one in-flight scan, and repeat calls within the TTL reuse the result, so a tick's
+ * many lookups cost a single `getProgramAccounts`. Mirrors the web app's discovery, fresh code.
+ */
+export async function discoverOpenMarkets(
+  program: MeridianProgram,
+  opts: { force?: boolean } = {}
+): Promise<OpenMarket[]> {
+  const now = Date.now();
+  const entry = marketsCache.get(program);
+  if (!opts.force && entry) {
+    if (entry.inflight) return entry.inflight; // coalesce concurrent scans
+    if (entry.value && now - entry.at < MARKETS_TTL_MS) return entry.value;
+  }
+  const inflight = scanOpenMarkets(program);
+  marketsCache.set(program, { at: now, inflight });
+  try {
+    const value = await inflight;
+    marketsCache.set(program, { at: Date.now(), value });
+    return value;
+  } catch (err) {
+    marketsCache.delete(program); // don't cache a failure
+    throw err;
+  }
 }
 
 /**

@@ -10,11 +10,15 @@ test-ledger
 .env
 .env.*
 !.env.example
+# direnv: local auto-loader for .env (may reference secrets). Local-only.
+.envrc
 
 # Local dev-stack state written by `make dev` (validator pid/ledger, demo wallet secret,
 # deploy manifest). All regenerated; none belongs in git.
 /.localnet/
 /deploy-manifest.json
+# Per-cluster manifest backups (e.g. deploy-manifest.devnet.json) — local pointers, not git.
+/deploy-manifest.*.json
 
 # Compiled TS package output (the off-chain workspace).
 packages/*/dist

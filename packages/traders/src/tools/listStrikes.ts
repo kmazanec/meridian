@@ -17,9 +17,10 @@ import { unitsToAmount, round } from "../format";
 const schema = z.object({
   symbol: z
     .string()
+    .nullable()
     .optional()
     .describe(
-      "Optional: restrict to one symbol (e.g. META). Omit to list all."
+      "Optional: restrict to one symbol (e.g. META). Omit (or null) to list all."
     ),
 });
 

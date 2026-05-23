@@ -19,9 +19,10 @@ import { unitsToAmount, round } from "../format";
 const schema = z.object({
   symbol: z
     .string()
+    .nullable()
     .optional()
     .describe(
-      "Optional: restrict to one symbol (e.g. NVDA). Omit to price all strikes."
+      "Optional: restrict to one symbol (e.g. NVDA). Omit (or null) to price all strikes."
     ),
 });
 
