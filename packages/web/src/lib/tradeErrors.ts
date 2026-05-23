@@ -23,14 +23,14 @@ export function readableTradeError(err: unknown): string {
   const text = raw.toLowerCase();
 
   // SOL fee shortfall (check first — more specific than the generic token case).
-  if (text.includes("insufficient lamports") || text.includes("insufficient funds for rent")) {
+  if (
+    text.includes("insufficient lamports") ||
+    text.includes("insufficient funds for rent")
+  ) {
     return "Not enough SOL to pay the network fee. Add devnet SOL and try again.";
   }
   // Token (USDC/Yes/No) shortfall — the mint/transfer failed for lack of balance.
-  if (
-    text.includes("insufficient") ||
-    text.includes("insufficient funds")
-  ) {
+  if (text.includes("insufficient") || text.includes("insufficient funds")) {
     return "Insufficient funds for this trade. Check your USDC (or token) balance.";
   }
   if (text.includes("user rejected") || text.includes("rejected the request")) {

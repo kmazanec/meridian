@@ -20,8 +20,8 @@ export function MarketsView({ tickers }: { tickers: TickerView[] }) {
       <header className="mb-6">
         <h1 className="font-serif text-3xl text-fg">Markets</h1>
         <p className="mt-1 text-fg-dim">
-          Seven stocks. Will it close at or above the strike today? Expand a stock
-          for its full strike ladder, depth, and settlement history.
+          Seven stocks. Will it close at or above the strike today? Expand a
+          stock for its full strike ladder, depth, and settlement history.
         </p>
       </header>
 

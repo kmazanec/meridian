@@ -8,10 +8,7 @@ import { StrikeLadder } from "./StrikeLadder";
 
 const emptyBook: BookView = { bids: [], asks: [] };
 
-function row(
-  strike: number,
-  overrides: Partial<StrikeRow> = {}
-): StrikeRow {
+function row(strike: number, overrides: Partial<StrikeRow> = {}): StrikeRow {
   return {
     address: PublicKey.unique().toBase58(),
     strike: new BN(strike),

@@ -15,7 +15,9 @@ export default function MarketsPage() {
 
   // One history fetch per stock. The seven symbols are fixed, so the hook count is
   // constant — calling usePriceHistory once per symbol is rules-of-hooks safe.
-  const histories = TICKER_SYMBOLS.map((symbol) => usePriceHistory(symbol).data);
+  const histories = TICKER_SYMBOLS.map(
+    (symbol) => usePriceHistory(symbol).data
+  );
 
   const tickers = useMemo<TickerView[]>(() => {
     const grouped = groupByTicker(markets ?? []);

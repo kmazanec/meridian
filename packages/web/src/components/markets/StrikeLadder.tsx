@@ -32,7 +32,9 @@ export function StrikeLadder({ rows }: { rows: StrikeRow[] }) {
             <th className="py-2 pr-3 font-medium">Strike</th>
             <th className="py-2 pr-3 font-medium">Yes</th>
             <th className="py-2 pr-3 font-medium">Implied</th>
-            <th className="hidden py-2 pr-3 font-medium sm:table-cell">Spread</th>
+            <th className="hidden py-2 pr-3 font-medium sm:table-cell">
+              Spread
+            </th>
             <th className="hidden py-2 pr-3 font-medium sm:table-cell">Size</th>
             <th className="py-2 pr-3 font-medium">Depth</th>
             <th className="py-2 font-medium">Status</th>
@@ -46,7 +48,9 @@ export function StrikeLadder({ rows }: { rows: StrikeRow[] }) {
               data-testid={`ladder-row-${row.strike.toString()}`}
             >
               <td className="py-2 pr-3 text-fg">{formatUsdc(row.strike, 0)}</td>
-              <td className="py-2 pr-3 text-yes">{formatPrice(row.yesPrice)}</td>
+              <td className="py-2 pr-3 text-yes">
+                {formatPrice(row.yesPrice)}
+              </td>
               <td className="py-2 pr-3 text-fg-dim">
                 {formatProbability(row.yesPrice)}
               </td>
@@ -73,7 +77,9 @@ export function StrikeLadder({ rows }: { rows: StrikeRow[] }) {
 /** Live "Open", or a settled outcome badge with the settlement price. */
 function StatusCell({ row }: { row: StrikeRow }) {
   if (row.state === "open") {
-    return <span className="text-xs uppercase tracking-wide text-accent">Open</span>;
+    return (
+      <span className="text-xs uppercase tracking-wide text-accent">Open</span>
+    );
   }
   const yesWon = row.outcome === Outcome.YesWins;
   const noWon = row.outcome === Outcome.NoWins;

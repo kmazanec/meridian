@@ -30,10 +30,7 @@ import {
   PublicKey,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
-import {
-  getOrCreateAssociatedTokenAccount,
-  mintTo,
-} from "@solana/spl-token";
+import { getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
 
 const expand = (p) => (p.startsWith("~") ? p.replace("~", homedir()) : p);
 const req = (k) => {
@@ -42,7 +39,9 @@ const req = (k) => {
   return v;
 };
 const loadKp = (p) =>
-  Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(expand(p), "utf8"))));
+  Keypair.fromSecretKey(
+    Uint8Array.from(JSON.parse(readFileSync(expand(p), "utf8")))
+  );
 
 const rpc = req("RPC_URL");
 const isLocal = rpc.includes("127.0.0.1") || rpc.includes("localhost");
@@ -77,7 +76,11 @@ const traderPaths = (
   .split(",")
   .map((s) => s.trim());
 
-console.log(`Funding ${traderPaths.length} test trader(s) on ${isLocal ? "localnet" : rpc}`);
+console.log(
+  `Funding ${traderPaths.length} test trader(s) on ${
+    isLocal ? "localnet" : rpc
+  }`
+);
 console.log(`  deployer/mint-authority: ${deployer.publicKey.toBase58()}`);
 console.log(`  USDC mint: ${usdcMint.toBase58()}`);
 
@@ -94,7 +97,10 @@ for (const path of traderPaths) {
   // SOL: airdrop on localnet (unlimited); on devnet try the faucet, fall back to a transfer
   // from the deployer if the faucet is rate-limited.
   if (isLocal) {
-    const sig = await conn.requestAirdrop(trader.publicKey, solEach * LAMPORTS_PER_SOL);
+    const sig = await conn.requestAirdrop(
+      trader.publicKey,
+      solEach * LAMPORTS_PER_SOL
+    );
     await conn.confirmTransaction(sig, "confirmed");
     console.log(`  + ${solEach} SOL (airdrop)`);
   } else {
@@ -106,7 +112,9 @@ for (const path of traderPaths) {
       );
       console.log(`  + ${solEach} SOL (devnet faucet)`);
     } catch {
-      console.log(`  ! faucet failed (rate limit) — fund ${solEach} SOL manually if needed`);
+      console.log(
+        `  ! faucet failed (rate limit) — fund ${solEach} SOL manually if needed`
+      );
     }
   }
 
@@ -128,4 +136,6 @@ for (const path of traderPaths) {
   console.log(`  + ${usdcEach} mock USDC`);
 }
 
-console.log("\n✓ done. Import these keypairs into your wallet to trade as them.");
+console.log(
+  "\n✓ done. Import these keypairs into your wallet to trade as them."
+);

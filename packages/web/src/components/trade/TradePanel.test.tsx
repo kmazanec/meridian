@@ -122,8 +122,16 @@ describe("TradePanel", () => {
     // Buy No blocked by Yes; sells need the token).
     const big = new BN(100_000_000);
     const cases: [string, TradeAction, { usdc: BN; yes: BN; no: BN }][] = [
-      ["Sell Yes", TradeAction.SellYes, { usdc: new BN(0), yes: big, no: new BN(0) }],
-      ["Buy No", TradeAction.BuyNo, { usdc: big, yes: new BN(0), no: new BN(0) }],
+      [
+        "Sell Yes",
+        TradeAction.SellYes,
+        { usdc: new BN(0), yes: big, no: new BN(0) },
+      ],
+      [
+        "Buy No",
+        TradeAction.BuyNo,
+        { usdc: big, yes: new BN(0), no: new BN(0) },
+      ],
       ["Sell No", TradeAction.SellNo, { usdc: big, yes: new BN(0), no: big }],
     ];
     for (const [label, expected, position] of cases) {
@@ -150,7 +158,9 @@ describe("TradePanel", () => {
 
   it("passes the entered No price for a No action (reflected by the SDK)", async () => {
     // Buy No needs USDC and must NOT hold Yes (guard) — funded holds Yes, so override.
-    renderPanel({ position: { usdc: new BN(100_000_000), yes: new BN(0), no: new BN(0) } });
+    renderPanel({
+      position: { usdc: new BN(100_000_000), yes: new BN(0), no: new BN(0) },
+    });
     await userEvent.click(screen.getByRole("button", { name: "Buy No" }));
     const price = screen.getByLabelText("No price ($)");
     await userEvent.clear(price);
@@ -176,7 +186,9 @@ describe("TradePanel", () => {
 
   it("surfaces an invalid BUY_NO size instead of building", async () => {
     // USDC-only so the guard allows Buy No and the size error is what surfaces.
-    renderPanel({ position: { usdc: new BN(100_000_000), yes: new BN(0), no: new BN(0) } });
+    renderPanel({
+      position: { usdc: new BN(100_000_000), yes: new BN(0), no: new BN(0) },
+    });
     await userEvent.click(screen.getByRole("button", { name: "Buy No" }));
     const size = screen.getByLabelText("Size (tokens)");
     await userEvent.clear(size);
@@ -222,7 +234,9 @@ describe("TradePanel", () => {
 
   it("blocks an unaffordable trade with a clear message (no build)", async () => {
     // Zero USDC → Buy No (needs full size USDC for the mint deposit) must be blocked.
-    renderPanel({ position: { usdc: new BN(0), yes: new BN(0), no: new BN(0) } });
+    renderPanel({
+      position: { usdc: new BN(0), yes: new BN(0), no: new BN(0) },
+    });
     await userEvent.click(screen.getByRole("button", { name: "Buy No" }));
     await userEvent.click(screen.getByTestId("submit-trade"));
     expect(screen.getByRole("alert").textContent).toMatch(/insufficient usdc/i);

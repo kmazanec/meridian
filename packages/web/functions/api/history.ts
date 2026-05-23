@@ -93,6 +93,9 @@ export const onRequestGet: PagesFunction = async ({ request }) => {
     // Cache successful results for an hour at the edge and in the browser.
     return json(points, 200, 3600);
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : "fetch failed" }, 502);
+    return json(
+      { error: e instanceof Error ? e.message : "fetch failed" },
+      502
+    );
   }
 };

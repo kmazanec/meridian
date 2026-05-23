@@ -68,7 +68,9 @@ export function MarketCard({
               {repYesPrice ? formatPrice(repYesPrice) : "—"}
             </div>
             <div className="stat-mono mt-0.5 text-xs text-fg-faint">
-              {repYesPrice ? `${formatProbability(repYesPrice)} implied` : "no open market"}
+              {repYesPrice
+                ? `${formatProbability(repYesPrice)} implied`
+                : "no open market"}
             </div>
           </div>
           <Sparkline values={closes} className="shrink-0" />

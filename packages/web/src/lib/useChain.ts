@@ -88,7 +88,8 @@ export function usePolled<T>(
     if (!enabled || pollMs <= 0) return;
     let id: ReturnType<typeof setInterval> | undefined;
     const start = () => {
-      if (id === undefined) id = setInterval(() => setTick((t) => t + 1), pollMs);
+      if (id === undefined)
+        id = setInterval(() => setTick((t) => t + 1), pollMs);
     };
     const stop = () => {
       if (id !== undefined) {

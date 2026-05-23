@@ -65,7 +65,9 @@ describe("MarketsView", () => {
 
   it("counts active (open) contracts per ticker", () => {
     render(
-      <MarketsView tickers={allTickers({ [Ticker.Aapl]: { activeCount: 2 } })} />
+      <MarketsView
+        tickers={allTickers({ [Ticker.Aapl]: { activeCount: 2 } })}
+      />
     );
     expect(screen.getByText("2 active")).toBeInTheDocument();
   });

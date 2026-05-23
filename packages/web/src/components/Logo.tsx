@@ -57,7 +57,9 @@ export function Logo({
   return (
     <span className={cx("inline-flex items-center gap-2", className)}>
       <MeridianMark size={markSize} />
-      <span className="font-serif text-xl tracking-tight text-fg">Meridian</span>
+      <span className="font-serif text-xl tracking-tight text-fg">
+        Meridian
+      </span>
     </span>
   );
 }

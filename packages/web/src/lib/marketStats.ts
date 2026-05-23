@@ -69,10 +69,7 @@ function yesView(market: DiscoveredMarket, books: BookMap): BookView {
 }
 
 /** Build a ladder row for one discovered market, joined to its book. */
-export function strikeRow(
-  market: DiscoveredMarket,
-  books: BookMap
-): StrikeRow {
+export function strikeRow(market: DiscoveredMarket, books: BookMap): StrikeRow {
   const view = yesView(market, books);
   const stats = bookStats(view);
   const yesPrice = priceFromBook(view);

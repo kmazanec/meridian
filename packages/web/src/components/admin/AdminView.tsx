@@ -51,7 +51,8 @@ export function AdminView() {
               use these controls.
             </p>
             <p className="mt-2 text-xs text-fg-faint">
-              Admin: <span className="stat-mono">{config.admin.toBase58()}</span>
+              Admin:{" "}
+              <span className="stat-mono">{config.admin.toBase58()}</span>
             </p>
           </Panel>
         ) : (

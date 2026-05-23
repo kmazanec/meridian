@@ -50,7 +50,9 @@ export default function RootLayout({
               <div className="mx-auto flex max-w-page flex-col items-center justify-between gap-3 px-5 py-6 text-xs text-fg-faint sm:flex-row">
                 <span className="inline-flex items-center gap-2">
                   <MeridianMark size={16} />
-                  <span className="font-serif text-sm text-fg-dim">Meridian</span>
+                  <span className="font-serif text-sm text-fg-dim">
+                    Meridian
+                  </span>
                 </span>
                 <span className="text-center sm:text-right">
                   Non-custodial by construction. The program is the only thing

@@ -7,7 +7,10 @@ const wallet = { publicKey: null as PublicKey | null };
 const config = { data: null as { admin: PublicKey; paused: boolean } | null };
 
 vi.mock("@solana/wallet-adapter-react", () => ({
-  useWallet: () => ({ publicKey: wallet.publicKey, connected: !!wallet.publicKey }),
+  useWallet: () => ({
+    publicKey: wallet.publicKey,
+    connected: !!wallet.publicKey,
+  }),
 }));
 vi.mock("@/lib/useChain", () => ({
   useConfig: () => config,
@@ -16,12 +19,22 @@ vi.mock("@/lib/useChain", () => ({
 }));
 vi.mock("@/lib/useProgram", () => ({ useProgram: () => ({}) }));
 vi.mock("@/lib/useSendIx", () => ({
-  useSendIx: () => ({ send: vi.fn(), status: "idle", signature: null, error: null }),
+  useSendIx: () => ({
+    send: vi.fn(),
+    status: "idle",
+    signature: null,
+    error: null,
+  }),
 }));
 // ConnectGate: render children only when a wallet is present (mirrors real behavior).
 vi.mock("@/components/ConnectGate", () => ({
-  ConnectGate: ({ children, prompt }: { children: React.ReactNode; prompt: string }) =>
-    wallet.publicKey ? <>{children}</> : <div>{prompt}</div>,
+  ConnectGate: ({
+    children,
+    prompt,
+  }: {
+    children: React.ReactNode;
+    prompt: string;
+  }) => (wallet.publicKey ? <>{children}</> : <div>{prompt}</div>),
 }));
 
 import { AdminView } from "./AdminView";

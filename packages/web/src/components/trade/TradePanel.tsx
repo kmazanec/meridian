@@ -27,7 +27,10 @@ import {
   formatAmount,
   type TradeCost,
 } from "@/lib/tradeAffordability";
-import { marketOrderHasNoLiquidity, readableTradeError } from "@/lib/tradeErrors";
+import {
+  marketOrderHasNoLiquidity,
+  readableTradeError,
+} from "@/lib/tradeErrors";
 import { checkPositionConstraint } from "@/lib/positionGuard";
 import { Button, Panel, cx } from "@/components/ui";
 
@@ -101,7 +104,11 @@ export function TradePanel({
     [action, position]
   );
 
-  const balances = position ?? { usdc: new BN(0), yes: new BN(0), no: new BN(0) };
+  const balances = position ?? {
+    usdc: new BN(0),
+    yes: new BN(0),
+    no: new BN(0),
+  };
 
   // Step 1: validate, check affordability + liquidity, build, and open the confirmation.
   const prepare = async () => {
@@ -122,7 +129,12 @@ export function TradePanel({
       setFormError("Enter a valid size.");
       return;
     }
-    const valid = validateTradeForm({ action, price: effectivePrice, size, isMarket });
+    const valid = validateTradeForm({
+      action,
+      price: effectivePrice,
+      size,
+      isMarket,
+    });
     if (!valid.ok) {
       setFormError(valid.error ?? "Invalid trade.");
       return;
@@ -134,7 +146,13 @@ export function TradePanel({
 
     // Pre-trade affordability check — catches the "insufficient funds" cause BEFORE the
     // wallet shows a generic error.
-    const cost = tradeCost({ action, price: effectivePrice, size, isMarket, balances });
+    const cost = tradeCost({
+      action,
+      price: effectivePrice,
+      size,
+      isMarket,
+      balances,
+    });
     if (!cost.affordable) {
       setFormError(
         `Insufficient ${cost.asset}: this needs ${formatAmount(
@@ -161,7 +179,12 @@ export function TradePanel({
           : [];
 
       // Empty-book guard: a market order with no crossable liquidity can't fill.
-      if (marketOrderHasNoLiquidity({ isMarket, makerCount: makerAccounts.length })) {
+      if (
+        marketOrderHasNoLiquidity({
+          isMarket,
+          makerCount: makerAccounts.length,
+        })
+      ) {
         setFormError(
           "No liquidity to fill a market order yet — place a limit order instead."
         );

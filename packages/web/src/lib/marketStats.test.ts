@@ -105,7 +105,10 @@ describe("strikeRow", () => {
         ),
       ],
     ]);
-    const row = strikeRow(market({ strike: 680_000_000, orderBook: ob }), books);
+    const row = strikeRow(
+      market({ strike: 680_000_000, orderBook: ob }),
+      books
+    );
     expect(row.yesPrice.toNumber()).toBe(650_000); // mid of 0.60/0.70
     expect(row.noPrice.toNumber()).toBe(PRICE_SCALE.toNumber() - 650_000);
     expect(row.spread?.toNumber()).toBe(100_000);

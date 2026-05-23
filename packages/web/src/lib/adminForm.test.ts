@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import BN from "bn.js";
 import { PublicKey } from "@solana/web3.js";
-import { isAdmin, parseDollarsToBaseUnits, formatBaseUnitsUsd } from "./adminForm";
+import {
+  isAdmin,
+  parseDollarsToBaseUnits,
+  formatBaseUnitsUsd,
+} from "./adminForm";
 
 const A = new PublicKey("11111111111111111111111111111111");
 const B = new PublicKey("So11111111111111111111111111111111111111112");
