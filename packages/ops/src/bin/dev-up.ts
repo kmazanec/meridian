@@ -10,12 +10,13 @@
  * exists); the demo seeding always creates fresh demo markets/wallet for a clean session.
  */
 
-import { configPda } from "@meridian/sdk";
+import { configPda, tickerToSymbol } from "@meridian/sdk";
 import { loadOpsEnv, isLocalRpc } from "../env";
 import { createConsoleLog } from "../log";
 import { deployProgram, solanaCliAvailable } from "../deploy";
 import { bootstrap } from "../bootstrap";
 import { createMarkets } from "../createMarkets";
+import { resolveCloses } from "../liveCloses";
 import { seedDevStack } from "../devStack";
 import { writeManifest } from "../manifest";
 
@@ -65,13 +66,22 @@ async function main(): Promise<void> {
     admin: env.deployer.publicKey.toBase58(),
   });
 
-  // 2) the day's markets (from MOCK_CLOSE_<SYMBOL>; defaults provided by the Makefile)
+  // 2) the day's markets. Closes resolve via live (/api/history) → MOCK_CLOSE_* → hardcoded
+  // defaults, so `make dev` seeds strikes around the real last close when WEB_BASE_URL is set
+  // and still produces a sane ladder fully offline.
+  const closes = await resolveCloses({
+    symbols: env.tickers.map(tickerToSymbol),
+    mockCloses: env.mockCloses,
+    live: env.liveCloses,
+    webBaseUrl: env.webBaseUrl,
+    log,
+  });
   await createMarkets({
     rpcUrl: env.rpcUrl,
     deployer: env.deployer,
     usdcMint,
     tickers: env.tickers,
-    mockCloses: env.mockCloses,
+    mockCloses: closes,
     includeClose: env.includeClose,
     tradingDay: Math.floor(Date.now() / 1000) + 2 * 3600,
     log,

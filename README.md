@@ -65,7 +65,8 @@ user's wallet signs every state-changing action.
 │   ├── automation/          # @meridian/automation — scheduled morning/settlement jobs
 │   ├── web/                 # @meridian/web — Next.js frontend (four-button trading UX)
 │   ├── e2e/                 # @meridian/e2e — convergence suite vs a real validator
-│   └── ops/                 # @meridian/ops — deploy + lifecycle scripts (local & devnet)
+│   ├── ops/                 # @meridian/ops — deploy + lifecycle scripts (local & devnet)
+│   └── traders/             # @meridian/traders — autonomous LLM trading bots (OpenRouter + LangGraph)
 ├── docs/
 │   ├── ROADMAP.md           # Delivery plan, dependency graph, critical path
 │   ├── local-development.md # Local dev loop + the one-command `make dev` stack
@@ -137,6 +138,20 @@ frontend talks to it immediately:
 ```bash
 corepack yarn@4.10.2 workspace @meridian/web dev   # open the trading UI against the local stack
 ```
+
+### Autonomous trading bots
+
+Spin up a fleet of LLM agents that trade on the platform — each with its own funded wallet and
+OpenRouter model, making markets and taking edges, narrating every decision to a log:
+
+```bash
+make fund-traders                                  # fund trader{1..8}.json (SOL + mock USDC)
+cp packages/traders/bots.config.example.json packages/traders/bots.config.json
+RPC_URL=http://127.0.0.1:8899 OPENROUTER_API_KEY=sk-or-... make bots   # then: make bots-logs
+```
+
+Full guide (models, live-close strike seeding, devnet): [`packages/traders/README.md`](packages/traders/README.md)
+and the "Trading bots" section of [`docs/local-development.md`](docs/local-development.md).
 
 ### Just the tests
 

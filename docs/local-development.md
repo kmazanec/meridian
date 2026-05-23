@@ -146,20 +146,20 @@ empty, point them at a `.so` built elsewhere via `MERIDIAN_SO` / `MERIDIAN_PROGR
 ### Test trader accounts (`make fund-traders`)
 
 `make dev` seeds one internal demo wallet (with pre-built positions) so the app is instantly
-demoable. To place *pretend trades between two parties* — one posts an order, the other fills
-it — fund two persistent, importable accounts:
+demoable. To place *pretend trades between parties* — and to back the trading-bot fleet below —
+fund a set of persistent, importable accounts:
 
 ```bash
-make fund-traders          # local: 2 keypairs in ~/.config/solana/trader{1,2}.json,
+make fund-traders          # local: keypairs in ~/.config/solana/trader{1..8}.json,
                            #        each given 10 SOL + 1000 mock USDC
-make fund-traders-devnet   # same two keypairs, funded on devnet (faucet SOL + mock USDC)
+make fund-traders-devnet   # same keypairs, funded on devnet (faucet SOL + mock USDC)
 ```
 
-The script (`scripts/fund-test-traders.mjs`) generates the keypairs on first run and reuses
-them after, so the same two traders work on both clusters. The mock USDC mint authority is the
-deployer/admin, so it mints test USDC directly; SOL is an airdrop locally and the faucet on
-devnet (if rate-limited, top up with `solana transfer`). Override with `TRADERS=`, `SOL_EACH=`,
-`USDC_EACH=`.
+The script (`scripts/fund-test-traders.mjs`) generates each `trader{1..8}.json` on first run
+and reuses the rest after — so re-running is safe and the same traders work on both clusters. The
+mock USDC mint authority is the deployer/admin, so it mints test USDC directly; SOL is an airdrop
+locally and the faucet on devnet (if rate-limited, top up with `solana transfer`). Override the
+set or amounts with `TRADERS=`, `SOL_EACH=`, `USDC_EACH=`.
 
 To trade as them in the browser, convert each keypair to a base58 private key and import it
 into your wallet (Phantom/Solflare), then switch accounts:
@@ -170,6 +170,64 @@ node -e "console.log(require('bs58').encode(Buffer.from(JSON.parse(require('fs')
 
 > These keypair files hold real (test-only) secrets — keep them out of commits. The repo only
 > ships the funding script, never the keys.
+
+## Trading bots (`@meridian/traders`)
+
+A fleet of autonomous LLM agents that trade on the platform — each with its own funded wallet and
+its own (cheap, tool-calling) OpenRouter model. They observe the market through tools, reason with
+LangGraph, make markets on empty strikes and take edges on quoted ones, and narrate every decision
+to a watchable log. See [`packages/traders/README.md`](../packages/traders/README.md) for the full
+guide; the end-to-end local + devnet flow is below.
+
+**Realistic strikes (so bots don't bid one-directionally).** The strike ladder is derived from a
+*previous close*. By default that's the `MOCK_CLOSE_*` values, which drift from reality — and since
+the bots read live spot, a stale ladder makes every strike look near-certain and the bots quote one
+way. Seed strikes from the **real last close** instead by exposing the dashboard's `/api/history`
+(a Cloudflare Pages Function) and setting `WEB_BASE_URL`. Closes resolve **live → `MOCK_CLOSE_*` →
+hardcoded defaults**, so it always produces a sane board.
+
+Serve `/api/history` locally with wrangler (it answers on `:8788` — see
+[`cloudflare-pages.md`](cloudflare-pages.md)):
+
+```bash
+cd packages/web && yarn build && npx wrangler pages dev out   # serves /api/* on :8788
+curl -s 'http://localhost:8788/api/history?symbol=AAPL' | head -c 80   # sanity-check it returns closes
+```
+
+### Localnet (recommended — no RPC rate limits)
+
+```bash
+export OPENROUTER_API_KEY=sk-or-...
+export WEB_BASE_URL=http://localhost:8788     # wrangler serving /api/history (optional but recommended)
+
+make dev                                       # validator + deploy + markets (live closes if WEB_BASE_URL set)
+make fund-traders                              # create + fund trader{1..8}.json
+make create-markets-live                       # (optional) reseed strikes from the real last close
+
+cp packages/traders/bots.config.example.json packages/traders/bots.config.json   # 8 bots, one per wallet
+export RPC_URL=http://127.0.0.1:8899
+make bots                                      # spawn one process per bot
+make bots-logs                                 # watch them reason + trade
+make bots-stop                                 # stop the fleet
+```
+
+### Devnet
+
+```bash
+export OPENROUTER_API_KEY=sk-or-...
+export RPC_URL=https://api.devnet.solana.com
+export WEB_BASE_URL=https://<your-deployed-dashboard>   # for live closes + the history tool
+
+make deploy-devnet bootstrap-devnet
+make create-markets-live-devnet                # WEB_BASE_URL required here; or create-markets-devnet for mock
+make fund-traders-devnet
+make bots                                       # heavier 429 rate-limiting on public devnet than localnet
+```
+
+The bot config (`bots.config.json`) maps each bot to a `trader{N}.json` wallet and an OpenRouter
+model; `intervalSec` sets the tick cadence and `maxStepsPerTick` caps agent⇄tool round-trips per
+tick (raise it if a bot quoting many strikes hits the limit). `DRY_RUN=1` makes bots log intended
+trades without sending them.
 
 ### Ops reproducibility test
 

@@ -23,17 +23,35 @@ Six tools, matching the six required capabilities:
 | `get_strike_prices`  | Live order-book bid/ask/mid (the implied probability) per strike, both Yes and No sides.                              |
 | `place_order`        | Place any of the four actions — **BUY_YES, SELL_YES, BUY_NO, SELL_NO** — as a limit or market order.                  |
 
-Each bot's standing goal is **make the most money you can today**. It looks for strikes where the
-order-book implied probability disagrees with its own read of spot + recent closes, and takes the
-cheaper side.
+Each bot's standing goal is **make the most money you can today**. On a strike that already has
+quotes, it takes the cheaper side when the order-book implied probability disagrees with its own
+read of spot + recent closes; on an empty strike it **posts resting limit orders to make a
+market** around its fair-value estimate. So the fleet bootstraps liquidity and then trades against
+itself.
+
+The example config ships **8 bots**, each with its own wallet and a different (cheap,
+tool-calling) OpenRouter model. Run as many or as few as you like.
 
 ## Prerequisites
 
-- The Meridian program **bootstrapped on your target cluster** (devnet is the default target):
-  `make deploy-devnet bootstrap-devnet create-markets-devnet` from the repo root.
-- The two test trader wallets, **funded**: `make fund-traders-devnet`
-  (creates/funds `~/.config/solana/trader{1,2}.json` with SOL + mock USDC).
-- An **OpenRouter API key**.
+Pick a cluster and make sure the program, your wallets, and the markets all live on it.
+
+**Localnet (recommended — no RPC rate limits):**
+
+```bash
+make dev            # boot validator + deploy + bootstrap + create markets
+make fund-traders   # create + fund trader{1..8}.json with SOL + mock USDC
+```
+
+**Devnet:**
+
+```bash
+make deploy-devnet bootstrap-devnet create-markets-devnet
+make fund-traders-devnet   # fund trader{1..8}.json (faucet SOL + mock USDC)
+```
+
+`make fund-traders[-devnet]` creates any `~/.config/solana/trader{1..8}.json` that don't exist
+yet and reuses the rest, so re-running is safe. You also need an **OpenRouter API key**.
 
 ## Configure
 
@@ -47,29 +65,35 @@ Edit it — one entry per bot:
 {
   "bots": [
     {
-      "name": "claude-trader", // log-friendly id; also the log file name
+      "name": "deepseek-trader", // log-friendly id; also the log file name
       "wallet": "~/.config/solana/trader1.json", // a funded trader keypair
-      "model": "anthropic/claude-3.5-sonnet", // any OpenRouter model id
+      "model": "deepseek/deepseek-v4-flash", // any tool-calling OpenRouter model id
       "intervalSec": 60, // seconds between trading ticks
       "maxStepsPerTick": 60, // max agent⇄tool round-trips per tick (raise if quoting many strikes)
       "persona": "A disciplined value trader…" // optional flavor for the system prompt
     }
+    // … 7 more in the shipped example, one per wallet + model
   ]
 }
 ```
 
-Spin up **N** bots by adding more entries (give each its own wallet + model). The real config is
-gitignored because it names wallet paths; the committed template is `bots.config.example.json`.
+Spin up **N** bots by adding/removing entries (give each its own wallet + model). The shipped
+example has 8. The real config is gitignored because it names wallet paths; the committed template
+is `bots.config.example.json`. **Models must support tool calling** — the major Anthropic / OpenAI
+/ Google / DeepSeek / Mistral / Qwen ids do; tiny or preview models often malform tool calls.
 
 Set the shared environment (see the root `.env.example` for the full list):
 
 ```bash
 # Recommended: run against your local validator — no RPC rate limits.
 export RPC_URL=http://127.0.0.1:8899
-# (public devnet works too, but two bots scanning it get heavily 429-rate-limited:
+# (public devnet works too, but many bots scanning it get heavily 429-rate-limited:
 #  export RPC_URL=https://api.devnet.solana.com)
 export OPENROUTER_API_KEY=sk-or-...
-export WEB_BASE_URL=http://localhost:3000   # optional: enables the 7-day-history tool
+# Optional: enables the 7-day-history tool. /api/history is a Cloudflare Pages Function, so
+# point this at wherever it's served — wrangler's port locally (`wrangler pages dev` →
+# http://localhost:8788), or your deployed dashboard URL.
+export WEB_BASE_URL=http://localhost:8788
 # export DRY_RUN=1                          # optional: log intended trades without sending
 ```
 
@@ -96,7 +120,7 @@ To run a single bot in the foreground (handy for development):
 
 ```bash
 RPC_URL=… OPENROUTER_API_KEY=… \
-  yarn workspace @meridian/traders run-bot claude-trader
+  yarn workspace @meridian/traders run-bot deepseek-trader   # a bot name from your config
 ```
 
 ## Watching it think
@@ -129,7 +153,7 @@ yarn workspace @meridian/traders build        # emit dist/
 
 ## Safety
 
-The default target is **devnet with mock USDC**, so no real money is at risk. There is **no
-per-bot spend cap** — a bot may trade up to its balance, matching the "make the most money
+Run on **localnet or devnet with mock USDC** — no real money is at risk on either. There is **no
+per-bot spend cap**: a bot may trade up to its balance, matching the "make the most money
 possible" objective. Use `DRY_RUN=1` to watch a bot reason and decide without it actually sending
-transactions.
+transactions. (Don't point `RPC_URL` at mainnet.)

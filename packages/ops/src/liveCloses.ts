@@ -27,6 +27,22 @@ function dollarsToBaseUnits(dollars: number): BN {
   return new BN(Math.round(dollars * Number(PAYOFF_UNIT.toString())));
 }
 
+/**
+ * Last-resort hardcoded previous closes (USD), so market creation always has a number to
+ * derive strikes from even with no live endpoint and no MOCK_CLOSE_* set (e.g. a fully
+ * offline `make dev`). These drift from reality over time — they are the floor of the
+ * fallback chain (live → envar → these), not a source of truth. Refresh occasionally.
+ */
+export const DEFAULT_CLOSES: Record<TickerSymbol, number> = {
+  AAPL: 230,
+  MSFT: 420,
+  GOOGL: 175,
+  AMZN: 230,
+  NVDA: 180,
+  META: 720,
+  TSLA: 420,
+};
+
 /** Pull the most recent close (USD) for one symbol from /api/history, or null on any failure. */
 async function fetchLastClose(
   baseUrl: string,
@@ -74,4 +90,43 @@ export async function fetchLiveCloses(
     })
   );
   return out;
+}
+
+/**
+ * Resolve the per-ticker previous closes that drive the strike ladder, via a three-tier
+ * fallback so market creation always has a sensible number:
+ *
+ *   1. live close from {@link fetchLiveCloses} (when `live` + `webBaseUrl` are set),
+ *   2. else the envar `MOCK_CLOSE_*` value (passed in `mockCloses`),
+ *   3. else the hardcoded {@link DEFAULT_CLOSES} floor.
+ *
+ * Later tiers fill only the gaps the earlier ones left, per symbol — so a flaky endpoint or a
+ * single missing envar degrades gracefully instead of dropping that ticker's markets.
+ */
+export async function resolveCloses(opts: {
+  symbols: readonly TickerSymbol[];
+  mockCloses: Partial<Record<TickerSymbol, BN>>;
+  live: boolean;
+  webBaseUrl?: string;
+  log?: ConsoleLog;
+}): Promise<Record<TickerSymbol, BN>> {
+  const { symbols, mockCloses, live, webBaseUrl, log } = opts;
+
+  // Tier 3 (floor): hardcoded defaults for every requested symbol.
+  const resolved: Partial<Record<TickerSymbol, BN>> = {};
+  for (const sym of symbols) {
+    resolved[sym] = dollarsToBaseUnits(DEFAULT_CLOSES[sym]);
+  }
+  // Tier 2: envar mock closes override the floor.
+  Object.assign(resolved, mockCloses);
+  // Tier 1: live closes override everything (only the symbols that fetched cleanly).
+  if (live && webBaseUrl) {
+    const liveCloses = await fetchLiveCloses(webBaseUrl, symbols, log);
+    Object.assign(resolved, liveCloses);
+  } else if (live && !webBaseUrl) {
+    log?.warn(
+      "LIVE_CLOSES set but WEB_BASE_URL is not — using MOCK_CLOSE_* / defaults."
+    );
+  }
+  return resolved as Record<TickerSymbol, BN>;
 }

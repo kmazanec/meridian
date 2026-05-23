@@ -14,7 +14,7 @@ import { tickerToSymbol } from "@meridian/sdk";
 import { loadOpsEnv } from "../env";
 import { createConsoleLog } from "../log";
 import { createMarkets } from "../createMarkets";
-import { fetchLiveCloses } from "../liveCloses";
+import { resolveCloses } from "../liveCloses";
 import { requireManifest } from "../manifest";
 
 async function main(): Promise<void> {
@@ -32,20 +32,15 @@ async function main(): Promise<void> {
   const tradingDay =
     env.tradingDayOverride ?? Math.floor(Date.now() / 1000) + 2 * 3600;
 
-  // Closes that drive the strike ladder. Default: the MOCK_CLOSE_* envars. In live mode,
-  // fetch the real most-recent close per ticker from the web app's /api/history and let it
-  // override the mock value — falling back to the mock per-ticker when a fetch fails — so
-  // strikes are seeded around where each stock actually trades.
-  let closes = env.mockCloses;
-  if (env.liveCloses && env.webBaseUrl) {
-    const symbols = env.tickers.map(tickerToSymbol);
-    const live = await fetchLiveCloses(env.webBaseUrl, symbols, log);
-    closes = { ...env.mockCloses, ...live }; // live wins; mock fills any gaps
-  } else if (env.liveCloses && !env.webBaseUrl) {
-    log.warn(
-      "LIVE_CLOSES set but WEB_BASE_URL is not — using MOCK_CLOSE_* values instead."
-    );
-  }
+  // Closes that drive the strike ladder, via the three-tier fallback:
+  // live (/api/history) → MOCK_CLOSE_* envars → hardcoded defaults.
+  const closes = await resolveCloses({
+    symbols: env.tickers.map(tickerToSymbol),
+    mockCloses: env.mockCloses,
+    live: env.liveCloses,
+    webBaseUrl: env.webBaseUrl,
+    log,
+  });
 
   const created = await createMarkets({
     rpcUrl: env.rpcUrl,

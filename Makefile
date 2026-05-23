@@ -63,8 +63,13 @@ help: ## Show this help.
 
 dev: _validator-up ## Bring up the full LOCAL stack (validator + deploy + markets + demo wallet + web env).
 	@echo "▶ Deploying + seeding the local stack..."
+	@# Strikes seed via live (/api/history) → MOCK_CLOSE_* → hardcoded defaults. Set
+	@# WEB_BASE_URL (e.g. your deployed dashboard) to pull the REAL last close; otherwise the
+	@# MOCK_CLOSE_* defaults below are used. The local frontend isn't up yet during `make dev`,
+	@# so localhost won't serve /api/history here — point WEB_BASE_URL at a reachable dashboard.
 	@RPC_URL=$(LOCAL_RPC) DEPLOYER_KEYPAIR=$(abspath $(LOCAL_DEPLOYER)) \
 	  $(LOCAL_MOCK_CLOSES) \
+	  WEB_BASE_URL=$${WEB_BASE_URL:-} \
 	  $(YARN) workspace @meridian/ops dev-up
 	@echo ""
 	@echo "✓ Local stack is up (RPC $(LOCAL_RPC))."
