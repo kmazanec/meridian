@@ -5,6 +5,7 @@ import { Outcome, OrderSide, type OrderBookAccount } from "@meridian/sdk";
 import { Ticker } from "@meridian/sdk";
 import {
   foldLeaderboard,
+  foldMarketDrilldown,
   valueOfHolding,
   type LeaderboardInputs,
   type MarketHolding,
@@ -219,5 +220,63 @@ describe("foldLeaderboard", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].tokenValue.toNumber()).toBe(6_000_000);
     expect(rows[0].positions).toHaveLength(2);
+  });
+});
+
+describe("foldMarketDrilldown", () => {
+  const book = { bestBid: new BN(500_000), bestAsk: new BN(550_000), restingSize: new BN(7) };
+
+  it("ranks holders by value, values settled winners 1:1 and losers 0", () => {
+    const yesWins = market({}); // YesWins
+    const view = foldMarketDrilldown(
+      yesWins,
+      [
+        { owner: pk(1), side: "yes", amount: new BN(2_000_000) }, // win → $2
+        { owner: pk(2), side: "no", amount: new BN(9_000_000) }, // lose → $0
+        { owner: pk(3), side: "yes", amount: new BN(5_000_000) }, // win → $5
+      ],
+      null,
+      book
+    );
+    expect(view.holders.map((h) => h.value.toNumber())).toEqual([5_000_000, 2_000_000, 0]);
+    expect(view.holders[0].owner).toBe(pk(3).toBase58());
+    expect(view.bestBid!.toNumber()).toBe(500_000);
+    expect(view.restingSize.toNumber()).toBe(7);
+  });
+
+  it("marks open holdings to market, flags unpriceable when no mark", () => {
+    const open = market({
+      state: "open",
+      outcome: Outcome.Unsettled,
+      settlementPrice: null,
+    });
+    const marked = foldMarketDrilldown(
+      open,
+      [{ owner: pk(1), side: "yes", amount: new BN(2_000_000) }],
+      new BN(600_000),
+      book
+    );
+    expect(marked.holders[0].value.toNumber()).toBe(1_200_000);
+    expect(marked.holders[0].unpriceable).toBe(false);
+
+    const unmarked = foldMarketDrilldown(
+      open,
+      [{ owner: pk(1), side: "yes", amount: new BN(2_000_000) }],
+      null,
+      book
+    );
+    expect(unmarked.holders[0].unpriceable).toBe(true);
+    expect(unmarked.holders[0].value.toNumber()).toBe(0);
+  });
+
+  it("drops zero-amount holders", () => {
+    const yesWins = market({});
+    const view = foldMarketDrilldown(
+      yesWins,
+      [{ owner: pk(1), side: "yes", amount: new BN(0) }],
+      null,
+      book
+    );
+    expect(view.holders).toHaveLength(0);
   });
 });

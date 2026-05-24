@@ -1,11 +1,19 @@
 "use client";
 
 import { useConnection } from "@solana/wallet-adapter-react";
+import { dualBook } from "@meridian/sdk";
 import { useProgram } from "./useProgram";
 import { usePolled, type AsyncResource } from "./useChain";
 import { useChainData, useUsdcMintFromConfig } from "./ChainDataProvider";
-import { loadLeaderboardInputs } from "./leaderboardData";
-import { foldLeaderboard, type LeaderboardRow } from "./leaderboard";
+import { loadLeaderboardInputs, loadMarketHolders } from "./leaderboardData";
+import {
+  foldLeaderboard,
+  foldMarketDrilldown,
+  type LeaderboardRow,
+  type MarketDrilldownView,
+} from "./leaderboard";
+import { bookStats, yesMarkFor } from "./marketStats";
+import type { DiscoveredMarket } from "./discovery";
 
 /**
  * The admin market-wide leaderboard, computed lazily. Reuses the shared markets/books polls
@@ -38,5 +46,35 @@ export function useLeaderboard(enabled: boolean): AsyncResource<LeaderboardRow[]
     },
     [program, connection, markets.data, allBooks.data, usdcMint],
     { pollMs: LEADERBOARD_POLL_MS, enabled: ready }
+  );
+}
+
+/**
+ * Per-market drilldown: the market's top holders (fetched on expand) + book depth (from the
+ * cached BookMap, no extra RPC). `market` null → disabled (nothing expanded).
+ */
+export function useMarketDrilldown(
+  market: DiscoveredMarket | null
+): AsyncResource<MarketDrilldownView> {
+  const program = useProgram();
+  const { connection } = useConnection();
+  const { allBooks } = useChainData();
+
+  return usePolled<MarketDrilldownView>(
+    async () => {
+      const m = market!;
+      const holders = await loadMarketHolders({ program, connection, market: m });
+      const book = allBooks.data?.get(m.orderBook.toBase58());
+      const yesView = book ? dualBook(book).yes : { bids: [], asks: [] };
+      const stats = bookStats(yesView);
+      const yesMark = allBooks.data ? yesMarkFor(m, allBooks.data) : null;
+      return foldMarketDrilldown(m, holders, yesMark, {
+        bestBid: stats.bestBid,
+        bestAsk: stats.bestAsk,
+        restingSize: stats.restingSize,
+      });
+    },
+    [program, connection, market?.address.toBase58(), allBooks.data],
+    { pollMs: LEADERBOARD_POLL_MS, enabled: !!market }
   );
 }

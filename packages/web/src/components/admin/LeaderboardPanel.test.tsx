@@ -17,6 +17,15 @@ vi.mock("@/lib/useLeaderboard", () => ({
     return { ...hookState, refresh: vi.fn() };
   },
 }));
+// MarketsList reads the shared chain store; stub it to no markets so this suite stays focused
+// on the leaderboard table + lazy-load contract. The drilldown has its own behavior via the
+// pure foldMarketDrilldown tests.
+vi.mock("@/lib/ChainDataProvider", () => ({
+  useChainData: () => ({ markets: { data: [] } }),
+}));
+vi.mock("./MarketDrilldown", () => ({
+  MarketDrilldown: () => <div>drilldown</div>,
+}));
 
 import { LeaderboardPanel } from "./LeaderboardPanel";
 

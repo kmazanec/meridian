@@ -194,3 +194,59 @@ export function foldLeaderboard(inputs: LeaderboardInputs): LeaderboardRow[] {
 
   return [...rows.values()].sort((a, b) => b.net.cmp(a.net));
 }
+
+// --- Per-market drilldown ---
+
+/** One holder's stake in a single market (for the drilldown). */
+export interface MarketHolderRow {
+  owner: string;
+  side: "yes" | "no";
+  amount: BN;
+  /** USDC value of this stake (settled payout or mark; 0 if unpriceable). */
+  value: BN;
+  unpriceable: boolean;
+}
+
+export interface MarketDrilldownView {
+  /** Holders ranked by stake value, then size. */
+  holders: MarketHolderRow[];
+  /** Book depth (best bid/ask in yes-perspective price scale; null if a side is empty). */
+  bestBid: BN | null;
+  bestAsk: BN | null;
+  /** Total resting token size across both sides. */
+  restingSize: BN;
+}
+
+/**
+ * Fold one market's holders + book into a drilldown view. Holders come from top-N discovery;
+ * book stats are passed in (derived from the cached BookMap, no extra RPC). Pure.
+ */
+export function foldMarketDrilldown(
+  market: DiscoveredMarket,
+  holders: { owner: PublicKeyLike; side: "yes" | "no"; amount: BN }[],
+  yesMark: BN | null,
+  book: { bestBid: BN | null; bestAsk: BN | null; restingSize: BN }
+): MarketDrilldownView {
+  const rows: MarketHolderRow[] = [];
+  for (const h of holders) {
+    if (h.amount.lten(0)) continue;
+    const v = valueOfHolding(market, h.side, h.amount, yesMark);
+    rows.push({
+      owner: typeof h.owner === "string" ? h.owner : h.owner.toBase58(),
+      side: h.side,
+      amount: h.amount,
+      value: v ?? ZERO,
+      unpriceable: v === null,
+    });
+  }
+  rows.sort((a, b) => b.value.cmp(a.value) || b.amount.cmp(a.amount));
+  return {
+    holders: rows,
+    bestBid: book.bestBid,
+    bestAsk: book.bestAsk,
+    restingSize: book.restingSize,
+  };
+}
+
+/** Minimal shape for an owner key — a base58 string or anything with toBase58(). */
+type PublicKeyLike = string | { toBase58: () => string };

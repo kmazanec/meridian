@@ -1,10 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { Outcome, tickerToSymbol } from "@meridian/sdk";
 import { useLeaderboard } from "@/lib/useLeaderboard";
-import { formatUsdc, shortKey } from "@/lib/format";
+import { useChainData } from "@/lib/ChainDataProvider";
+import { formatPrice, formatUsdc, shortKey } from "@/lib/format";
 import { Panel, Button } from "@/components/ui";
+import { MarketDrilldown } from "./MarketDrilldown";
 import type { LeaderboardRow } from "@/lib/leaderboard";
+import type { DiscoveredMarket } from "@/lib/discovery";
 
 /**
  * Market-wide trader leaderboard (admin observability). Ranks every discovered trader by
@@ -50,9 +54,59 @@ export function LeaderboardPanel() {
           ) : (
             <p className="text-fg-dim">No traders found.</p>
           )}
+
+          <MarketsList />
         </div>
       )}
     </Panel>
+  );
+}
+
+/** Per-market drilldown: each market expands to its top holders + book depth. */
+function MarketsList() {
+  const { markets } = useChainData();
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const rows = markets.data ?? [];
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="mt-6">
+      <h3 className="mb-2 font-serif text-lg text-fg">Markets</h3>
+      <div className="divide-y divide-line/40 rounded border border-line/40">
+        {rows.map((m: DiscoveredMarket) => {
+          const key = m.address.toBase58();
+          const isOpen = expanded === key;
+          const settled = m.state === "settled";
+          return (
+            <div key={key}>
+              <button
+                className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-bg-soft/40"
+                onClick={() => setExpanded(isOpen ? null : key)}
+              >
+                <span className="text-fg-faint">{isOpen ? "▾" : "▸"}</span>
+                <span className="font-medium text-fg">
+                  {tickerToSymbol(m.ticker)} {formatPrice(m.strike)}
+                </span>
+                <span
+                  className={`ml-auto text-xs ${
+                    settled ? "text-fg-dim" : "text-yes"
+                  }`}
+                >
+                  {settled
+                    ? m.outcome === Outcome.YesWins
+                      ? "YES won"
+                      : m.outcome === Outcome.NoWins
+                      ? "NO won"
+                      : "settled"
+                    : "open"}
+                </span>
+              </button>
+              {isOpen && <MarketDrilldown market={m} />}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

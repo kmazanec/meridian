@@ -169,3 +169,22 @@ export async function loadLeaderboardInputs(opts: {
 
   return { markets, books, ownerUsdc, holdingsByOwner, yesMarkByMarket };
 }
+
+/** Top holders (YES + NO) of one market, for the drilldown. */
+export async function loadMarketHolders(opts: {
+  program: Parameters<typeof fetchMarket>[0];
+  connection: Connection;
+  market: DiscoveredMarket;
+}): Promise<{ owner: PublicKey; side: "yes" | "no"; amount: BN }[]> {
+  const { program, connection, market } = opts;
+  const acc = await fetchMarket(program, market.address);
+  if (!acc) return [];
+  const [yes, no] = await Promise.all([
+    topHolders(connection, acc.yesMint),
+    topHolders(connection, acc.noMint),
+  ]);
+  return [
+    ...yes.map((h) => ({ owner: h.owner, side: "yes" as const, amount: h.amount })),
+    ...no.map((h) => ({ owner: h.owner, side: "no" as const, amount: h.amount })),
+  ];
+}
