@@ -33,11 +33,30 @@ describe("StrikeLadder", () => {
     );
   });
 
-  it("shows each strike's Yes price and implied probability", () => {
+  it("shows each strike's Yes price", () => {
     render(<StrikeLadder rows={[row(680_000_000)]} />);
     const r = screen.getByTestId("ladder-row-680000000");
     expect(within(r).getByText("$0.65")).toBeInTheDocument();
-    expect(within(r).getByText("65%")).toBeInTheDocument();
+  });
+
+  it("does not render an Implied column (it always equals the Yes price)", () => {
+    render(<StrikeLadder rows={[row(680_000_000)]} />);
+    const ladder = screen.getByTestId("strike-ladder");
+    expect(within(ladder).queryByText("Implied")).not.toBeInTheDocument();
+    // The 65% implied value must not appear in the row.
+    expect(
+      within(screen.getByTestId("ladder-row-680000000")).queryByText("65%")
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not render a Spread column (kept narrow; spread lives in the book)", () => {
+    render(<StrikeLadder rows={[row(680_000_000, { spread: new BN(100_000) })]} />);
+    const ladder = screen.getByTestId("strike-ladder");
+    expect(within(ladder).queryByText("Spread")).not.toBeInTheDocument();
+    // The $0.10 spread value must not appear in the row.
+    expect(
+      within(screen.getByTestId("ladder-row-680000000")).queryByText("$0.10")
+    ).not.toBeInTheDocument();
   });
 
   it("marks open strikes as Open", () => {
@@ -46,7 +65,7 @@ describe("StrikeLadder", () => {
     expect(within(r).getByText("Open")).toBeInTheDocument();
   });
 
-  it("shows settled outcome and settlement price for settled strikes", () => {
+  it("shows the settled outcome badge without the settlement price in the row", () => {
     render(
       <StrikeLadder
         rows={[
@@ -60,7 +79,8 @@ describe("StrikeLadder", () => {
     );
     const r = screen.getByTestId("ladder-row-700000000");
     expect(within(r).getByText(/Yes won/)).toBeInTheDocument();
-    expect(within(r).getByText(/\$712\.34/)).toBeInTheDocument();
+    // The close price moved to the AT CLOSE marker — the status cell stays terse.
+    expect(within(r).queryByText(/\$712\.34/)).not.toBeInTheDocument();
   });
 
   it("selects an open row when clicked (onSelect provided)", async () => {
@@ -238,5 +258,57 @@ describe("StrikeLadder", () => {
       "last-close-marker",
       "ladder-row-300000000",
     ]);
+  });
+
+  it("shows a single AT CLOSE marker (not live markers) when all strikes are settled", () => {
+    // Both strikes settled at $311.50 → one green "AT CLOSE" marker among the strikes,
+    // and the live last-close / current markers are suppressed (only useful while open).
+    const settled = (strike: number) =>
+      row(strike, {
+        state: "settled",
+        outcome: Outcome.YesWins,
+        settlementPrice: new BN(311_500_000),
+      });
+    render(
+      <StrikeLadder
+        rows={[settled(300_000_000), settled(320_000_000)]}
+        lastClose={305}
+        currentPrice={315}
+      />
+    );
+    const marker = screen.getByTestId("at-close-marker");
+    expect(marker).toHaveTextContent(/at close/i);
+    expect(marker).toHaveTextContent("$311.50");
+    expect(screen.queryByTestId("last-close-marker")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("current-price-marker")).not.toBeInTheDocument();
+
+    const ids = Array.from(
+      document.querySelectorAll(
+        "[data-testid^='ladder-row-'], [data-testid='at-close-marker']"
+      )
+    ).map((el) => el.getAttribute("data-testid"));
+    expect(ids).toEqual([
+      "ladder-row-320000000",
+      "at-close-marker",
+      "ladder-row-300000000",
+    ]);
+  });
+
+  it("keeps live markers (no AT CLOSE) while any strike is still open", () => {
+    render(
+      <StrikeLadder
+        rows={[
+          row(300_000_000, {
+            state: "settled",
+            outcome: Outcome.NoWins,
+            settlementPrice: new BN(311_500_000),
+          }),
+          row(320_000_000), // still open
+        ]}
+        lastClose={305}
+      />
+    );
+    expect(screen.queryByTestId("at-close-marker")).not.toBeInTheDocument();
+    expect(screen.getByTestId("last-close-marker")).toBeInTheDocument();
   });
 });

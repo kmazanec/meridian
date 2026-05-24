@@ -1,27 +1,28 @@
 import { Fragment } from "react";
 import { Outcome } from "@meridian/sdk";
-import {
-  formatPrice,
-  formatProbability,
-  formatTokens,
-  formatUsdc,
-} from "@/lib/format";
+import { formatPrice, formatTokens, formatUsdc } from "@/lib/format";
 import { cx } from "@/components/ui";
 import type { StrikeRow } from "@/lib/marketStats";
 import { DepthBar } from "./DepthBar";
 
 /**
- * The options-style strike ladder for one ticker: every strike's Yes price + implied
- * probability, the bid/ask spread, resting size, and a compact depth bar. Settled strikes
- * show their outcome (Yes/No won) and the settlement price instead of a live spread.
+ * The options-style strike ladder for one ticker: every strike's Yes price (which *is* the
+ * implied probability, so no separate column), resting size, and a compact depth bar. Kept
+ * narrow for the trade-page sidebar — the bid/ask spread is omitted here (it's in THE BOOK).
+ * Settled strikes show just their outcome badge (Yes/No won); the day's close lives in a
+ * single "at close" marker rather than being repeated per row.
+ *
+ * Price markers drop into the ladder between the strikes a price falls between: while the
+ * market is open, the live last-close + current-price markers; once every strike has settled,
+ * a single green "at close" marker (the live ones are only meaningful intraday).
  *
  * Doubles as the trade page's strike picker: when `onSelect` is provided, **open** rows
  * become clickable (the selected one is highlighted) and settled rows stay muted and
  * non-interactive — you can't trade a closed market. Without `onSelect` it's a read-only
  * table. Presentational — rows are derived upstream by `strikeLadderRows`.
  */
-/** Columns the ladder renders — used to size the full-width "last close" marker. */
-const COL_COUNT = 7;
+/** Columns the ladder renders — used to size the full-width price markers. */
+const COL_COUNT = 5;
 
 export function StrikeLadder({
   rows,
@@ -54,12 +55,10 @@ export function StrikeLadder({
   // descending for the ladder (a trader reads the price scale top-down, high to low).
   const orderedRows = [...rows].reverse();
 
-  // Price markers (last close, current price) drop into the ladder between the strikes
-  // they fall between, so you can see at a glance which strikes are in/out of the money
-  // and where the stock is trading now. Each marker's row index is the first strike
-  // *at or below* its price; below every strike → after the last row. Both markers are
-  // sorted high→low so when they share a slot the higher price renders above (matching
-  // the descending ladder).
+  // Price markers drop into the ladder between the strikes a price falls between, so you can
+  // see at a glance which strikes are in/out of the money. A marker's row index is the first
+  // strike *at or below* its price; below every strike → after the last row. Markers are
+  // sorted high→low so when they share a slot the higher price renders above (descending ladder).
   const STRIKE_SCALE = 1_000_000; // strike is in USDC base units (6dp); prices are dollars.
   const markerIndexFor = (value: number) => {
     const idx = orderedRows.findIndex(
@@ -67,13 +66,34 @@ export function StrikeLadder({
     );
     return idx === -1 ? orderedRows.length : idx;
   };
-  const markers: PriceMarker[] = [
-    currentPrice != null
-      ? { kind: "current" as const, value: currentPrice }
-      : null,
-    lastClose != null ? { kind: "last" as const, value: lastClose } : null,
-  ]
-    .filter((m): m is PriceMarker => m !== null)
+
+  // Once every strike has settled the market is closed for the day: the live last-close and
+  // current-price markers are only meaningful intraday, so collapse to a single "at close"
+  // marker at the day's settlement price (the same close for all strikes). Settlement prices
+  // are USDC base units (6dp) → dollars.
+  const allSettled = orderedRows.every((r) => r.state === "settled");
+  const settlementClose = orderedRows.find((r) => r.settlementPrice != null)
+    ?.settlementPrice;
+  let sourceMarkers: PriceMarker[];
+  if (allSettled) {
+    sourceMarkers =
+      settlementClose != null
+        ? [
+            {
+              kind: "at-close",
+              value: settlementClose.toNumber() / STRIKE_SCALE,
+            },
+          ]
+        : [];
+  } else {
+    sourceMarkers = [];
+    if (currentPrice != null)
+      sourceMarkers.push({ kind: "current", value: currentPrice });
+    if (lastClose != null)
+      sourceMarkers.push({ kind: "last", value: lastClose });
+  }
+
+  const markers: PriceMarker[] = sourceMarkers
     .map((m) => ({ ...m, index: markerIndexFor(m.value) }))
     .sort((a, b) => b.value - a.value);
 
@@ -84,14 +104,10 @@ export function StrikeLadder({
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs uppercase tracking-wide text-fg-faint">
-            <th className="py-2 pr-3 font-medium">Strike</th>
-            <th className="py-2 pr-3 font-medium">Yes</th>
-            <th className="py-2 pr-3 font-medium">Implied</th>
-            <th className="hidden py-2 pr-3 font-medium sm:table-cell">
-              Spread
-            </th>
-            <th className="hidden py-2 pr-3 font-medium sm:table-cell">Size</th>
-            <th className="py-2 pr-3 font-medium">Depth</th>
+            <th className="py-2 pr-2 font-medium">Strike</th>
+            <th className="py-2 pr-2 font-medium">Yes</th>
+            <th className="hidden py-2 pr-2 font-medium sm:table-cell">Size</th>
+            <th className="py-2 pr-2 font-medium">Depth</th>
             <th className="py-2 font-medium">Status</th>
           </tr>
         </thead>
@@ -119,23 +135,17 @@ export function StrikeLadder({
                     selectable ? () => onSelect!(row.address) : undefined
                   }
                 >
-                  <td className="py-2 pr-3 text-fg">
+                  <td className="py-2 pr-2 text-fg">
                     {formatUsdc(row.strike, 0)}
                   </td>
-                  <td className="py-2 pr-3 text-yes">
+                  <td className="py-2 pr-2 text-yes">
                     {formatPrice(row.yesPrice)}
                   </td>
-                  <td className="py-2 pr-3 text-fg-dim">
-                    {formatProbability(row.yesPrice)}
-                  </td>
-                  <td className="hidden py-2 pr-3 text-fg-dim sm:table-cell">
-                    {row.spread ? formatPrice(row.spread) : "—"}
-                  </td>
-                  <td className="hidden py-2 pr-3 text-fg-dim sm:table-cell">
+                  <td className="hidden py-2 pr-2 text-fg-dim sm:table-cell">
                     {formatTokens(row.restingSize, 0)}
                   </td>
-                  <td className="py-2 pr-3">
-                    <DepthBar view={row.depth} className="w-20" />
+                  <td className="py-2 pr-2">
+                    <DepthBar view={row.depth} className="w-12" />
                   </td>
                   <td className="py-2">
                     <StatusCell row={row} />
@@ -154,49 +164,70 @@ export function StrikeLadder({
   );
 }
 
-/** A price marker dropped into the ladder (last close in amber, live price in teal). */
+/**
+ * A price marker dropped into the ladder. Live (intraday): last close in amber, current price
+ * in teal. Settled (market closed): a single "at close" marker in teal.
+ */
 type PriceMarker = {
-  kind: "last" | "current";
+  kind: "last" | "current" | "at-close";
   value: number;
   /** Row index it renders before (filled in during placement). */
   index?: number;
 };
 
+const MARKER_META: Record<
+  PriceMarker["kind"],
+  { label: string; testId: string; tone: string; rule: string }
+> = {
+  current: {
+    label: "Current",
+    testId: "current-price-marker",
+    tone: "text-yes",
+    rule: "bg-yes/50",
+  },
+  last: {
+    label: "Last close",
+    testId: "last-close-marker",
+    tone: "text-amber",
+    rule: "bg-amber/50",
+  },
+  "at-close": {
+    label: "At close",
+    testId: "at-close-marker",
+    tone: "text-yes",
+    rule: "bg-yes/50",
+  },
+};
+
 /** A full-width divider row marking where a price falls among the strikes. */
 function PriceMarkerRow({ marker }: { marker: PriceMarker }) {
-  // `value` is a plain dollar amount (from the price feeds), not USDC base units —
-  // format it directly rather than via formatUsdc (which divides by 1e6).
+  // `value` is a plain dollar amount, not USDC base units — format it directly rather than
+  // via formatUsdc (which divides by 1e6).
   const label = `$${marker.value.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
-  const isCurrent = marker.kind === "current";
+  const meta = MARKER_META[marker.kind];
   return (
-    <tr
-      data-testid={isCurrent ? "current-price-marker" : "last-close-marker"}
-      aria-hidden
-    >
+    <tr data-testid={meta.testId} aria-hidden>
       <td colSpan={COL_COUNT} className="p-0">
         <div className="flex items-center gap-2 py-1">
           <span
             className={cx(
               "whitespace-nowrap text-xs uppercase tracking-wide",
-              isCurrent ? "text-yes" : "text-amber"
+              meta.tone
             )}
           >
-            {isCurrent ? "Current" : "Last close"}{" "}
-            <span className="stat-mono normal-case">{label}</span>
+            {meta.label} <span className="stat-mono normal-case">{label}</span>
           </span>
-          <span
-            className={cx("h-px flex-1", isCurrent ? "bg-yes/50" : "bg-amber/50")}
-          />
+          <span className={cx("h-px flex-1", meta.rule)} />
         </div>
       </td>
     </tr>
   );
 }
 
-/** Live "Open", or a settled outcome badge with the settlement price. */
+/** Live "Open", or a settled outcome badge (the close lives in the "at close" marker). */
 function StatusCell({ row }: { row: StrikeRow }) {
   if (row.state === "open") {
     return (
@@ -214,11 +245,6 @@ function StatusCell({ row }: { row: StrikeRow }) {
       )}
     >
       {label}
-      {row.settlementPrice && (
-        <span className="ml-1 normal-case text-fg-faint">
-          @ {formatUsdc(row.settlementPrice, 2)}
-        </span>
-      )}
     </span>
   );
 }
