@@ -11,6 +11,7 @@ import { TxStatusBanner } from "@/components/trade/TxStatusBanner";
 import { PauseControl } from "./PauseControl";
 import { SettleControl } from "./SettleControl";
 import { AddStrikeControl } from "./AddStrikeControl";
+import { LeaderboardPanel } from "./LeaderboardPanel";
 
 /**
  * Operator console (gated to the on-chain Config admin). Exposes the brief's admin
@@ -81,6 +82,7 @@ export function AdminView() {
               busy={busy}
               onAdded={refreshMarkets}
             />
+            <LeaderboardPanel />
           </div>
         )}
       </ConnectGate>

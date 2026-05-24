@@ -18,6 +18,11 @@ vi.mock("@/lib/useChain", () => ({
   useUsdcMint: () => null,
 }));
 vi.mock("@/lib/useProgram", () => ({ useProgram: () => ({}) }));
+// The leaderboard panel has its own tests and pulls wallet/chain context we don't set up here;
+// this suite is about admin GATING, so stub it to a marker.
+vi.mock("./LeaderboardPanel", () => ({
+  LeaderboardPanel: () => <div>leaderboard-panel</div>,
+}));
 vi.mock("@/lib/useSendIx", () => ({
   useSendIx: () => ({
     send: vi.fn(),

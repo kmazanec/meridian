@@ -69,6 +69,15 @@ function yesView(market: DiscoveredMarket, books: BookMap): BookView {
   return dualBook(book).yes;
 }
 
+/**
+ * The Yes mark for valuing OPEN positions: the book mid, or null when a side is empty.
+ * Unlike {@link strikeRow}'s `yesPrice` (which falls back to 50/50 for display), this returns
+ * null so callers can treat an unmarkable position as *unpriceable* rather than guessing.
+ */
+export function yesMarkFor(market: DiscoveredMarket, books: BookMap): BN | null {
+  return midPrice(yesView(market, books));
+}
+
 /** Build a ladder row for one discovered market, joined to its book. */
 export function strikeRow(market: DiscoveredMarket, books: BookMap): StrikeRow {
   const view = yesView(market, books);
