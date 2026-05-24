@@ -121,7 +121,9 @@ describe("MarketsBoard", () => {
     const depth = { bids: [level(60, 75)], asks: [level(70, 25)] };
     render(
       <MarketsBoard
-        rows={[row(Ticker.Nvda, "NVDA", { rows: [strikeRow(210, 0.66, depth)] })]}
+        rows={[
+          row(Ticker.Nvda, "NVDA", { rows: [strikeRow(210, 0.66, depth)] }),
+        ]}
       />
     );
     await userEvent.click(screen.getByTestId("board-row-NVDA"));

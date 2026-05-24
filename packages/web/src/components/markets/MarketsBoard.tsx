@@ -210,7 +210,11 @@ function BoardRow({
           cells auto-align under the parent columns (strike→Stock, Yes price→Price, depth→Bet,
           result→Close) and the ladder uses the full board width instead of crowding the left. */}
       {expanded && (
-        <StrikeSubRows symbol={row.symbol} rows={row.rows} atmKey={row.atmRow?.address} />
+        <StrikeSubRows
+          symbol={row.symbol}
+          rows={row.rows}
+          atmKey={row.atmRow?.address}
+        />
       )}
     </>
   );
