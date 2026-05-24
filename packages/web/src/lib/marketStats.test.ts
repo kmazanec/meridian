@@ -289,6 +289,7 @@ function tickerView(
     tradingDay: new BN(1_700_000_000),
     activeCount: opts.activeCount ?? rows.filter((r) => r.state === "open").length,
     repYesPrice: rows[0]?.yesPrice ?? null,
+    repStrikeDollars: rows[0] ? rows[0].strike.toNumber() / 1_000_000 : null,
     totalRestingSize: new BN(0),
     totalPairsMinted: new BN(opts.openInterest ?? 0),
     totalCollateral: new BN(opts.openInterest ?? 0),

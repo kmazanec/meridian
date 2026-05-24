@@ -16,6 +16,7 @@ function ticker(
     tradingDay: null,
     activeCount: 0,
     repYesPrice: null,
+    repStrikeDollars: null,
     totalRestingSize: new BN(0),
     totalPairsMinted: new BN(0),
     totalCollateral: new BN(0),
@@ -80,6 +81,20 @@ describe("MarketsView", () => {
     expect(screen.getByLabelText("View TSLA")).toHaveAttribute(
       "href",
       "/trade/TSLA"
+    );
+  });
+
+  it("deep-links to the representative strike when one is open", () => {
+    render(
+      <MarketsView
+        tickers={allTickers({
+          [Ticker.Nvda]: { activeCount: 1, repStrikeDollars: 270 },
+        })}
+      />
+    );
+    expect(screen.getByLabelText("View NVDA")).toHaveAttribute(
+      "href",
+      "/trade/NVDA?strike=270"
     );
   });
 });

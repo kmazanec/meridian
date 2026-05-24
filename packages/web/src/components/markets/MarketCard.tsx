@@ -20,14 +20,19 @@ import { SpotLine } from "./SpotLine";
  * all data arrives as a derived {@link TickerView}.
  */
 export function MarketCard({ view }: { view: TickerView }) {
-  const { symbol, repYesPrice, activeCount } = view;
+  const { symbol, repYesPrice, repStrikeDollars, activeCount } = view;
   const closes = view.history?.map((p) => p.close) ?? [];
   const spot = spotFromHistory(view.history ?? []);
   const hasOpen = activeCount > 0;
+  // Deep-link to the representative strike (the one `repYesPrice` quotes), so opening a card
+  // lands on the same bet it shows — same continuity the home page's featured cards give.
+  const href = repStrikeDollars != null
+    ? `/trade/${symbol}?strike=${repStrikeDollars}`
+    : `/trade/${symbol}`;
 
   return (
     <Link
-      href={`/trade/${symbol}`}
+      href={href}
       aria-label={`View ${symbol}`}
       className="panel block p-5 transition-colors hover:border-accent/30"
       data-testid={`market-card-${symbol}`}

@@ -234,6 +234,12 @@ export interface TickerView {
   activeCount: number;
   /** Representative Yes price for the collapsed summary (or null with no open markets). */
   repYesPrice: BN | null;
+  /**
+   * The representative open market's strike in *dollars* (or null with no open markets) —
+   * the strike `repYesPrice` is quoted on. Used to deep-link the card straight to that
+   * strike's trade page (`?strike=<dollars>`), so clicking a card opens the same bet it shows.
+   */
+  repStrikeDollars: number | null;
   totalRestingSize: BN;
   totalPairsMinted: BN;
   totalCollateral: BN;
@@ -260,6 +266,7 @@ export function buildTickerView(opts: {
     tradingDay: rep?.tradingDay ?? null,
     activeCount: agg.openCount,
     repYesPrice: rep ? priceFromBook(yesView(rep, books)) : null,
+    repStrikeDollars: rep ? rep.strike.toNumber() / STRIKE_SCALE : null,
     totalRestingSize: agg.totalRestingSize,
     totalPairsMinted: agg.totalPairsMinted,
     totalCollateral: agg.totalCollateral,

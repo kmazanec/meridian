@@ -12,6 +12,7 @@ function view(overrides: Partial<TickerView> = {}): TickerView {
     tradingDay: new BN(Math.floor(Date.now() / 1000) + 3600),
     activeCount: 2,
     repYesPrice: new BN(650_000),
+    repStrikeDollars: 270,
     totalRestingSize: new BN(4_000_000),
     totalPairsMinted: new BN(3_000_000),
     totalCollateral: new BN(3_000_000),
@@ -34,22 +35,29 @@ describe("MarketCard", () => {
     expect(within(card).getByTestId("sparkline")).toBeInTheDocument();
   });
 
-  it("links to the stock's trade/detail page", () => {
+  it("deep-links to the representative strike on its trade page", () => {
     render(<MarketCard view={view()} />);
     expect(screen.getByTestId("market-card-NVDA")).toHaveAttribute(
       "href",
-      "/trade/NVDA"
+      "/trade/NVDA?strike=270"
     );
   });
 
   it("falls back gracefully when there is no open market", () => {
     render(
       <MarketCard
-        view={view({ activeCount: 0, repYesPrice: null, tradingDay: null })}
+        view={view({
+          activeCount: 0,
+          repYesPrice: null,
+          repStrikeDollars: null,
+          tradingDay: null,
+        })}
       />
     );
     const card = screen.getByTestId("market-card-NVDA");
     expect(within(card).getByText("no open market")).toBeInTheDocument();
     expect(within(card).queryByTestId("countdown")).not.toBeInTheDocument();
+    // With no open strike to anchor on, the card links to the plain trade page (no `?strike`).
+    expect(card).toHaveAttribute("href", "/trade/NVDA");
   });
 });
