@@ -164,10 +164,18 @@ create-markets-live: ## Create markets seeded from REAL last close via /api/hist
 	@RPC_URL=$(LOCAL_RPC) DEPLOYER_KEYPAIR=$(abspath $(LOCAL_DEPLOYER)) $(LOCAL_MOCK_CLOSES) \
 	  WEB_BASE_URL=$${WEB_BASE_URL:-http://localhost:3000} LIVE_CLOSES=1 \
 	  $(YARN) workspace @meridian/ops create-markets
-settle-due: ## Close (settle) all open markets past their day, at the synthetic close (set WEB_BASE_URL).
+settle-due: ## Close (settle) all open markets past their day, then write the demo bot report.
 	@RPC_URL=$(LOCAL_RPC) DEPLOYER_KEYPAIR=$(abspath $(LOCAL_DEPLOYER)) \
 	  WEB_BASE_URL=$${WEB_BASE_URL:-http://localhost:8788} \
 	  $(YARN) workspace @meridian/ops settle-due
+	@# Demo-only: after settling, snapshot how each bot did. Prints a leaderboard and writes a
+	@# timestamped JSON artifact under $(LOCALNET_DIR)/reports/ (gitignored). Not a production
+	@# concern — production wants a market-wide admin view, not this demo-bot roster. Best-effort:
+	@# a report failure must not fail the settle.
+	@RPC_URL=$(LOCAL_RPC) START_USDC=$${START_USDC:-1000} \
+	  node scripts/bot-results.mjs \
+	    --out "$(LOCALNET_DIR)/reports/bots-$$(date +%Y%m%d-%H%M%S).json" \
+	  || echo "  (bot report skipped — see above; settlement itself succeeded)"
 lifecycle: demo ## Alias for `make demo`.
 
 fund-traders: ## Fund the persistent test traders (trader{1..8}.json) on the local stack.
