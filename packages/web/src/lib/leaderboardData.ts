@@ -62,8 +62,13 @@ export async function marketMints(
 }
 
 /**
- * Top holders of one mint, resolved to owner wallets. getTokenLargestAccounts returns token
- * *account* addresses; we then read those accounts to recover each `.owner`.
+ * Top holders of one mint, resolved to owner WALLETS. getTokenLargestAccounts returns token
+ * *account* addresses; we read those to recover each `.owner`.
+ *
+ * Skips program-owned (off-curve) owners: a market's own vault/escrow PDAs hold outcome tokens
+ * but aren't traders, and deriving a USDC ATA for an off-curve owner throws
+ * TokenOwnerOffCurveError. Filtering them here keeps both the leaderboard and the drilldown to
+ * real wallets.
  */
 export async function topHolders(
   connection: Connection,
@@ -83,6 +88,7 @@ export async function topHolders(
     if (!info) return; // closed/missing → skip
     try {
       const decoded = unpackAccount(accounts[i].address, info);
+      if (!PublicKey.isOnCurve(decoded.owner.toBytes())) return; // PDA (vault/escrow) → not a trader
       holders.push({
         owner: decoded.owner,
         amount: new BN(decoded.amount.toString()),
@@ -101,10 +107,16 @@ export async function ownerUsdcBalances(
   usdcMint: PublicKey
 ): Promise<Map<string, BN>> {
   const out = new Map<string, BN>();
-  if (owners.length === 0) return out;
-  const atas = owners.map((o) => ata(usdcMint, o));
+  // Only on-curve wallets have a derivable ATA; an off-curve (PDA) owner would throw
+  // TokenOwnerOffCurveError. Such owners aren't traders — record 0 and skip derivation.
+  const wallets = owners.filter((o) => PublicKey.isOnCurve(o.toBytes()));
+  for (const o of owners) {
+    if (!PublicKey.isOnCurve(o.toBytes())) out.set(o.toBase58(), new BN(0));
+  }
+  if (wallets.length === 0) return out;
+  const atas = wallets.map((o) => ata(usdcMint, o));
   const infos = await getMultipleAccountsChunked(connection, atas);
-  owners.forEach((o, i) => {
+  wallets.forEach((o, i) => {
     const info = infos[i];
     let bal = new BN(0);
     if (info) {

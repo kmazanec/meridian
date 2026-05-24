@@ -35,14 +35,20 @@ export function useLeaderboard(enabled: boolean): AsyncResource<LeaderboardRow[]
 
   return usePolled<LeaderboardRow[]>(
     async () => {
-      const inputs = await loadLeaderboardInputs({
-        program,
-        connection,
-        markets: markets.data!,
-        books: allBooks.data!,
-        usdcMint: usdcMint!,
-      });
-      return foldLeaderboard(inputs);
+      try {
+        const inputs = await loadLeaderboardInputs({
+          program,
+          connection,
+          markets: markets.data!,
+          books: allBooks.data!,
+          usdcMint: usdcMint!,
+        });
+        return foldLeaderboard(inputs);
+      } catch (e) {
+        // Surface the real cause to the console (the panel only shows error.message).
+        console.error("[leaderboard] load failed:", e);
+        throw e;
+      }
     },
     [program, connection, markets.data, allBooks.data, usdcMint],
     { pollMs: LEADERBOARD_POLL_MS, enabled: ready }

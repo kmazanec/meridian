@@ -38,12 +38,15 @@ function fakeConnection(over: Record<string, unknown>) {
 
 describe("topHolders", () => {
   it("resolves token accounts to owners, skips zero + undecodable + missing", () => {
-    const acctA = pk(50); // owner 1, amount 5
-    const acctB = pk(51); // owner 2, amount 3
+    // Owners must be on-curve wallets (off-curve PDAs are filtered — see the next test).
+    const ownerA = Keypair.generate().publicKey;
+    const ownerB = Keypair.generate().publicKey;
+    const acctA = pk(50);
+    const acctB = pk(51);
     const acctZero = pk(52); // filtered: amount "0"
     const acctMissing = pk(53); // getMultipleAccountsInfo returns null
-    ownerByAccount.set(acctA.toBase58(), { owner: pk(1), amount: 5n });
-    ownerByAccount.set(acctB.toBase58(), { owner: pk(2), amount: 3n });
+    ownerByAccount.set(acctA.toBase58(), { owner: ownerA, amount: 5n });
+    ownerByAccount.set(acctB.toBase58(), { owner: ownerB, amount: 3n });
 
     const connection = fakeConnection({
       getTokenLargestAccounts: async () => ({
@@ -63,9 +66,34 @@ describe("topHolders", () => {
 
     return topHolders(connection, pk(99)).then((holders) => {
       expect(holders).toHaveLength(2);
-      expect(holders[0].owner.toBase58()).toBe(pk(1).toBase58());
+      expect(holders[0].owner.toBase58()).toBe(ownerA.toBase58());
       expect(holders[0].amount.toNumber()).toBe(5);
-      expect(holders[1].owner.toBase58()).toBe(pk(2).toBase58());
+      expect(holders[1].owner.toBase58()).toBe(ownerB.toBase58());
+    });
+  });
+
+  it("skips off-curve (PDA) owners — vault/escrow accounts aren't traders", () => {
+    const wallet = Keypair.generate().publicKey; // on-curve
+    const pdaOwner = pk(7); // all-7 bytes: off-curve (a program/PDA account)
+    const acctWallet = pk(60);
+    const acctPda = pk(61);
+    ownerByAccount.set(acctWallet.toBase58(), { owner: wallet, amount: 5n });
+    ownerByAccount.set(acctPda.toBase58(), { owner: pdaOwner, amount: 9n });
+
+    const connection = fakeConnection({
+      getTokenLargestAccounts: async () => ({
+        value: [
+          { address: acctWallet, amount: "5" },
+          { address: acctPda, amount: "9" },
+        ],
+      }),
+      getMultipleAccountsInfo: async (addrs: PublicKey[]) =>
+        addrs.map(() => ({} as never)),
+    });
+
+    return topHolders(connection, pk(99)).then((holders) => {
+      expect(holders).toHaveLength(1);
+      expect(holders[0].owner.toBase58()).toBe(wallet.toBase58());
     });
   });
 
