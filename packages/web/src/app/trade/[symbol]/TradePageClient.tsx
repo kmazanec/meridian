@@ -17,6 +17,7 @@ import { useProgram } from "@/lib/useProgram";
 import { useSendIx } from "@/lib/useSendIx";
 import { usePriceHistory, spotFromHistory } from "@/lib/usePriceHistory";
 import { priceFromBook } from "@/lib/market-math";
+import { currentTradingDayMarkets } from "@/lib/discovery";
 import {
   strikeLadderRows,
   representativeYesPrice,
@@ -60,11 +61,15 @@ export default function TradePageClient() {
   const history = usePriceHistory(ticker === null ? null : symbol).data;
   const books: BookMap = useMemo(() => allBooks ?? new Map(), [allBooks]);
 
+  // Only the current trading day's strikes — the on-chain set keeps every past day's
+  // markets, so without this the same strike shows up once per settled day.
   const strikes = useMemo(
     () =>
       ticker === null
         ? []
-        : (allMarkets ?? []).filter((m) => m.ticker === ticker),
+        : currentTradingDayMarkets(
+            (allMarkets ?? []).filter((m) => m.ticker === ticker)
+          ),
     [allMarkets, ticker]
   );
 

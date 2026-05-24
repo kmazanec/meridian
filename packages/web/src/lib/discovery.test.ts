@@ -7,6 +7,8 @@ import {
   groupByTicker,
   groupByTradingDay,
   activeCount,
+  maxTradingDay,
+  currentTradingDayMarkets,
   normalizeDiscovered,
 } from "./discovery";
 
@@ -142,6 +144,55 @@ describe("discovery", () => {
       const groups = groupByTradingDay(markets);
       expect(groups).toHaveLength(2);
       expect(groups.every((g) => g.markets.length === 1)).toBe(true);
+    });
+  });
+
+  describe("currentTradingDayMarkets", () => {
+    const DAY1 = 1_716_499_200; // older
+    const DAY2 = 1_716_585_600; // current (latest)
+
+    it("keeps only the latest trading day's markets (drops past-day duplicates)", async () => {
+      // The screenshot bug: AAPL $280 settled yesterday + open today; only today's stays.
+      const program = programWith([
+        rawMarket({
+          ticker: "aapl",
+          strike: 280_000_000,
+          tradingDay: DAY1,
+          state: "settled",
+          outcome: "yesWins",
+        }),
+        rawMarket({ ticker: "aapl", strike: 280_000_000, tradingDay: DAY2 }),
+        rawMarket({ ticker: "aapl", strike: 300_000_000, tradingDay: DAY2 }),
+      ]);
+      const markets = await discoverMarkets(program);
+      const current = currentTradingDayMarkets(markets);
+      expect(current).toHaveLength(2);
+      expect(current.every((m) => m.tradingDay.toNumber() === DAY2)).toBe(true);
+      // No duplicate strike levels remain.
+      const strikes = current.map((m) => m.strike.toNumber());
+      expect(new Set(strikes).size).toBe(strikes.length);
+    });
+
+    it("returns [] for no markets", () => {
+      expect(currentTradingDayMarkets([])).toEqual([]);
+    });
+  });
+
+  describe("maxTradingDay", () => {
+    it("returns the latest trading-day instant, or null when empty", () => {
+      const markets = [
+        normalizeDiscovered(
+          rawMarket({ ticker: "aapl", strike: 1, tradingDay: 100 })
+        ),
+        normalizeDiscovered(
+          rawMarket({ ticker: "aapl", strike: 2, tradingDay: 300 })
+        ),
+        normalizeDiscovered(
+          rawMarket({ ticker: "aapl", strike: 3, tradingDay: 200 })
+        ),
+      ];
+      expect(maxTradingDay(markets)?.toNumber()).toBe(300);
+      expect(maxTradingDay([])).toBeNull();
     });
   });
 });

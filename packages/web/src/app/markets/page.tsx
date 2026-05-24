@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { Ticker, TICKER_SYMBOLS } from "@meridian/sdk";
 import { useMarkets, useAllBooks } from "@/lib/useChain";
 import { usePriceHistory } from "@/lib/usePriceHistory";
-import { groupByTicker } from "@/lib/discovery";
+import { groupByTicker, currentTradingDayMarkets } from "@/lib/discovery";
 import { buildTickerView, type TickerView } from "@/lib/marketStats";
 import { MarketsView } from "@/components/markets/MarketsView";
 
@@ -23,10 +23,13 @@ export default function MarketsPage() {
     const bookMap = books ?? new Map();
     return TICKER_SYMBOLS.map((symbol, ordinal) => {
       const ticker = ordinal as Ticker;
+      // Only today's markets — exclude prior settled days so the card's strikes,
+      // open interest, and active count reflect the current trading day.
+      const tickerMarkets = currentTradingDayMarkets(grouped.get(ticker) ?? []);
       return buildTickerView({
         ticker,
         symbol,
-        markets: grouped.get(ticker) ?? [],
+        markets: tickerMarkets,
         books: bookMap,
         history: histories[ordinal] ?? null,
       });

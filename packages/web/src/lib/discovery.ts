@@ -115,6 +115,30 @@ export function activeCount(markets: DiscoveredMarket[]): number {
   return markets.filter((m) => m.state === "open").length;
 }
 
+/** The most recent trading-day instant among the given markets, or null if none. */
+export function maxTradingDay(markets: DiscoveredMarket[]): BN | null {
+  let latest: BN | null = null;
+  for (const m of markets) {
+    if (!latest || m.tradingDay.gt(latest)) latest = m.tradingDay;
+  }
+  return latest;
+}
+
+/**
+ * Keep only the *current* trading day's markets — the latest day present. The on-chain set
+ * accumulates every day's markets (older ones settle but persist), so any per-ticker view
+ * that should show "today" must filter to this; otherwise the same strike appears once per
+ * past day. After 4 PM ET, "today" is still the latest day (its markets are just settled).
+ * Pure — unit-tested directly.
+ */
+export function currentTradingDayMarkets(
+  markets: DiscoveredMarket[]
+): DiscoveredMarket[] {
+  const latest = maxTradingDay(markets);
+  if (!latest) return [];
+  return markets.filter((m) => m.tradingDay.eq(latest));
+}
+
 /** One trading day's markets, with the day's stable ET key and the raw trading-day instant. */
 export interface MarketDayGroup {
   /** ET date key, e.g. `2026-05-23` (sortable). */
