@@ -166,6 +166,11 @@ A successful `make lifecycle-devnet` ends with something like:
 
 That is the create → mint → trade → settle → redeem flow running **on real devnet**.
 
+A captured transcript of an actual run (full phase-by-phase output, plus the program id,
+market address, and explorer links) is checked in at
+[`devnet-lifecycle-run.md`](devnet-lifecycle-run.md) — read that if you want to see the
+evidence without running it yourself.
+
 ---
 
 ## 5. See it on a block explorer

@@ -182,6 +182,10 @@ keypair. Follow the step-by-step, novice-friendly runbook:
 **[`docs/devnet-deployment.md`](docs/devnet-deployment.md)** (`make deploy-devnet` →
 `bootstrap-devnet` → `create-markets-devnet` → `lifecycle-devnet`).
 
+A captured transcript of an actual green devnet run — create → mint → trade → settle →
+redeem, with the program id, market address, and explorer links — is checked in at
+**[`docs/devnet-lifecycle-run.md`](docs/devnet-lifecycle-run.md)**.
+
 ### Building / deploying with Anchor
 
 `anchor build`, `anchor test`, and `anchor deploy` read their provider settings
@@ -251,6 +255,7 @@ with the Cargo registry and `target/` cached between runs.
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Delivery plan, dependency graph, critical path, cross-cutting contracts |
 | [`docs/local-development.md`](docs/local-development.md) | Local dev loop, the `make dev` stack, cluster targeting |
 | [`docs/devnet-deployment.md`](docs/devnet-deployment.md) | Step-by-step devnet deploy runbook (novice-friendly) |
+| [`docs/devnet-lifecycle-run.md`](docs/devnet-lifecycle-run.md) | Captured transcript of an actual green devnet lifecycle run (create→mint→trade→settle→redeem) |
 | [`docs/features/`](docs/features/) | One spec per deliverable (F-01 … F-10) with acceptance criteria |
 
 ---
