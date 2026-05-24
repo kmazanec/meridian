@@ -617,6 +617,7 @@ __metadata:
     meridian-deploy: ./src/bin/deploy.ts
     meridian-dev-up: ./src/bin/dev-up.ts
     meridian-lifecycle: ./src/bin/lifecycle.ts
+    meridian-settle-due: ./src/bin/settle-due.ts
   languageName: unknown
   linkType: soft
 
