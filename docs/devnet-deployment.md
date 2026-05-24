@@ -130,6 +130,12 @@ set -a; . ./.env; set +a
 > **`.env` is gitignored — never commit it.** `DEPLOYER_KEYPAIR` here is a *file path*; the
 > secret stays in that file, not in the repo.
 
+> **RPC note.** The public endpoint above is fine for deploy/bootstrap/settle — they're light,
+> one-shot calls. But if you go on to run the **trading-bot fleet** against devnet, the shared
+> endpoint's `getProgramAccounts` limit will throttle it; set `RPC_URL` to a free-tier dedicated
+> provider (Alchemy/QuickNode) for that. See
+> [`packages/traders/README.md` → RPC rate limits](../packages/traders/README.md#rpc-rate-limits-devnet).
+
 ---
 
 ## 4. Deploy + run the lifecycle on devnet

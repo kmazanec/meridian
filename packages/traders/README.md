@@ -146,10 +146,25 @@ reads each bot does per tick. The fleet mitigates this two ways:
   window with the `backoffMinMs` / `backoffMaxMs` options on `BotChain.send` (defaults 10000 /
   30000).
 
-These reduce collisions a lot, but the **most effective fix is a dedicated RPC**: point `RPC_URL`
-at your own provider (Helius, QuickNode, Triton — all have free tiers) instead of the shared
-public endpoint, and the 429s mostly disappear. Locally, run against your validator (no limits at
-all).
+These reduce collisions a lot, but the **most effective fix is a dedicated RPC**. The public
+endpoint caps `getProgramAccounts` at ~4/sec across your whole IP (40 per 10s, per-method — see
+[Solana's cluster docs](https://solana.com/docs/references/clusters)), and all the bots share one
+IP, so a gPA-heavy fleet blows past it instantly. A free-tier dedicated endpoint lifts that ceiling
+several-fold. Just point `RPC_URL` at it — the bots read it from the environment:
+
+```bash
+# Alchemy — most free throughput (~25 req/s) and the mildest gPA weighting; free WebSockets.
+export RPC_URL="https://solana-devnet.g.alchemy.com/v2/<your-key>"
+
+# QuickNode — no-credit-card free tier (documented), flat per-method metering (gPA not penalized).
+export RPC_URL="https://<your-endpoint>.solana-devnet.quiknode.pro/<your-token>/"
+
+make bots
+```
+
+For this gPA-heavy workload, **Alchemy** or **QuickNode** are the best fits. Avoid **Helius**'s free
+tier here — it hard-caps `getProgramAccounts` at 5/sec (the exact call the fleet leans on) unless you
+refactor to `getProgramAccountsV2`. **Locally, run against your validator** — no limits at all.
 
 ### Closing the day
 
