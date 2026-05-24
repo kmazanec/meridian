@@ -25,6 +25,21 @@ import type {
 /** How many holders to pull per mint side. getTokenLargestAccounts caps at 20. */
 const TOP_N = 20;
 
+/** getMultipleAccountsInfo rejects > 100 keys per call; chunk to stay under the limit. */
+const MAX_MULTI = 100;
+
+export async function getMultipleAccountsChunked(
+  connection: Connection,
+  keys: PublicKey[]
+): Promise<(Awaited<ReturnType<Connection["getMultipleAccountsInfo"]>>[number])[]> {
+  const out: (Awaited<ReturnType<Connection["getMultipleAccountsInfo"]>>[number])[] = [];
+  for (let i = 0; i < keys.length; i += MAX_MULTI) {
+    const batch = keys.slice(i, i + MAX_MULTI);
+    out.push(...(await connection.getMultipleAccountsInfo(batch)));
+  }
+  return out;
+}
+
 interface MintInfo {
   yesMint: PublicKey;
   noMint: PublicKey;
@@ -88,7 +103,7 @@ export async function ownerUsdcBalances(
   const out = new Map<string, BN>();
   if (owners.length === 0) return out;
   const atas = owners.map((o) => ata(usdcMint, o));
-  const infos = await connection.getMultipleAccountsInfo(atas);
+  const infos = await getMultipleAccountsChunked(connection, atas);
   owners.forEach((o, i) => {
     const info = infos[i];
     let bal = new BN(0);

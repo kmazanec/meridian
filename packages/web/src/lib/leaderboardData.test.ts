@@ -24,7 +24,11 @@ vi.mock("@solana/spl-token", async (orig) => {
 
 beforeEach(() => ownerByAccount.clear());
 
-import { topHolders, ownerUsdcBalances } from "./leaderboardData";
+import {
+  topHolders,
+  ownerUsdcBalances,
+  getMultipleAccountsChunked,
+} from "./leaderboardData";
 
 const pk = (n: number) => new PublicKey(new Uint8Array(32).fill(n));
 
@@ -85,5 +89,42 @@ describe("ownerUsdcBalances", () => {
     const bals = await ownerUsdcBalances(connection, [], pk(80));
     expect(bals.size).toBe(0);
     expect(getMultipleAccountsInfo).not.toHaveBeenCalled();
+  });
+});
+
+describe("getMultipleAccountsChunked", () => {
+  // Regression: getMultipleAccountsInfo rejects > 100 keys ("Too many inputs provided; max
+  // 100"). The leaderboard gathers >100 owners across all markets, so it must chunk.
+  it("splits > 100 keys into batches of <= 100 and concatenates in order", async () => {
+    const batchSizes: number[] = [];
+    const connection = fakeConnection({
+      getMultipleAccountsInfo: async (keys: PublicKey[]) => {
+        expect(keys.length).toBeLessThanOrEqual(100);
+        batchSizes.push(keys.length);
+        // Echo a marker so we can verify order: index encoded as the returned "lamports".
+        return keys.map((_k, i) => ({ lamports: i } as never));
+      },
+    });
+
+    const keys = Array.from({ length: 250 }, () => PublicKey.unique());
+    const infos = await getMultipleAccountsChunked(connection, keys);
+
+    expect(infos).toHaveLength(250);
+    expect(batchSizes).toEqual([100, 100, 50]);
+  });
+
+  it("single call when <= 100", async () => {
+    let calls = 0;
+    const connection = fakeConnection({
+      getMultipleAccountsInfo: async (keys: PublicKey[]) => {
+        calls += 1;
+        return keys.map(() => null);
+      },
+    });
+    await getMultipleAccountsChunked(
+      connection,
+      Array.from({ length: 100 }, () => PublicKey.unique())
+    );
+    expect(calls).toBe(1);
   });
 });
