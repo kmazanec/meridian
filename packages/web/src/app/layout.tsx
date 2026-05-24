@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Link from "next/link";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { Header } from "@/components/Header";
@@ -54,9 +55,14 @@ export default function RootLayout({
                     Meridian
                   </span>
                 </span>
-                <span className="text-center sm:text-right">
-                  Non-custodial by construction. The program is the only thing
-                  that can move funds.
+                <span className="flex flex-col items-center gap-1 text-center sm:flex-row sm:items-center sm:gap-4 sm:text-right">
+                  <Link href="/faq" className="hover:text-fg-dim">
+                    FAQ
+                  </Link>
+                  <span>
+                    Non-custodial by construction. The program is the only thing
+                    that can move funds.
+                  </span>
                 </span>
               </div>
             </footer>

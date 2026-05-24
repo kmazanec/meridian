@@ -82,6 +82,18 @@ describe("LandingView", () => {
     expect(card).toHaveAttribute("href", "/trade/NVDA?strike=1180");
   });
 
+  it("offers newcomers a link to the FAQ", () => {
+    render(
+      <LandingView
+        featured={[]}
+        activity={activity}
+        connect={<button>Connect</button>}
+      />
+    );
+    const faqLink = screen.getByRole("link", { name: /read the faq/i });
+    expect(faqLink).toHaveAttribute("href", "/faq");
+  });
+
   it("shows a graceful note when no markets are open", () => {
     render(
       <LandingView

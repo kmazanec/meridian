@@ -47,6 +47,12 @@ export function LandingView({
             <Button variant="ghost">Browse all markets</Button>
           </Link>
         </div>
+        <p className="mt-4 text-sm text-fg-faint">
+          New to this?{" "}
+          <Link href="/faq" className="text-accent hover:underline">
+            Read the FAQ →
+          </Link>
+        </p>
       </section>
 
       {/* Live activity bar — scale + liveness at a glance. */}
