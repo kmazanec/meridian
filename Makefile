@@ -178,6 +178,10 @@ settle-due: ## Close (settle) all open markets past their day, then write the de
 	  || echo "  (bot report skipped — see above; settlement itself succeeded)"
 lifecycle: demo ## Alias for `make demo`.
 
+claim-bot-winnings: ## Redeem every bot's won tokens (settled markets) into USDC on the local stack. DRY_RUN=1 to preview.
+	@RPC_URL=$(LOCAL_RPC) \
+	  node scripts/claim-bot-winnings.mjs $${DRY_RUN:+--dry-run}
+
 fund-traders: ## Fund the persistent test traders (trader{1..8}.json) on the local stack.
 	@if [ ! -f $(LOCALNET_DIR)/dev.json ]; then echo "✗ No local stack — run 'make dev' first."; exit 1; fi
 	@RPC_URL=$(LOCAL_RPC) DEPLOYER_KEYPAIR=$(abspath $(LOCAL_DEPLOYER)) \
@@ -205,6 +209,9 @@ settle-due-devnet: _require-devnet-keypair ## Close due markets on devnet at the
 	  $(YARN) workspace @meridian/ops settle-due
 lifecycle-devnet: _require-devnet-keypair ## Run the full lifecycle on devnet.
 	@RPC_URL=$${RPC_URL:-https://api.devnet.solana.com} $(YARN) workspace @meridian/ops lifecycle
+claim-bot-winnings-devnet: ## Redeem every bot's won tokens into USDC on devnet (bots self-sign). DRY_RUN=1 to preview.
+	@RPC_URL=$${RPC_URL:-https://api.devnet.solana.com} \
+	  node scripts/claim-bot-winnings.mjs $${DRY_RUN:+--dry-run}
 
 _require-devnet-keypair:
 	@if [ -z "$$DEPLOYER_KEYPAIR" ]; then \
