@@ -18,10 +18,13 @@ export function HistoryView({
   entries,
   connected,
   loading,
+  error,
 }: {
   entries: HistoryEntry[];
   connected: boolean;
   loading?: boolean;
+  /** Set when loading failed (e.g. an RPC without transaction history). */
+  error?: Error | null;
 }) {
   if (!connected) {
     return (
@@ -45,7 +48,19 @@ export function HistoryView({
         </p>
       </header>
 
-      {entries.length === 0 ? (
+      {error && entries.length === 0 ? (
+        <div
+          className="panel py-10 text-center"
+          data-testid="history-error"
+        >
+          <p className="text-sm text-no">Couldn't load your history.</p>
+          <p className="mx-auto mt-1 max-w-md text-xs text-fg-faint">
+            The RPC didn't return transaction history. A local validator must run
+            with <span className="font-mono">--enable-rpc-transaction-history</span>,
+            and some providers prune older signatures.
+          </p>
+        </div>
+      ) : entries.length === 0 ? (
         <Panel className="py-10 text-center">
           <p className="text-sm text-fg-dim">
             {loading ? "Loading your activity…" : "No activity yet."}

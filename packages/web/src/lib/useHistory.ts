@@ -23,12 +23,16 @@ const SIGNATURE_LIMIT = 40;
 export function useHistory(): {
   entries: HistoryEntry[];
   loading: boolean;
+  /** Set when the RPC fetch or event decode failed, so the UI can say so rather than
+   *  showing a misleading "no activity" — e.g. an RPC without transaction history. */
+  error: Error | null;
   refresh: () => void;
 } {
   const { connection } = useConnection();
   const { publicKey } = useWallet();
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
   const [tick, setTick] = useState(0);
 
   const refresh = () => setTick((t) => t + 1);
@@ -36,10 +40,12 @@ export function useHistory(): {
   useEffect(() => {
     if (!publicKey) {
       setEntries([]);
+      setError(null);
       return;
     }
     let cancelled = false;
     setLoading(true);
+    setError(null);
 
     (async () => {
       const parser = new EventParser(
@@ -76,8 +82,15 @@ export function useHistory(): {
         setEntries(buildHistory(collected, publicKey));
         setLoading(false);
       }
-    })().catch(() => {
-      if (!cancelled) setLoading(false);
+    })().catch((e: unknown) => {
+      // Surface the failure instead of silently showing "no activity". The most common
+      // cause is an RPC without transaction history (e.g. a local validator started
+      // without --enable-rpc-transaction-history, or a provider that prunes signatures).
+      if (cancelled) return;
+      const err = e instanceof Error ? e : new Error(String(e));
+      console.error("useHistory: failed to load transaction history", err);
+      setError(err);
+      setLoading(false);
     });
 
     return () => {
@@ -86,5 +99,5 @@ export function useHistory(): {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connection, publicKey?.toBase58(), tick]);
 
-  return { entries, loading, refresh };
+  return { entries, loading, error, refresh };
 }

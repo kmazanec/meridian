@@ -102,6 +102,7 @@ _validator-up: ## (internal) Ensure a local validator is running + an ephemeral 
 	  echo "▶ Starting solana-test-validator..."; \
 	  rm -rf $(VALIDATOR_LEDGER); \
 	  nohup solana-test-validator --reset --quiet --ledger $(VALIDATOR_LEDGER) \
+	    --enable-rpc-transaction-history --limit-ledger-size 100000000 \
 	    > $(LOCALNET_DIR)/validator.log 2>&1 & echo $$! > $(VALIDATOR_PID); \
 	  echo "  waiting for RPC..."; \
 	  for i in $$(seq 1 60); do \
