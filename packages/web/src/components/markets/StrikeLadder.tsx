@@ -113,7 +113,9 @@ export function StrikeLadder({
         </thead>
         <tbody className="stat-mono">
           {orderedRows.map((row, i) => {
-            const selectable = !!onSelect && row.state === "open";
+            // Every strike is selectable — settled ones too, so a closed market can be
+            // inspected (its book, outcome, and close) even though it can't be traded.
+            const selectable = !!onSelect;
             const selected = selectedAddress === row.address;
             return (
               <Fragment key={row.address}>
@@ -125,7 +127,8 @@ export function StrikeLadder({
                     "border-t border-line-soft/60",
                     selectable && "cursor-pointer hover:bg-panel-2/60",
                     selected && "bg-accent/10",
-                    row.state === "settled" && "opacity-55"
+                    // Settled rows read dimmer (not tradable), but stay legible/interactive.
+                    row.state === "settled" && !selected && "opacity-70"
                   )}
                   data-testid={`ladder-row-${row.strike.toString()}`}
                   data-selectable={selectable || undefined}

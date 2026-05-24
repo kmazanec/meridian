@@ -39,6 +39,7 @@ import { MergedBookView } from "@/components/trade/MergedBookView";
 import { PayoffLine } from "@/components/trade/PayoffLine";
 import { Countdown } from "@/components/trade/Countdown";
 import { TradePanel, type TradeFill } from "@/components/trade/TradePanel";
+import { SettledMarketPanel } from "@/components/trade/SettledMarketPanel";
 import { TxStatusBanner } from "@/components/trade/TxStatusBanner";
 import { Panel, cx } from "@/components/ui";
 import BN from "bn.js";
@@ -284,28 +285,33 @@ export default function TradePageClient() {
         {/* Right: the trade ticket (drops below the chart at lg, beside it at xl). */}
         <section className="order-3 space-y-6 lg:col-span-2 xl:col-span-1">
           {market && selected ? (
-            <>
-              <PayoffLine
-                ticker={ticker}
-                strike={market.strike}
-                yesPrice={yesPrice}
-              />
-              <TxStatusBanner state={tx} />
-              <TradePanel
-                program={program}
-                user={publicKey ?? null}
-                market={market}
-                marketAddress={selected}
-                book={rawBook}
-                position={position}
-                usdcMint={usdcMint}
-                onSubmit={onSubmit}
-                busy={tx.status === "signing" || tx.status === "confirming"}
-              />
-            </>
+            market.state === "settled" ? (
+              // Closed market: inspect the outcome instead of a trade ticket.
+              <SettledMarketPanel ticker={ticker} market={market} />
+            ) : (
+              <>
+                <PayoffLine
+                  ticker={ticker}
+                  strike={market.strike}
+                  yesPrice={yesPrice}
+                />
+                <TxStatusBanner state={tx} />
+                <TradePanel
+                  program={program}
+                  user={publicKey ?? null}
+                  market={market}
+                  marketAddress={selected}
+                  book={rawBook}
+                  position={position}
+                  usdcMint={usdcMint}
+                  onSubmit={onSubmit}
+                  busy={tx.status === "signing" || tx.status === "confirming"}
+                />
+              </>
+            )
           ) : (
             <Panel>
-              <p className="text-fg-dim">Select an open strike to trade.</p>
+              <p className="text-fg-dim">Select a strike.</p>
             </Panel>
           )}
         </section>

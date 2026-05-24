@@ -108,7 +108,7 @@ describe("StrikeLadder", () => {
     );
   });
 
-  it("does not select settled rows", async () => {
+  it("selects settled rows too (so closed strikes can be inspected)", async () => {
     const onSelect = vi.fn();
     const settled = row(700_000_000, {
       state: "settled",
@@ -116,9 +116,9 @@ describe("StrikeLadder", () => {
     });
     render(<StrikeLadder rows={[settled]} onSelect={onSelect} />);
     const r = screen.getByTestId("ladder-row-700000000");
-    expect(r).not.toHaveAttribute("data-selectable");
+    expect(r).toHaveAttribute("data-selectable", "true");
     await userEvent.click(r);
-    expect(onSelect).not.toHaveBeenCalled();
+    expect(onSelect).toHaveBeenCalledWith(settled.address);
   });
 
   it("is read-only when no onSelect is given", () => {
