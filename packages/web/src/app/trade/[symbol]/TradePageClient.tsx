@@ -28,7 +28,7 @@ import { formatPrice, formatProbability, formatUsdc } from "@/lib/format";
 import { StrikeLadder } from "@/components/markets/StrikeLadder";
 import { PriceChartPanel } from "@/components/markets/PriceChartPanel";
 import { SpotLine } from "@/components/markets/SpotLine";
-import { DualBookView } from "@/components/trade/DualBookView";
+import { MergedBookView } from "@/components/trade/MergedBookView";
 import { PayoffLine } from "@/components/trade/PayoffLine";
 import { Countdown } from "@/components/trade/Countdown";
 import { TradePanel, type TradeFill } from "@/components/trade/TradePanel";
@@ -226,7 +226,7 @@ export default function TradePageClient() {
           />
           {market && selected ? (
             dual ? (
-              <DualBookView book={dual} />
+              <MergedBookView view={dual.yes} />
             ) : (
               <Panel>
                 <p className="text-sm text-fg-faint">
