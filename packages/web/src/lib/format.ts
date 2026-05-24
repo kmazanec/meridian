@@ -60,6 +60,24 @@ export function formatSignedUsdc(baseUnits: BN | number | string): string {
   return `${sign}${formatUsdc(bn.abs())}`;
 }
 
+/**
+ * A plain dollar *amount* (already in dollars, NOT base units) as `$215.33`. For the stock
+ * price feeds (history/intraday), which report dollars directly — unlike {@link formatUsdc}
+ * which divides base units by 1e6.
+ */
+export function formatDollars(n: number, digits = 2): string {
+  return `$${n.toLocaleString("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })}`;
+}
+
+/** A fractional change as a signed percent, e.g. `+1.20%` / `-0.85%` (0.012 → `+1.20%`). */
+export function formatPctChange(frac: number): string {
+  const sign = frac > 0 ? "+" : "";
+  return `${sign}${(frac * 100).toFixed(2)}%`;
+}
+
 /** Short pubkey for display, e.g. `7xKX…9aQ2`. */
 export function shortKey(key: { toBase58: () => string } | string): string {
   const s = typeof key === "string" ? key : key.toBase58();

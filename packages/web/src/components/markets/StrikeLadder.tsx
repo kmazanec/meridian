@@ -28,6 +28,7 @@ export function StrikeLadder({
   selectedAddress,
   onSelect,
   lastClose,
+  currentPrice,
 }: {
   rows: StrikeRow[];
   /** Address of the currently selected strike (highlighted), if any. */
@@ -37,6 +38,9 @@ export function StrikeLadder({
   /** The stock's last close (dollars). Draws a marker line between the strikes it sits
    *  between, so you can see at a glance which strikes are in/out of the money. */
   lastClose?: number | null;
+  /** The stock's live price (dollars). Draws a second marker so you can see where the
+   *  stock is trading *right now* relative to the strikes, alongside the last close. */
+  currentPrice?: number | null;
 }) {
   if (rows.length === 0) {
     return (
@@ -50,20 +54,30 @@ export function StrikeLadder({
   // descending for the ladder (a trader reads the price scale top-down, high to low).
   const orderedRows = [...rows].reverse();
 
-  // The marker shows where the last close falls among the (now descending) strikes: it
-  // goes before the first strike that is *at or below* the close, so the close sits between
-  // that row and the higher one above it. If the close is below every strike, place it
-  // after the last row.
-  const STRIKE_SCALE = 1_000_000; // strike is in USDC base units (6dp); close is dollars.
-  const markerIndex =
-    lastClose == null
-      ? -1
-      : (() => {
-          const idx = orderedRows.findIndex(
-            (r) => r.strike.toNumber() / STRIKE_SCALE <= lastClose
-          );
-          return idx === -1 ? orderedRows.length : idx;
-        })();
+  // Price markers (last close, current price) drop into the ladder between the strikes
+  // they fall between, so you can see at a glance which strikes are in/out of the money
+  // and where the stock is trading now. Each marker's row index is the first strike
+  // *at or below* its price; below every strike → after the last row. Both markers are
+  // sorted high→low so when they share a slot the higher price renders above (matching
+  // the descending ladder).
+  const STRIKE_SCALE = 1_000_000; // strike is in USDC base units (6dp); prices are dollars.
+  const markerIndexFor = (value: number) => {
+    const idx = orderedRows.findIndex(
+      (r) => r.strike.toNumber() / STRIKE_SCALE <= value
+    );
+    return idx === -1 ? orderedRows.length : idx;
+  };
+  const markers: PriceMarker[] = [
+    currentPrice != null
+      ? { kind: "current" as const, value: currentPrice }
+      : null,
+    lastClose != null ? { kind: "last" as const, value: lastClose } : null,
+  ]
+    .filter((m): m is PriceMarker => m !== null)
+    .map((m) => ({ ...m, index: markerIndexFor(m.value) }))
+    .sort((a, b) => b.value - a.value);
+
+  const markersAt = (i: number) => markers.filter((m) => m.index === i);
 
   return (
     <div className="overflow-x-auto" data-testid="strike-ladder">
@@ -87,9 +101,9 @@ export function StrikeLadder({
             const selected = selectedAddress === row.address;
             return (
               <Fragment key={row.address}>
-                {i === markerIndex && lastClose != null && (
-                  <LastCloseMarker value={lastClose} />
-                )}
+                {markersAt(i).map((m) => (
+                  <PriceMarkerRow key={m.kind} marker={m} />
+                ))}
                 <tr
                   className={cx(
                     "border-t border-line-soft/60",
@@ -130,32 +144,52 @@ export function StrikeLadder({
               </Fragment>
             );
           })}
-          {/* Close below every strike → marker sits below the last row. */}
-          {markerIndex === orderedRows.length && lastClose != null && (
-            <LastCloseMarker value={lastClose} />
-          )}
+          {/* A price below every strike → its marker sits below the last row. */}
+          {markersAt(orderedRows.length).map((m) => (
+            <PriceMarkerRow key={m.kind} marker={m} />
+          ))}
         </tbody>
       </table>
     </div>
   );
 }
 
-/** A full-width divider row marking where the last close falls among the strikes. */
-function LastCloseMarker({ value }: { value: number }) {
-  // `value` is a plain dollar amount (from the price-history feed), not USDC base units —
+/** A price marker dropped into the ladder (last close in amber, live price in teal). */
+type PriceMarker = {
+  kind: "last" | "current";
+  value: number;
+  /** Row index it renders before (filled in during placement). */
+  index?: number;
+};
+
+/** A full-width divider row marking where a price falls among the strikes. */
+function PriceMarkerRow({ marker }: { marker: PriceMarker }) {
+  // `value` is a plain dollar amount (from the price feeds), not USDC base units —
   // format it directly rather than via formatUsdc (which divides by 1e6).
-  const label = `$${value.toLocaleString("en-US", {
+  const label = `$${marker.value.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+  const isCurrent = marker.kind === "current";
   return (
-    <tr data-testid="last-close-marker" aria-hidden>
+    <tr
+      data-testid={isCurrent ? "current-price-marker" : "last-close-marker"}
+      aria-hidden
+    >
       <td colSpan={COL_COUNT} className="p-0">
         <div className="flex items-center gap-2 py-1">
-          <span className="whitespace-nowrap text-xs uppercase tracking-wide text-amber">
-            Last close <span className="stat-mono normal-case">{label}</span>
+          <span
+            className={cx(
+              "whitespace-nowrap text-xs uppercase tracking-wide",
+              isCurrent ? "text-yes" : "text-amber"
+            )}
+          >
+            {isCurrent ? "Current" : "Last close"}{" "}
+            <span className="stat-mono normal-case">{label}</span>
           </span>
-          <span className="h-px flex-1 bg-amber/50" />
+          <span
+            className={cx("h-px flex-1", isCurrent ? "bg-yes/50" : "bg-amber/50")}
+          />
         </div>
       </td>
     </tr>

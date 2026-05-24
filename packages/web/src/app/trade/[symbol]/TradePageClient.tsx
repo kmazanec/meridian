@@ -16,6 +16,7 @@ import { useChainData } from "@/lib/ChainDataProvider";
 import { useProgram } from "@/lib/useProgram";
 import { useSendIx } from "@/lib/useSendIx";
 import { usePriceHistory, spotFromHistory } from "@/lib/usePriceHistory";
+import { useCurrentPrice } from "@/lib/useCurrentPrice";
 import { priceFromBook } from "@/lib/market-math";
 import { currentTradingDayMarkets } from "@/lib/discovery";
 import {
@@ -24,7 +25,13 @@ import {
   type BookMap,
 } from "@/lib/marketStats";
 import { recordTradeFill } from "@/lib/recordTradeFill";
-import { formatPrice, formatProbability, formatUsdc } from "@/lib/format";
+import {
+  formatPrice,
+  formatProbability,
+  formatUsdc,
+  formatDollars,
+  formatPctChange,
+} from "@/lib/format";
 import { StrikeLadder } from "@/components/markets/StrikeLadder";
 import { PriceChartPanel } from "@/components/markets/PriceChartPanel";
 import { SpotLine } from "@/components/markets/SpotLine";
@@ -33,7 +40,7 @@ import { PayoffLine } from "@/components/trade/PayoffLine";
 import { Countdown } from "@/components/trade/Countdown";
 import { TradePanel, type TradeFill } from "@/components/trade/TradePanel";
 import { TxStatusBanner } from "@/components/trade/TxStatusBanner";
-import { Panel } from "@/components/ui";
+import { Panel, cx } from "@/components/ui";
 import BN from "bn.js";
 
 export default function TradePageClient() {
@@ -126,6 +133,16 @@ export default function TradePageClient() {
     market?.tradingDay ??
     strikes.find((m) => m.state === "open")?.tradingDay ??
     null;
+  const tradingDaySeconds =
+    headerTradingDay != null ? Number(headerTradingDay) : null;
+
+  // The stock's live price — the lightweight, always-available quote (same `/api/price` the
+  // bots trade against), separate from the heavier intraday history. Drives the header
+  // "Current" stat and the strike-ladder live marker; degrades to null when unavailable.
+  const live = useCurrentPrice(
+    ticker === null ? null : symbol,
+    tradingDaySeconds
+  );
 
   if (ticker === null) {
     return (
@@ -171,7 +188,12 @@ export default function TradePageClient() {
             <h1 className="mt-2 font-serif text-3xl leading-tight tracking-tight text-fg sm:text-4xl">
               {heroQuestion}
             </h1>
-            <SpotLine spot={spot} showOpen className="mt-3 block" />
+            <SpotLine
+              spot={spot}
+              showOpen
+              showChange={false}
+              className="mt-3 block"
+            />
           </div>
           <div className="flex items-end gap-8">
             <div>
@@ -187,6 +209,30 @@ export default function TradePageClient() {
                   : "no open market"}
               </div>
             </div>
+            <div>
+              <div className="text-xs uppercase tracking-wide text-fg-faint">
+                {symbol} now
+              </div>
+              <div className="stat-mono text-3xl text-fg">
+                {live.price != null ? formatDollars(live.price) : "—"}
+              </div>
+              <div
+                className={cx(
+                  "stat-mono mt-0.5 text-xs",
+                  live.pctFromOpen == null
+                    ? "text-fg-faint"
+                    : live.pctFromOpen >= 0
+                    ? "text-yes"
+                    : "text-no"
+                )}
+              >
+                {live.pctFromOpen != null
+                  ? `${live.pctFromOpen >= 0 ? "▲" : "▼"} ${formatPctChange(
+                      live.pctFromOpen
+                    )} from open`
+                  : "live price"}
+              </div>
+            </div>
             {headerTradingDay && (
               <Countdown tradingDay={headerTradingDay} variant="inline" />
             )}
@@ -200,17 +246,15 @@ export default function TradePageClient() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(280px,320px)_minmax(0,1fr)] xl:grid-cols-[minmax(280px,320px)_minmax(0,1fr)_minmax(340px,380px)]">
         {/* Left: strike ladder (the picker). */}
         <section className="panel order-2 p-5 lg:order-1">
-          <div className="mb-3 flex items-baseline justify-between">
-            <h2 className="text-xs uppercase tracking-wide text-fg-faint">
-              Strikes
-            </h2>
-            <SpotLine spot={spot} />
-          </div>
+          <h2 className="mb-3 text-xs uppercase tracking-wide text-fg-faint">
+            Strikes
+          </h2>
           <StrikeLadder
             rows={ladderRows}
             selectedAddress={selected?.toBase58() ?? null}
             onSelect={(addr) => setSelectedAddr(new PublicKey(addr))}
             lastClose={spot?.close ?? null}
+            currentPrice={live.price}
           />
         </section>
 

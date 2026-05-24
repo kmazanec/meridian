@@ -28,6 +28,22 @@ describe("SpotLine", () => {
     expect(screen.getByTestId("spot-line")).toHaveTextContent("▼ -5.00%");
   });
 
+  it("suppresses the change when showChange is false (the hero)", () => {
+    // On the hero the day-over-day delta sits next to the open, which would falsely read
+    // as an open-vs-close move — so the hero hides it and relies on the live "from open" stat.
+    render(
+      <SpotLine
+        spot={{ date: "2026-05-02", close: 110, open: 101, changePct: -0.05 }}
+        showOpen
+        showChange={false}
+      />
+    );
+    const el = screen.getByTestId("spot-line");
+    expect(el).toHaveTextContent("last close $110.00");
+    expect(el).toHaveTextContent("open $101.00");
+    expect(el).not.toHaveTextContent("%");
+  });
+
   it("renders a dash when there is no spot", () => {
     render(<SpotLine spot={null} />);
     expect(screen.getByTestId("spot-line")).toHaveTextContent("last close —");

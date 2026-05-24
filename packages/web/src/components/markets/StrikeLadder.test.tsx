@@ -185,4 +185,58 @@ describe("StrikeLadder", () => {
     render(<StrikeLadder rows={[row(300_000_000)]} lastClose={null} />);
     expect(screen.queryByTestId("last-close-marker")).not.toBeInTheDocument();
   });
+
+  it("draws the current-price marker positioned among the strikes", () => {
+    // Strikes $300 and $320 (shown $320, $300); current $311.50 → between them.
+    render(
+      <StrikeLadder
+        rows={[row(300_000_000), row(320_000_000)]}
+        currentPrice={311.5}
+      />
+    );
+    const marker = screen.getByTestId("current-price-marker");
+    expect(marker).toHaveTextContent(/current/i);
+    expect(marker).toHaveTextContent("$311.50");
+
+    const ids = Array.from(
+      document.querySelectorAll(
+        "[data-testid^='ladder-row-'], [data-testid='current-price-marker']"
+      )
+    ).map((el) => el.getAttribute("data-testid"));
+    expect(ids).toEqual([
+      "ladder-row-320000000",
+      "current-price-marker",
+      "ladder-row-300000000",
+    ]);
+  });
+
+  it("omits the current-price marker when currentPrice is null", () => {
+    render(<StrikeLadder rows={[row(300_000_000)]} currentPrice={null} />);
+    expect(
+      screen.queryByTestId("current-price-marker")
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows both markers, current above last close when current is higher", () => {
+    // Strikes $300 / $320 (descending $320, $300). last close $305, current $315.
+    // Both fall between the two strikes; higher price (current) renders first.
+    render(
+      <StrikeLadder
+        rows={[row(300_000_000), row(320_000_000)]}
+        lastClose={305}
+        currentPrice={315}
+      />
+    );
+    const ids = Array.from(
+      document.querySelectorAll(
+        "[data-testid^='ladder-row-'], [data-testid='current-price-marker'], [data-testid='last-close-marker']"
+      )
+    ).map((el) => el.getAttribute("data-testid"));
+    expect(ids).toEqual([
+      "ladder-row-320000000",
+      "current-price-marker",
+      "last-close-marker",
+      "ladder-row-300000000",
+    ]);
+  });
 });
