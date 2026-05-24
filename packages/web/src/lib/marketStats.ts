@@ -3,6 +3,7 @@ import {
   dualBook,
   Outcome,
   PRICE_SCALE,
+  tickerToSymbol,
   type BookView,
   type OrderBookAccount,
   type Ticker,
@@ -398,6 +399,61 @@ export function activitySummary(views: TickerView[]): ActivitySummary {
     }
   }
   return { openInterest, openMarkets, stockCount, tradingDay };
+}
+
+// --- Home page: "recent wins" — the settled-market results feed ---
+
+/**
+ * One settled market's result, as the home page's "recent wins" feed shows it: the question
+ * that was decided, the price it settled at, which side won, and how much collateral was at
+ * stake. Pure view-model — derived from already-discovered markets, no extra RPC.
+ */
+export interface RecentWin {
+  /** The settled market's address (stable React key + deep link). */
+  address: string;
+  symbol: string;
+  /** Strike the question was set at (USDC base units, 6dp). */
+  strike: BN;
+  /** The official closing price the market settled to (USDC base units), or null if absent. */
+  settlementPrice: BN | null;
+  /** Which side paid out. Always Yes/No here (Unsettled markets are filtered out). */
+  outcome: Outcome;
+  /** Collateral that was locked = $ paid out to the winning side (USDC base units). */
+  payout: BN;
+  /** Settlement instant (unix seconds, BN) — the day this was decided, for ordering/labels. */
+  tradingDay: BN;
+}
+
+/**
+ * The home page's "recent wins": every settled market, newest day first, as a results feed —
+ * "NVDA closed $1,182, Yes won". Reuses the same discovered markets as the rest of the page
+ * (the `useMarkets` poll already returns settled markets, which persist on-chain), so this
+ * costs **no** extra RPC. Markets with no minted pairs (nothing was ever at stake) are dropped
+ * — they're not a "win" anyone cared about. Ties on the same day break to the bigger payout.
+ *
+ * Returns up to `count` results; fewer when the board has settled less than that.
+ */
+export function recentWins(
+  markets: DiscoveredMarket[],
+  count = 6
+): RecentWin[] {
+  const wins: RecentWin[] = [];
+  for (const m of markets) {
+    if (m.state !== "settled") continue;
+    if (m.outcome === Outcome.Unsettled) continue;
+    if (m.pairsMinted.isZero()) continue;
+    wins.push({
+      address: m.address.toBase58(),
+      symbol: tickerToSymbol(m.ticker),
+      strike: m.strike,
+      settlementPrice: m.settlementPrice,
+      outcome: m.outcome,
+      payout: m.pairsMinted,
+      tradingDay: m.tradingDay,
+    });
+  }
+  wins.sort((a, b) => b.tradingDay.cmp(a.tradingDay) || b.payout.cmp(a.payout));
+  return wins.slice(0, count);
 }
 
 // --- Markets board: one sortable row per stock, with the live price joined in ---

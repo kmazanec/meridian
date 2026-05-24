@@ -1,8 +1,13 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { formatProbability, formatUsdc } from "@/lib/format";
+import { Outcome } from "@meridian/sdk";
+import { formatProbability, formatUsdc, formatTradingDay } from "@/lib/format";
 import { impliedComplement } from "@/lib/market-math";
-import type { ActivitySummary, FeaturedCall } from "@/lib/marketStats";
+import type {
+  ActivitySummary,
+  FeaturedCall,
+  RecentWin,
+} from "@/lib/marketStats";
 import { Price, Button, cx } from "@/components/ui";
 import { MeridianMark } from "@/components/Logo";
 import { Countdown } from "@/components/trade/Countdown";
@@ -10,19 +15,23 @@ import { Countdown } from "@/components/trade/Countdown";
 /**
  * The home page. Bet-centric, not a price grid: a hero, a live activity bar (scale +
  * liveness), then "Today's closest calls" — a curated set of the nearest-the-money markets
- * phrased as real questions with their live odds — and a short "why Meridian" explainer.
+ * phrased as real questions with their live odds. Below the fold, two always-on sections keep
+ * the page alive even when the board is closed: a "Recent wins" results feed of settled markets
+ * and a visual "How it works" flow, capped by the "Why Meridian" differentiators.
  *
  * Presentational: the connect control is injected (so it renders in tests without the wallet
- * provider) and all market data arrives pre-derived as {@link FeaturedCall}s + an
- * {@link ActivitySummary}.
+ * provider) and all market data arrives pre-derived as {@link FeaturedCall}s, {@link RecentWin}s,
+ * and an {@link ActivitySummary}.
  */
 export function LandingView({
   featured,
   activity,
+  wins,
   connect,
 }: {
   featured: FeaturedCall[];
   activity: ActivitySummary;
+  wins: RecentWin[];
   connect: ReactNode;
 }) {
   return (
@@ -83,6 +92,12 @@ export function LandingView({
           </div>
         )}
       </section>
+
+      {/* Recent wins — settled results, on-chain. Alive even when the board is closed. */}
+      <RecentWins wins={wins} />
+
+      {/* How it works — the lifecycle as a visual flow, for newcomers. */}
+      <HowItWorks />
 
       {/* Why Meridian — the differentiators, sharpened and numbered. */}
       <section>
@@ -243,6 +258,256 @@ function FeaturedCard({ call }: { call: FeaturedCall }) {
         )}
       </div>
     </Link>
+  );
+}
+
+/**
+ * "Recent wins": the settled-market results feed. Always rendered — when nothing has settled
+ * yet it shows an inviting placeholder rather than vanishing, so the page never reads as dead.
+ * Each row states the question that was decided, the price it closed at, and which side paid.
+ */
+function RecentWins({ wins }: { wins: RecentWin[] }) {
+  return (
+    <section data-testid="recent-wins">
+      <div className="mb-4 flex items-baseline justify-between">
+        <h2 className="font-serif text-2xl tracking-tight text-fg">
+          Recent wins
+        </h2>
+        <span className="text-xs uppercase tracking-wide text-fg-faint">
+          Settled on-chain
+        </span>
+      </div>
+      {wins.length === 0 ? (
+        <div className="panel py-12 text-center" data-testid="no-wins">
+          <p className="text-fg-dim">No markets have settled yet.</p>
+          <p className="mt-1 text-sm text-fg-faint">
+            Results land here the instant the 4:00 PM bell rings.
+          </p>
+        </div>
+      ) : (
+        <div className="panel divide-y divide-line-soft p-0">
+          {wins.map((win) => (
+            <WinRow key={win.address} win={win} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** One settled result: SYMBOL · the question · the close · the winning side · the margin. */
+function WinRow({ win }: { win: RecentWin }) {
+  const yesWon = win.outcome === Outcome.YesWins;
+  const strikeLabel = formatUsdc(win.strike, 0);
+  const closeLabel =
+    win.settlementPrice != null ? formatUsdc(win.settlementPrice) : null;
+  // The margin — how far the close beat or missed the strike — is the row's drama, and it's
+  // meaningful at any scale (unlike the pot, which is ~$0 on a thin devnet). Yes wins on a
+  // clear (close ≥ strike), No wins on a miss; sign of (close − strike) agrees with the outcome.
+  const marginUsdc =
+    win.settlementPrice != null ? win.settlementPrice.sub(win.strike) : null;
+  return (
+    <Link
+      href={`/trade/${win.symbol}`}
+      className="flex items-center gap-4 px-5 py-3.5 transition-colors first:rounded-t-panel last:rounded-b-panel hover:bg-panel-2/60"
+      data-testid={`win-${win.address}`}
+    >
+      {/* Winning-side pill — the verdict, color-coded teal/terracotta. */}
+      <span
+        className={cx(
+          "stat-mono w-12 shrink-0 rounded-md border py-1 text-center text-xs uppercase tracking-wide",
+          yesWon
+            ? "border-yes/30 bg-yes/10 text-yes"
+            : "border-no/30 bg-no/10 text-no"
+        )}
+      >
+        {yesWon ? "Yes" : "No"}
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm text-fg">
+          <span className="font-serif tracking-tight">{win.symbol}</span>{" "}
+          <span className="text-fg-dim">
+            closed{" "}
+            {closeLabel ? (
+              <span className="stat-mono text-fg">{closeLabel}</span>
+            ) : (
+              "—"
+            )}{" "}
+            vs {strikeLabel}
+          </span>
+        </p>
+        <p className="mt-0.5 text-[0.7rem] text-fg-faint">
+          {formatTradingDay(win.tradingDay)} ·{" "}
+          <span className={yesWon ? "text-yes" : "text-no"}>
+            {yesWon ? "Yes" : "No"}
+          </span>{" "}
+          paid out
+        </p>
+      </div>
+
+      <div className="shrink-0 text-right">
+        {marginUsdc != null ? (
+          <>
+            <div
+              className={cx(
+                "stat-mono text-sm",
+                yesWon ? "text-yes" : "text-no"
+              )}
+            >
+              {yesWon ? "+" : "−"}
+              {formatUsdc(marginUsdc.abs())}
+            </div>
+            <div className="text-[0.65rem] uppercase tracking-wide text-fg-faint">
+              {yesWon ? "cleared by" : "missed by"}
+            </div>
+          </>
+        ) : (
+          <div className="stat-mono text-sm text-fg-faint">—</div>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+/** One numbered step in the "how it works" flow. */
+function FlowStep({
+  n,
+  title,
+  body,
+  icon,
+}: {
+  n: string;
+  title: string;
+  body: ReactNode;
+  icon: ReactNode;
+}) {
+  return (
+    <li className="panel relative flex-1 p-5">
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-ink-2 text-accent">
+          {icon}
+        </span>
+        <span className="stat-mono text-xs text-fg-faint">{n}</span>
+      </div>
+      <h3 className="mt-3 font-serif text-base text-fg">{title}</h3>
+      <p className="mt-1.5 text-sm text-fg-dim">{body}</p>
+    </li>
+  );
+}
+
+/**
+ * "How it works": the contract lifecycle as a four-step flow — pick a side, pay the price,
+ * the bell rings, it auto-settles. Laid out as a connected stepper on desktop (the gold
+ * connector line traces the meridian motif: price crossing the close), stacked on mobile.
+ */
+function HowItWorks() {
+  return (
+    <section data-testid="how-it-works">
+      <div className="mb-4">
+        <h2 className="font-serif text-2xl tracking-tight text-fg">
+          How it works
+        </h2>
+        <p className="mt-1 text-sm text-fg-dim">
+          One trading day, start to finish — no overnight risk, no human in the
+          loop.
+        </p>
+      </div>
+
+      <ol className="relative grid grid-cols-1 gap-4 md:grid-cols-4">
+        {/* The connector: a faint gold rule the steps sit on (desktop only). */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-[12.5%] top-[2.6rem] hidden h-px bg-gradient-to-r from-transparent via-accent/30 to-transparent md:block"
+        />
+        <FlowStep
+          n="01"
+          title="Pick a side"
+          icon={<IconSides />}
+          body={
+            <>
+              Choose a daily question and take{" "}
+              <span className="text-yes">Yes</span> or{" "}
+              <span className="text-no">No</span> on where a stock closes.
+            </>
+          }
+        />
+        <FlowStep
+          n="02"
+          title="Pay the price"
+          icon={<IconCoin />}
+          body={
+            <>
+              The price <em className="not-italic text-fg">is</em> the odds —
+              pay it, and you hold a contract that wins{" "}
+              <Price tone="usdc">$1.00</Price>.
+            </>
+          }
+        />
+        <FlowStep
+          n="03"
+          title="The bell rings"
+          icon={<IconBell />}
+          body="At 4:00 PM ET the official closing price is read straight from an on-chain oracle."
+        />
+        <FlowStep
+          n="04"
+          title="Auto-settle"
+          icon={<MeridianMark size={18} />}
+          body="Winners redeem $1.00 each, instantly. No proposer, no dispute window, no waiting."
+        />
+      </ol>
+    </section>
+  );
+}
+
+/* --- Inline step icons (stroke = currentColor, gold via the badge). --- */
+
+function IconSides() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 3v18M5 8l-2 4 2 4M19 8l2 4-2 4"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconCoin() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M12 8v8M9.5 9.5h3.2a1.3 1.3 0 010 2.6H9.5h3.5a1.3 1.3 0 010 2.6H9.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconBell() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M6 16V11a6 6 0 1112 0v5l1.5 2H4.5L6 16z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M10 20a2 2 0 004 0"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 

@@ -10,6 +10,7 @@ import {
   buildTickerView,
   featuredCalls,
   activitySummary,
+  recentWins,
   type TickerView,
 } from "@/lib/marketStats";
 import { LandingView } from "@/components/landing/LandingView";
@@ -68,10 +69,15 @@ export default function HomePage() {
   );
   const activity = useMemo(() => activitySummary(views), [views]);
 
+  // Recent settled results, straight off the same shared markets poll (settled markets persist
+  // on-chain), so the "recent wins" feed adds no RPC of its own.
+  const wins = useMemo(() => recentWins(markets ?? [], 6), [markets]);
+
   return (
     <LandingView
       featured={featured}
       activity={activity}
+      wins={wins}
       connect={<WalletMultiButton />}
     />
   );

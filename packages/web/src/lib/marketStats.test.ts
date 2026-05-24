@@ -21,6 +21,7 @@ import {
   nearestTheMoneyRow,
   featuredCalls,
   activitySummary,
+  recentWins,
   buildBoardRow,
   sortBoardRows,
   type BookMap,
@@ -391,6 +392,69 @@ describe("activitySummary", () => {
     expect(sum.openMarkets).toBe(3);
     expect(sum.stockCount).toBe(2); // TSLA has no open markets
     expect(sum.tradingDay).not.toBeNull();
+  });
+});
+
+describe("recentWins", () => {
+  const ob = () => PublicKey.unique();
+
+  it("keeps only settled markets with a real outcome and a stake, newest first", () => {
+    const open = market({ strike: 300_000_000, orderBook: ob() });
+    const noStake = {
+      ...market({
+        strike: 310_000_000,
+        state: "settled",
+        outcome: Outcome.YesWins,
+        orderBook: ob(),
+        pairsMinted: 0,
+      }),
+    };
+    const day1 = {
+      ...market({
+        ticker: Ticker.Tsla,
+        strike: 300_000_000,
+        state: "settled",
+        outcome: Outcome.YesWins,
+        orderBook: ob(),
+        pairsMinted: 1_000_000,
+        settlementPrice: 312_400_000,
+      }),
+      tradingDay: new BN(1000),
+    };
+    const day2 = {
+      ...market({
+        ticker: Ticker.Aapl,
+        strike: 210_000_000,
+        state: "settled",
+        outcome: Outcome.NoWins,
+        orderBook: ob(),
+        pairsMinted: 5_000_000,
+        settlementPrice: 205_000_000,
+      }),
+      tradingDay: new BN(2000),
+    };
+
+    const wins = recentWins([open, noStake, day1, day2]);
+    // Open + zero-stake markets are dropped; newest settlement day leads.
+    expect(wins.map((w) => w.symbol)).toEqual(["AAPL", "TSLA"]);
+    expect(wins[0].outcome).toBe(Outcome.NoWins);
+    expect(wins[0].settlementPrice?.toNumber()).toBe(205_000_000);
+    expect(wins[0].payout.toNumber()).toBe(5_000_000);
+  });
+
+  it("respects the count cap", () => {
+    const settled = Array.from({ length: 5 }, (_, i) => ({
+      ...market({
+        strike: 300_000_000,
+        state: "settled",
+        outcome: Outcome.YesWins,
+        orderBook: ob(),
+        pairsMinted: 1_000_000,
+        settlementPrice: 305_000_000,
+      }),
+      tradingDay: new BN(i + 1),
+    }));
+    expect(recentWins(settled, 3)).toHaveLength(3);
   });
 });
 
