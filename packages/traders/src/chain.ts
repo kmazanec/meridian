@@ -28,6 +28,26 @@ function isRateLimited(err: unknown): boolean {
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * A jittered backoff delay (ms) for a rate-limited retry. The window grows linearly from
+ * `minMs` (attempt 0) toward `maxMs` (attempt ≥3), and the returned delay is a uniform random
+ * pick inside that window. The randomness is the point: it scatters a whole fleet's retries
+ * across the window instead of having them all wake at the same instant and re-collide.
+ * Exported for unit testing.
+ */
+export function rateLimitBackoffMs(
+  attempt: number,
+  minMs: number,
+  maxMs: number
+): number {
+  const lo = Math.min(minMs, maxMs);
+  const hi = Math.max(minMs, maxMs);
+  // Widen the ceiling with each attempt (25% of the span per attempt, capped at hi) so later
+  // retries can wait longer, while the floor stays at `lo` to keep the jitter window wide.
+  const ceiling = Math.min(hi, lo + (hi - lo) * (attempt * 0.25 + 0.25));
+  return Math.round(lo + Math.random() * (ceiling - lo));
+}
+
 /** Minimal Anchor `Wallet` around a Keypair (matches the automation service's shape). */
 function keypairWallet(kp: Keypair) {
   return {
@@ -68,16 +88,30 @@ export class BotChain {
 
   /**
    * Sign (with the bot wallet + any extra signers) and confirm one transaction. Retries a
-   * few times on 429 rate-limiting with exponential backoff; other errors throw
-   * immediately so a real program error (insufficient funds, bad order) surfaces fast.
+   * few times on 429 rate-limiting; other errors throw immediately so a real program error
+   * (insufficient funds, bad order) surfaces fast.
+   *
+   * The backoff is deliberately long AND jittered. On the shared devnet endpoint a whole fleet
+   * tends to hit the limit at once; a short, fixed backoff just has every bot retry in lockstep
+   * and re-trigger the limit (a thundering herd). So each 429 waits a *random* delay drawn from
+   * a widening window — by default ~10s on the first retry up to ~30s — which both gives the
+   * endpoint room and spreads the fleet's retries across time so they stop colliding. Tune via
+   * {@link backoffMinMs}/{@link backoffMaxMs} (per-attempt window grows linearly to the max).
    */
   async send(
     instructions: TransactionInstruction[],
     extraSigners: Keypair[] = [],
-    opts: { retries?: number; baseDelayMs?: number } = {}
+    opts: {
+      retries?: number;
+      /** Lower bound of the first retry's wait window (ms). Default 10000. */
+      backoffMinMs?: number;
+      /** Upper bound the wait window grows to on later retries (ms). Default 30000. */
+      backoffMaxMs?: number;
+    } = {}
   ): Promise<string> {
     const retries = opts.retries ?? 4;
-    const baseDelayMs = opts.baseDelayMs ?? 800;
+    const backoffMinMs = opts.backoffMinMs ?? 10_000;
+    const backoffMaxMs = opts.backoffMaxMs ?? 30_000;
     let lastErr: unknown;
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
@@ -90,7 +124,7 @@ export class BotChain {
       } catch (err) {
         lastErr = err;
         if (!isRateLimited(err) || attempt === retries) throw err;
-        await sleep(baseDelayMs * 2 ** attempt);
+        await sleep(rateLimitBackoffMs(attempt, backoffMinMs, backoffMaxMs));
       }
     }
     throw lastErr;

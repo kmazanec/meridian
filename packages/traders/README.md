@@ -131,6 +131,26 @@ Each bot runs as its own OS process, so the fleet trades **concurrently** and on
 doesn't take down the others. Output goes to `packages/traders/logs/<name>.log`; PIDs are tracked
 in `packages/traders/logs/bots.pids`.
 
+### RPC rate limits (devnet)
+
+The public devnet endpoint (`api.devnet.solana.com`) is aggressively rate-limited, and a whole
+fleet scanning + trading against it will draw HTTP 429s — most from the `getProgramAccounts`
+reads each bot does per tick. The fleet mitigates this two ways:
+
+- **Staggered start.** Each bot delays its first tick by a random `[0, intervalSec)`, so the bots
+  spawned together by `make bots` don't all fire their first read burst at the same instant
+  (you'll see `staggering first tick by Ns` in each log).
+- **Long, jittered backoff on 429.** A rate-limited transaction retries after a *random* delay —
+  ~10s on the first retry, widening toward ~30s on later ones. The randomness matters: a short,
+  fixed backoff just has the whole fleet retry in lockstep and re-trigger the limit. Tune the
+  window with the `backoffMinMs` / `backoffMaxMs` options on `BotChain.send` (defaults 10000 /
+  30000).
+
+These reduce collisions a lot, but the **most effective fix is a dedicated RPC**: point `RPC_URL`
+at your own provider (Helius, QuickNode, Triton — all have free tiers) instead of the shared
+public endpoint, and the 429s mostly disappear. Locally, run against your validator (no limits at
+all).
+
 ### Closing the day
 
 When the (compressed) trading day ends, settle the markets at the **synthetic close** the bots

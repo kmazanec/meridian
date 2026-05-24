@@ -100,6 +100,17 @@ export async function runBot(
     usdcMint: ctx.usdcMint.toBase58(),
   });
 
+  // Stagger the fleet's first tick. `make bots` spawns every bot within the same second, so
+  // without this they all fire their first round of getProgramAccounts reads simultaneously —
+  // the chief source of the shared endpoint's 429s. A random delay in [0, intervalSec) spreads
+  // the fleet across the tick window up front; subsequent ticks stay spread because each bot's
+  // work takes a different amount of time. Skipped when aborted before we even start.
+  if (!signal?.aborted) {
+    const startupJitterMs = Math.random() * bot.intervalSec * 1000;
+    log.info(`staggering first tick by ${Math.round(startupJitterMs / 1000)}s`);
+    await sleep(startupJitterMs);
+  }
+
   let tick = 0;
   while (!signal?.aborted) {
     tick += 1;
