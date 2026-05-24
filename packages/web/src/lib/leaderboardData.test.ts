@@ -59,9 +59,7 @@ describe("topHolders", () => {
       }),
       getMultipleAccountsInfo: async (addrs: PublicKey[]) =>
         // acctZero was filtered before this call; the remaining three are A, B, missing.
-        addrs.map((a) =>
-          a.equals(acctMissing) ? null : ({} as never)
-        ),
+        addrs.map((a) => (a.equals(acctMissing) ? null : ({} as never))),
     });
 
     return topHolders(connection, pk(99)).then((holders) => {

@@ -28,7 +28,11 @@ export function MergedBookView({ view }: { view: BookView }) {
   const spread = bestBid && bestAsk ? bestAsk.sub(bestBid) : null;
 
   return (
-    <div className="panel p-4" aria-label="Order book" data-testid="merged-book">
+    <div
+      className="panel p-4"
+      aria-label="Order book"
+      data-testid="merged-book"
+    >
       <div className="mb-3 font-mono text-sm uppercase tracking-wide text-fg-dim">
         The book
       </div>
@@ -67,7 +71,10 @@ function Side({
 }) {
   if (levels.length === 0) {
     return (
-      <div className="py-2 text-center text-xs text-fg-faint" data-testid={`side-${kind}`}>
+      <div
+        className="py-2 text-center text-xs text-fg-faint"
+        data-testid={`side-${kind}`}
+      >
         {empty}
       </div>
     );

@@ -59,7 +59,10 @@ export function parseIntraday(json: unknown): IntradayPayload {
   const points: IntradayPoint[] = [];
   for (const row of obj.points) {
     if (!row || typeof row !== "object") continue;
-    const { timestamp, close } = row as { timestamp?: unknown; close?: unknown };
+    const { timestamp, close } = row as {
+      timestamp?: unknown;
+      close?: unknown;
+    };
     if (typeof timestamp !== "number" || !Number.isFinite(timestamp)) continue;
     if (typeof close !== "number" || !Number.isFinite(close)) continue;
     points.push({ timestamp, close });

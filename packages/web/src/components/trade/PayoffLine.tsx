@@ -59,8 +59,8 @@ export function PayoffLine({
       </div>
       <p className="mt-3 text-xs text-fg-faint">
         Each winning {symbol} token redeems for{" "}
-        <span className="font-mono text-usdc">$1.00</span> at the close — Yes + No
-        always equals <span className="font-mono text-fg-dim">$1.00</span>.
+        <span className="font-mono text-usdc">$1.00</span> at the close — Yes +
+        No always equals <span className="font-mono text-fg-dim">$1.00</span>.
       </p>
     </div>
   );

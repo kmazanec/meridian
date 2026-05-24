@@ -5,10 +5,7 @@ import { ata, fetchMarket } from "@meridian/sdk";
 import type { DiscoveredMarket } from "./discovery";
 import type { BookMap } from "./marketStats";
 import { yesMarkFor } from "./marketStats";
-import type {
-  LeaderboardInputs,
-  MarketHolding,
-} from "./leaderboard";
+import type { LeaderboardInputs, MarketHolding } from "./leaderboard";
 
 /**
  * RPC discovery for the admin leaderboard — the impure half, kept out of leaderboard.ts so the
@@ -31,8 +28,12 @@ const MAX_MULTI = 100;
 export async function getMultipleAccountsChunked(
   connection: Connection,
   keys: PublicKey[]
-): Promise<(Awaited<ReturnType<Connection["getMultipleAccountsInfo"]>>[number])[]> {
-  const out: (Awaited<ReturnType<Connection["getMultipleAccountsInfo"]>>[number])[] = [];
+): Promise<
+  Awaited<ReturnType<Connection["getMultipleAccountsInfo"]>>[number][]
+> {
+  const out: Awaited<
+    ReturnType<Connection["getMultipleAccountsInfo"]>
+  >[number][] = [];
   for (let i = 0; i < keys.length; i += MAX_MULTI) {
     const batch = keys.slice(i, i + MAX_MULTI);
     out.push(...(await connection.getMultipleAccountsInfo(batch)));
@@ -56,7 +57,11 @@ export async function marketMints(
   );
   markets.forEach((m, i) => {
     const acc = fetched[i];
-    if (acc) out.set(m.address.toBase58(), { yesMint: acc.yesMint, noMint: acc.noMint });
+    if (acc)
+      out.set(m.address.toBase58(), {
+        yesMint: acc.yesMint,
+        noMint: acc.noMint,
+      });
   });
   return out;
 }
@@ -168,9 +173,17 @@ export async function loadLeaderboardInputs(opts: {
       topHolders(connection, mi.noMint),
     ]);
     for (const h of yes)
-      addHolding(h.owner, { market: m.address.toBase58(), side: "yes", amount: h.amount });
+      addHolding(h.owner, {
+        market: m.address.toBase58(),
+        side: "yes",
+        amount: h.amount,
+      });
     for (const h of no)
-      addHolding(h.owner, { market: m.address.toBase58(), side: "no", amount: h.amount });
+      addHolding(h.owner, {
+        market: m.address.toBase58(),
+        side: "no",
+        amount: h.amount,
+      });
   }
 
   // Order owners also count (a wallet may have only resting orders, no token holdings).
@@ -211,7 +224,15 @@ export async function loadMarketHolders(opts: {
     topHolders(connection, acc.noMint),
   ]);
   return [
-    ...yes.map((h) => ({ owner: h.owner, side: "yes" as const, amount: h.amount })),
-    ...no.map((h) => ({ owner: h.owner, side: "no" as const, amount: h.amount })),
+    ...yes.map((h) => ({
+      owner: h.owner,
+      side: "yes" as const,
+      amount: h.amount,
+    })),
+    ...no.map((h) => ({
+      owner: h.owner,
+      side: "no" as const,
+      amount: h.amount,
+    })),
   ];
 }

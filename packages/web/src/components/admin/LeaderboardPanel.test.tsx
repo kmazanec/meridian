@@ -30,7 +30,10 @@ vi.mock("./MarketDrilldown", () => ({
 import { LeaderboardPanel } from "./LeaderboardPanel";
 
 const pkStr = (n: number) =>
-  Array(43).fill(String(n % 10)).join("").slice(0, 44);
+  Array(43)
+    .fill(String(n % 10))
+    .join("")
+    .slice(0, 44);
 
 function row(owner: string, net: number): LeaderboardRow {
   return {

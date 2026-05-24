@@ -42,7 +42,11 @@ export interface ChartLayout {
   /** y-axis label values (price) with their y pixel positions. */
   ticks: Array<{ value: number; y: number }>;
   /** x-axis labels with their x pixel positions and text anchor (avoids edge clipping). */
-  xLabels: Array<{ label: string; x: number; anchor: "start" | "middle" | "end" }>;
+  xLabels: Array<{
+    label: string;
+    x: number;
+    anchor: "start" | "middle" | "end";
+  }>;
 }
 
 /**
@@ -99,7 +103,11 @@ export function chartLayout(
     label: points[idx].label,
     x: pts[idx].x,
     anchor:
-      idx === 0 ? ("start" as const) : idx === points.length - 1 ? ("end" as const) : ("middle" as const),
+      idx === 0
+        ? ("start" as const)
+        : idx === points.length - 1
+        ? ("end" as const)
+        : ("middle" as const),
   }));
 
   return { pts, line, area, min, max, ticks, xLabels };
@@ -293,9 +301,7 @@ export function PriceChart({
           data-testid="price-chart-tooltip"
         >
           <div className="text-fg-faint">{hoverPt.point.label}</div>
-          <div className="stat-mono text-fg">
-            {fmtUsd(hoverPt.point.close)}
-          </div>
+          <div className="stat-mono text-fg">{fmtUsd(hoverPt.point.close)}</div>
           {hoverPt.point.open != null && (
             <div className="stat-mono text-fg-dim">
               Open {fmtUsd(hoverPt.point.open)}

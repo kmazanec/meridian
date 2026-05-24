@@ -206,8 +206,8 @@ function FeaturedCard({ call }: { call: FeaturedCall }) {
       </div>
 
       <p className="mt-3 text-sm text-fg">
-        Will <span className="font-medium">{call.symbol}</span> close at or above{" "}
-        <span className="font-medium">{strikeLabel}</span> today?
+        Will <span className="font-medium">{call.symbol}</span> close at or
+        above <span className="font-medium">{strikeLabel}</span> today?
       </p>
 
       <div className="mt-4 flex gap-2">

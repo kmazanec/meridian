@@ -23,13 +23,11 @@ export function SettledMarketPanel({
 
   // Settlement price is the stock's close (USDC base units, 6dp) — the same scale as strike.
   const closeLabel =
-    market.settlementPrice != null ? formatUsdc(market.settlementPrice, 2) : null;
+    market.settlementPrice != null
+      ? formatUsdc(market.settlementPrice, 2)
+      : null;
 
-  const verdict = yesWon
-    ? "Yes won"
-    : noWon
-    ? "No won"
-    : "Settled";
+  const verdict = yesWon ? "Yes won" : noWon ? "No won" : "Settled";
   const explanation = yesWon
     ? `${symbol} closed at or above ${strikeLabel}.`
     : noWon
@@ -74,7 +72,10 @@ export function SettledMarketPanel({
           <span className="text-xs uppercase tracking-wide text-fg-faint">
             Closed at
           </span>
-          <span className="stat-mono text-lg text-fg" data-testid="settled-close">
+          <span
+            className="stat-mono text-lg text-fg"
+            data-testid="settled-close"
+          >
             {closeLabel}
           </span>
         </div>

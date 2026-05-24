@@ -127,7 +127,10 @@ describe("discovery", () => {
 
       expect(groups.map((g) => g.dayKey)).toEqual(["2024-05-24", "2024-05-23"]); // newest first
       // Day 2: AAPL before NVDA (ticker order).
-      expect(groups[0].markets.map((m) => m.ticker)).toEqual([Ticker.Aapl, Ticker.Nvda]);
+      expect(groups[0].markets.map((m) => m.ticker)).toEqual([
+        Ticker.Aapl,
+        Ticker.Nvda,
+      ]);
       // Day 1: same ticker, ascending strike.
       expect(groups[1].markets.map((m) => m.strike.toNumber())).toEqual([
         180_000_000, 190_000_000,
@@ -137,7 +140,13 @@ describe("discovery", () => {
     it("keeps same ticker+strike on different days in separate groups", async () => {
       // The exact bug from the screenshot: AAPL $280 appears on two days.
       const program = programWith([
-        rawMarket({ ticker: "aapl", strike: 280_000_000, tradingDay: DAY1, state: "settled", outcome: "yesWins" }),
+        rawMarket({
+          ticker: "aapl",
+          strike: 280_000_000,
+          tradingDay: DAY1,
+          state: "settled",
+          outcome: "yesWins",
+        }),
         rawMarket({ ticker: "aapl", strike: 280_000_000, tradingDay: DAY2 }),
       ]);
       const markets = await discoverMarkets(program);

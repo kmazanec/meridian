@@ -91,7 +91,10 @@ export function dailyResults(
   tradingDay: BN
 ): DailyResults {
   // Aggregate fills by market+side: total size acquired and total cost paid.
-  const byPos = new Map<string, { market: string; side: Side; size: BN; cost: BN }>();
+  const byPos = new Map<
+    string,
+    { market: string; side: Side; size: BN; cost: BN }
+  >();
   for (const f of fills) {
     const info = settledMarkets.get(f.market);
     if (!info) continue; // not a settled market we know about

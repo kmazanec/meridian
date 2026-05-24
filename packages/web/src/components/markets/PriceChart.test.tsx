@@ -32,7 +32,10 @@ describe("chartLayout", () => {
   it("emits evenly-spaced x labels with end anchors inset", () => {
     const layout = chartLayout(series, 700, 160, 4, 3)!;
     expect(layout.xLabels).toHaveLength(3);
-    expect(layout.xLabels[0]).toMatchObject({ label: "May 1", anchor: "start" });
+    expect(layout.xLabels[0]).toMatchObject({
+      label: "May 1",
+      anchor: "start",
+    });
     expect(layout.xLabels[2]).toMatchObject({ label: "May 3", anchor: "end" });
     // Middle labels are centered.
     expect(layout.xLabels[1].anchor).toBe("middle");

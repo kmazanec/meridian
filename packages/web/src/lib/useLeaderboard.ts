@@ -23,15 +23,16 @@ import type { DiscoveredMarket } from "./discovery";
  */
 const LEADERBOARD_POLL_MS = 30_000;
 
-export function useLeaderboard(enabled: boolean): AsyncResource<LeaderboardRow[]> {
+export function useLeaderboard(
+  enabled: boolean
+): AsyncResource<LeaderboardRow[]> {
   const program = useProgram();
   const { connection } = useConnection();
   const { markets, allBooks, config } = useChainData();
   const usdcMint = useUsdcMintFromConfig(config.data);
 
   // Ready only once the shared inputs and the mint have loaded.
-  const ready =
-    enabled && !!markets.data && !!allBooks.data && !!usdcMint;
+  const ready = enabled && !!markets.data && !!allBooks.data && !!usdcMint;
 
   return usePolled<LeaderboardRow[]>(
     async () => {
@@ -69,7 +70,11 @@ export function useMarketDrilldown(
   return usePolled<MarketDrilldownView>(
     async () => {
       const m = market!;
-      const holders = await loadMarketHolders({ program, connection, market: m });
+      const holders = await loadMarketHolders({
+        program,
+        connection,
+        market: m,
+      });
       const book = allBooks.data?.get(m.orderBook.toBase58());
       const yesView = book ? dualBook(book).yes : { bids: [], asks: [] };
       const stats = bookStats(yesView);

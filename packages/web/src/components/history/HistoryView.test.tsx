@@ -26,9 +26,7 @@ describe("HistoryView", () => {
   });
 
   it("shows an error state (not 'no activity') when loading failed", () => {
-    render(
-      <HistoryView entries={[]} connected error={new Error("rpc 410")} />
-    );
+    render(<HistoryView entries={[]} connected error={new Error("rpc 410")} />);
     expect(screen.getByTestId("history-error")).toBeInTheDocument();
     expect(screen.getByText(/couldn't load your history/i)).toBeInTheDocument();
     expect(screen.queryByText(/no activity yet/i)).not.toBeInTheDocument();

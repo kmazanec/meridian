@@ -58,12 +58,21 @@ export function MarketDrilldown({ market }: { market: DiscoveredMarket }) {
           </thead>
           <tbody className="stat-mono">
             {data.holders.map((h, i) => (
-              <tr key={`${h.owner}-${h.side}-${i}`} className="border-t border-line/30">
+              <tr
+                key={`${h.owner}-${h.side}-${i}`}
+                className="border-t border-line/30"
+              >
                 <td className="py-1 pr-2">{shortKey(h.owner)}</td>
-                <td className={`py-1 pr-2 ${h.side === "yes" ? "text-yes" : "text-no"}`}>
+                <td
+                  className={`py-1 pr-2 ${
+                    h.side === "yes" ? "text-yes" : "text-no"
+                  }`}
+                >
                   {h.side.toUpperCase()}
                 </td>
-                <td className="py-1 pr-2 text-right">{formatTokens(h.amount)}</td>
+                <td className="py-1 pr-2 text-right">
+                  {formatTokens(h.amount)}
+                </td>
                 <td className="py-1 pr-2 text-right text-fg">
                   {h.unpriceable ? "—" : formatUsdc(h.value)}
                 </td>

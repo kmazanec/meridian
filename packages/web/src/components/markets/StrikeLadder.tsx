@@ -72,8 +72,9 @@ export function StrikeLadder({
   // marker at the day's settlement price (the same close for all strikes). Settlement prices
   // are USDC base units (6dp) → dollars.
   const allSettled = orderedRows.every((r) => r.state === "settled");
-  const settlementClose = orderedRows.find((r) => r.settlementPrice != null)
-    ?.settlementPrice;
+  const settlementClose = orderedRows.find(
+    (r) => r.settlementPrice != null
+  )?.settlementPrice;
   let sourceMarkers: PriceMarker[];
   if (allSettled) {
     sourceMarkers =

@@ -31,9 +31,13 @@ describe("PayoffLine", () => {
     const no = screen.getByTestId("no-price");
     // Yes price = 0.65; implied probability shown alongside.
     expect(yes.textContent).toContain("$0.65");
-    expect(within(yes.parentElement as HTMLElement).getByText("65%")).toBeInTheDocument();
+    expect(
+      within(yes.parentElement as HTMLElement).getByText("65%")
+    ).toBeInTheDocument();
     // Implied No = 1.00 − 0.65 = 0.35.
     expect(no.textContent).toContain("$0.35");
-    expect(within(no.parentElement as HTMLElement).getByText("35%")).toBeInTheDocument();
+    expect(
+      within(no.parentElement as HTMLElement).getByText("35%")
+    ).toBeInTheDocument();
   });
 });

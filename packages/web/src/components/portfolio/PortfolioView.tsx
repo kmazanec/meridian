@@ -116,7 +116,8 @@ export function PortfolioView({
           <Panel className="py-10 text-center">
             <p className="text-sm text-fg-dim">Nothing settled yet.</p>
             <p className="mt-1 text-xs text-fg-faint">
-              Settled markets and their payouts will appear here after the close.
+              Settled markets and their payouts will appear here after the
+              close.
             </p>
           </Panel>
         ) : (
@@ -186,9 +187,7 @@ function PositionCell({
       <span
         className={cx(
           "rounded px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide",
-          side === "yes"
-            ? "bg-yes/15 text-yes"
-            : "bg-no/15 text-no"
+          side === "yes" ? "bg-yes/15 text-yes" : "bg-no/15 text-no"
         )}
       >
         {side}
@@ -220,7 +219,11 @@ function PositionsTable({ rows }: { rows: OpenRow[] }) {
               className="border-b border-line-soft/60 last:border-0 hover:bg-panel-2/40"
             >
               <td className="px-4 py-3">
-                <PositionCell ticker={r.ticker} strike={r.strike} side={r.side} />
+                <PositionCell
+                  ticker={r.ticker}
+                  strike={r.strike}
+                  side={r.side}
+                />
               </td>
               <td className="stat-mono px-4 py-3 text-right text-fg-dim">
                 {formatTokens(r.amount, 0)}
@@ -235,10 +238,7 @@ function PositionsTable({ rows }: { rows: OpenRow[] }) {
                 {formatUsdc(r.value)}
               </td>
               <td
-                className={cx(
-                  "stat-mono px-4 py-3 text-right",
-                  pnlTone(r.pnl)
-                )}
+                className={cx("stat-mono px-4 py-3 text-right", pnlTone(r.pnl))}
                 data-testid="pnl"
               >
                 {r.pnl === null ? "—" : formatSignedUsdc(r.pnl)}
@@ -324,7 +324,11 @@ function SettledTable({
               className="border-b border-line-soft/60 last:border-0"
             >
               <td className="px-4 py-3">
-                <PositionCell ticker={r.ticker} strike={r.strike} side={r.side} />
+                <PositionCell
+                  ticker={r.ticker}
+                  strike={r.strike}
+                  side={r.side}
+                />
               </td>
               <td className="stat-mono px-4 py-3 text-right text-fg-dim">
                 {formatTokens(r.amount, 0)}

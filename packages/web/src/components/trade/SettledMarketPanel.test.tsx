@@ -34,7 +34,9 @@ describe("SettledMarketPanel", () => {
     render(<SettledMarketPanel ticker={ticker} market={market()} />);
     expect(screen.getByTestId("settled-verdict")).toHaveTextContent(/yes won/i);
     expect(screen.getByTestId("settled-close")).toHaveTextContent("$223.45");
-    expect(screen.getByText(/closed at or above/i)).toHaveTextContent("$220.00");
+    expect(screen.getByText(/closed at or above/i)).toHaveTextContent(
+      "$220.00"
+    );
   });
 
   it("shows the No-won verdict", () => {

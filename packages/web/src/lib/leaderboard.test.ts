@@ -96,7 +96,12 @@ describe("valueOfHolding", () => {
     });
     // yes mark 0.60 → 2 yes tokens worth $1.20; no worth complement 0.40 → $0.80
     expect(
-      valueOfHolding(open, "yes", new BN(2_000_000), new BN(600_000))!.toNumber()
+      valueOfHolding(
+        open,
+        "yes",
+        new BN(2_000_000),
+        new BN(600_000)
+      )!.toNumber()
     ).toBe(1_200_000);
     expect(
       valueOfHolding(open, "no", new BN(2_000_000), new BN(600_000))!.toNumber()
@@ -124,9 +129,27 @@ describe("foldLeaderboard", () => {
     const settled = market({}); // YesWins
     const holdings = new Map<string, MarketHolding[]>([
       // A holds 5 winning YES = $5
-      [OWNER_A, [{ market: MKT_SETTLED.toBase58(), side: "yes", amount: new BN(5_000_000) }]],
+      [
+        OWNER_A,
+        [
+          {
+            market: MKT_SETTLED.toBase58(),
+            side: "yes",
+            amount: new BN(5_000_000),
+          },
+        ],
+      ],
       // B holds 5 losing NO = $0
-      [OWNER_B, [{ market: MKT_SETTLED.toBase58(), side: "no", amount: new BN(5_000_000) }]],
+      [
+        OWNER_B,
+        [
+          {
+            market: MKT_SETTLED.toBase58(),
+            side: "no",
+            amount: new BN(5_000_000),
+          },
+        ],
+      ],
     ]);
     const rows = foldLeaderboard(
       baseInputs({
@@ -151,9 +174,7 @@ describe("foldLeaderboard", () => {
     // A ask: 3 YES tokens on a YesWins market → worth $3
     book.asks.push(order(pk(1), OrderSide.Ask, 600_000, 3_000_000));
     const books = new Map([[OB_SETTLED.toBase58(), book]]) as BookMap;
-    const rows = foldLeaderboard(
-      baseInputs({ markets: [settled], books })
-    );
+    const rows = foldLeaderboard(baseInputs({ markets: [settled], books }));
     const a = rows.find((r) => r.owner === OWNER_A)!;
     expect(a.escrowValue.toNumber()).toBe(5_000_000); // $2 bid + $3 ask
     expect(a.openOrders).toBe(2);
@@ -184,7 +205,16 @@ describe("foldLeaderboard", () => {
         markets: [open],
         ownerUsdc: new Map([[OWNER_A, new BN(7_000_000)]]),
         holdingsByOwner: new Map([
-          [OWNER_A, [{ market: MKT_OPEN.toBase58(), side: "yes", amount: new BN(9_000_000) }]],
+          [
+            OWNER_A,
+            [
+              {
+                market: MKT_OPEN.toBase58(),
+                side: "yes",
+                amount: new BN(9_000_000),
+              },
+            ],
+          ],
         ]),
         yesMarkByMarket: new Map([[MKT_OPEN.toBase58(), null]]),
       })
@@ -196,7 +226,11 @@ describe("foldLeaderboard", () => {
   });
 
   it("folds an owner across multiple markets into one row", () => {
-    const m1 = market({ address: MKT_SETTLED, orderBook: OB_SETTLED, outcome: Outcome.YesWins });
+    const m1 = market({
+      address: MKT_SETTLED,
+      orderBook: OB_SETTLED,
+      outcome: Outcome.YesWins,
+    });
     const m2 = market({
       address: MKT_OPEN,
       orderBook: OB_OPEN,
@@ -210,8 +244,16 @@ describe("foldLeaderboard", () => {
           [
             OWNER_A,
             [
-              { market: MKT_SETTLED.toBase58(), side: "yes", amount: new BN(2_000_000) }, // $2 win
-              { market: MKT_OPEN.toBase58(), side: "no", amount: new BN(4_000_000) }, // $4 win
+              {
+                market: MKT_SETTLED.toBase58(),
+                side: "yes",
+                amount: new BN(2_000_000),
+              }, // $2 win
+              {
+                market: MKT_OPEN.toBase58(),
+                side: "no",
+                amount: new BN(4_000_000),
+              }, // $4 win
             ],
           ],
         ]),
@@ -224,7 +266,11 @@ describe("foldLeaderboard", () => {
 });
 
 describe("foldMarketDrilldown", () => {
-  const book = { bestBid: new BN(500_000), bestAsk: new BN(550_000), restingSize: new BN(7) };
+  const book = {
+    bestBid: new BN(500_000),
+    bestAsk: new BN(550_000),
+    restingSize: new BN(7),
+  };
 
   it("ranks holders by value, values settled winners 1:1 and losers 0", () => {
     const yesWins = market({}); // YesWins
@@ -238,7 +284,9 @@ describe("foldMarketDrilldown", () => {
       null,
       book
     );
-    expect(view.holders.map((h) => h.value.toNumber())).toEqual([5_000_000, 2_000_000, 0]);
+    expect(view.holders.map((h) => h.value.toNumber())).toEqual([
+      5_000_000, 2_000_000, 0,
+    ]);
     expect(view.holders[0].owner).toBe(pk(3).toBase58());
     expect(view.bestBid!.toNumber()).toBe(500_000);
     expect(view.restingSize.toNumber()).toBe(7);

@@ -159,9 +159,13 @@ export function ResultsView({
                     <th className="px-4 py-2.5 text-right font-medium">
                       Wagered
                     </th>
-                    <th className="px-4 py-2.5 text-right font-medium">Earned</th>
+                    <th className="px-4 py-2.5 text-right font-medium">
+                      Earned
+                    </th>
                     <th className="px-4 py-2.5 text-right font-medium">Net</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Record</th>
+                    <th className="px-4 py-2.5 text-right font-medium">
+                      Record
+                    </th>
                   </tr>
                 </thead>
                 <tbody>

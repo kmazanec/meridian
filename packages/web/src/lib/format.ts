@@ -92,15 +92,21 @@ export function shortKey(key: { toBase58: () => string } | string): string {
 
 /** A stable, sortable ET date key for grouping, e.g. `2026-05-23`. */
 export function tradingDayKey(tradingDay: BN | number): string {
-  const ms = (typeof tradingDay === "number" ? tradingDay : tradingDay.toNumber()) * 1000;
+  const ms =
+    (typeof tradingDay === "number" ? tradingDay : tradingDay.toNumber()) *
+    1000;
   // en-CA gives ISO-ish YYYY-MM-DD, which sorts lexicographically = chronologically.
-  return new Date(ms).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  return new Date(ms).toLocaleDateString("en-CA", {
+    timeZone: "America/New_York",
+  });
 }
 
 /** Human label for a trading day, e.g. `Thu, May 23` (ET). */
 export function formatTradingDay(tradingDay: BN | number | null): string {
   if (tradingDay === null) return "—";
-  const ms = (typeof tradingDay === "number" ? tradingDay : tradingDay.toNumber()) * 1000;
+  const ms =
+    (typeof tradingDay === "number" ? tradingDay : tradingDay.toNumber()) *
+    1000;
   return new Date(ms).toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",

@@ -27,7 +27,9 @@ export default function HomePage() {
   // One history fetch per stock (fixed 7 symbols → constant hook count). Reuses the same
   // cached `/api/history` as the Markets page; the markets/books come from shared polls, so
   // the home page adds no order-book RPC fan-out of its own.
-  const histories = TICKER_SYMBOLS.map((symbol) => usePriceHistory(symbol).data);
+  const histories = TICKER_SYMBOLS.map(
+    (symbol) => usePriceHistory(symbol).data
+  );
 
   const views = useMemo<TickerView[]>(() => {
     const grouped = groupByTicker(markets ?? []);
@@ -60,7 +62,10 @@ export default function HomePage() {
     return out;
   }, [histories]);
 
-  const featured = useMemo(() => featuredCalls(views, spots, 3), [views, spots]);
+  const featured = useMemo(
+    () => featuredCalls(views, spots, 3),
+    [views, spots]
+  );
   const activity = useMemo(() => activitySummary(views), [views]);
 
   return (

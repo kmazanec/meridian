@@ -128,7 +128,10 @@ async function main() {
       // Escrowed Yes tokens: worth their settled payout. If the market isn't settled we can't
       // mark them, so count $0 and flag it.
       if (mk && mk.account.state === "settled") {
-        creditEscrow(o.owner, BigInt(payoutFor(mk.account, "yes", o.size).toString()));
+        creditEscrow(
+          o.owner,
+          BigInt(payoutFor(mk.account, "yes", o.size).toString())
+        );
       } else {
         creditEscrow(o.owner, 0n);
         unsettledAskWarnings += 1;
@@ -163,7 +166,10 @@ async function main() {
     }
 
     const usdcBase = BigInt(usdcBal.toString());
-    const esc = escrowByOwner.get(owner.toBase58()) ?? { usdc: 0n, openOrders: 0 };
+    const esc = escrowByOwner.get(owner.toBase58()) ?? {
+      usdc: 0n,
+      openOrders: 0,
+    };
     const escrowBase = esc.usdc;
     const netBase = usdcBase + unredeemedBase + escrowBase;
     const pnlBase = netBase - startBase;
@@ -209,7 +215,9 @@ async function main() {
 
   const money = (n) => (n >= 0 ? "+" : "-") + "$" + Math.abs(n).toFixed(2);
   console.log(
-    `\nMeridian bot results — ${RPC_URL}  (start $${START_USDC.toFixed(0)}/bot, ${settled.length} settled markets)\n`
+    `\nMeridian bot results — ${RPC_URL}  (start $${START_USDC.toFixed(
+      0
+    )}/bot, ${settled.length} settled markets)\n`
   );
   const head = ["#", "bot", "model", "net", "pnl", "pnl%", "in-orders"];
   const widths = [3, 16, 30, 11, 10, 8, 11];

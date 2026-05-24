@@ -119,14 +119,17 @@ async function main() {
         const bal = await fetchBalance(connection, ata(mint, owner));
         if (bal <= 0n) continue;
 
-        const payBase = BigInt(payoutFor(m, side === RedeemSide.Yes ? "yes" : "no", bal).toString());
+        const payBase = BigInt(
+          payoutFor(m, side === RedeemSide.Yes ? "yes" : "no", bal).toString()
+        );
         if (payBase <= 0n) continue; // losing side: tokens worth nothing, leave them be.
 
         const ticker = tickerToSymbol(m.ticker);
         const sideLabel = side === RedeemSide.Yes ? "YES" : "NO";
         const line =
-          `  ${bot.name.padEnd(16)} ${ticker.padEnd(6)} ${sideLabel.padEnd(3)} ` +
-          `$${toUsdc(payBase).toFixed(2)}`;
+          `  ${bot.name.padEnd(16)} ${ticker.padEnd(6)} ${sideLabel.padEnd(
+            3
+          )} ` + `$${toUsdc(payBase).toFixed(2)}`;
 
         if (DRY_RUN) {
           console.log(`${line}  (would redeem)`);
@@ -166,7 +169,9 @@ async function main() {
 
     if (botClaimedBase > 0n) {
       console.log(
-        `  ${bot.name.padEnd(16)} ${" ".repeat(10)} = $${toUsdc(botClaimedBase).toFixed(2)} ${DRY_RUN ? "claimable" : "claimed"}`
+        `  ${bot.name.padEnd(16)} ${" ".repeat(10)} = $${toUsdc(
+          botClaimedBase
+        ).toFixed(2)} ${DRY_RUN ? "claimable" : "claimed"}`
       );
     }
   }

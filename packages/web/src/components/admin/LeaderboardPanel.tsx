@@ -4,7 +4,12 @@ import { useState } from "react";
 import { Outcome, tickerToSymbol } from "@meridian/sdk";
 import { useLeaderboard } from "@/lib/useLeaderboard";
 import { useChainData } from "@/lib/ChainDataProvider";
-import { formatPrice, formatTradingDay, formatUsdc, shortKey } from "@/lib/format";
+import {
+  formatPrice,
+  formatTradingDay,
+  formatUsdc,
+  shortKey,
+} from "@/lib/format";
 import { Panel, Button } from "@/components/ui";
 import { groupByTradingDay } from "@/lib/discovery";
 import { MarketDrilldown } from "./MarketDrilldown";
@@ -96,7 +101,9 @@ function MarketsList() {
                     expanded={expanded === m.address.toBase58()}
                     onToggle={() =>
                       setExpanded((cur) =>
-                        cur === m.address.toBase58() ? null : m.address.toBase58()
+                        cur === m.address.toBase58()
+                          ? null
+                          : m.address.toBase58()
                       )
                     }
                   />
@@ -130,7 +137,9 @@ function MarketRow({
         <span className="font-medium text-fg">
           {tickerToSymbol(m.ticker)} {formatPrice(m.strike)}
         </span>
-        <span className={`ml-auto text-xs ${settled ? "text-fg-dim" : "text-yes"}`}>
+        <span
+          className={`ml-auto text-xs ${settled ? "text-fg-dim" : "text-yes"}`}
+        >
           {settled
             ? m.outcome === Outcome.YesWins
               ? "YES won"
@@ -168,23 +177,37 @@ function LeaderboardTable({ rows }: { rows: LeaderboardRow[] }) {
               <td className="py-1 pr-2">
                 {shortKey(r.owner)}
                 {r.unpriceableCount > 0 && (
-                  <span className="ml-1 text-fg-faint" title="Open positions with no book mark, excluded from net">
+                  <span
+                    className="ml-1 text-fg-faint"
+                    title="Open positions with no book mark, excluded from net"
+                  >
                     *
                   </span>
                 )}
               </td>
-              <td className="py-1 pr-2 text-right text-fg">{formatUsdc(r.net)}</td>
-              <td className="py-1 pr-2 text-right text-usdc">{formatUsdc(r.usdc)}</td>
-              <td className="py-1 pr-2 text-right">{formatUsdc(r.tokenValue)}</td>
-              <td className="py-1 pr-2 text-right">{formatUsdc(r.escrowValue)}</td>
-              <td className="py-1 pr-2 text-right text-fg-dim">{r.openOrders}</td>
+              <td className="py-1 pr-2 text-right text-fg">
+                {formatUsdc(r.net)}
+              </td>
+              <td className="py-1 pr-2 text-right text-usdc">
+                {formatUsdc(r.usdc)}
+              </td>
+              <td className="py-1 pr-2 text-right">
+                {formatUsdc(r.tokenValue)}
+              </td>
+              <td className="py-1 pr-2 text-right">
+                {formatUsdc(r.escrowValue)}
+              </td>
+              <td className="py-1 pr-2 text-right text-fg-dim">
+                {r.openOrders}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
       <p className="mt-3 text-xs text-fg-faint">
         Top 20 holders per market side; long-tail holders excluded.
-        {anyUnpriceable && " * Some open positions had no book mark and are excluded from net worth."}
+        {anyUnpriceable &&
+          " * Some open positions had no book mark and are excluded from net worth."}
       </p>
     </div>
   );

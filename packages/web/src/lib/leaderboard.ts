@@ -118,7 +118,9 @@ function orderEscrowValue(
   }
   // Ask: escrowed Yes tokens worth their Yes-side value.
   const v = valueOfHolding(market, "yes", order.size, yesMark);
-  return v === null ? { value: ZERO, unpriceable: true } : { value: v, unpriceable: false };
+  return v === null
+    ? { value: ZERO, unpriceable: true }
+    : { value: v, unpriceable: false };
 }
 
 /**
@@ -126,7 +128,8 @@ function orderEscrowValue(
  * multiple markets fold into one row.
  */
 export function foldLeaderboard(inputs: LeaderboardInputs): LeaderboardRow[] {
-  const { markets, books, ownerUsdc, holdingsByOwner, yesMarkByMarket } = inputs;
+  const { markets, books, ownerUsdc, holdingsByOwner, yesMarkByMarket } =
+    inputs;
   const marketByAddr = new Map(markets.map((m) => [m.address.toBase58(), m]));
 
   // owner -> accumulating row
@@ -178,7 +181,10 @@ export function foldLeaderboard(inputs: LeaderboardInputs): LeaderboardRow[] {
     const book = books.get(market.orderBook.toBase58());
     if (!book) continue;
     const yesMark = yesMarkByMarket.get(market.address.toBase58()) ?? null;
-    for (const order of [...book.bids, ...book.asks] as OrderBookAccount["bids"]) {
+    for (const order of [
+      ...book.bids,
+      ...book.asks,
+    ] as OrderBookAccount["bids"]) {
       const owner = order.owner.toBase58();
       const r = rowFor(owner);
       const { value, unpriceable } = orderEscrowValue(order, market, yesMark);

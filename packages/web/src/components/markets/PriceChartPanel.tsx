@@ -146,9 +146,7 @@ function TimeframeToggle({
             onClick={() => onChange(o.id)}
             className={cx(
               "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-              active
-                ? "bg-accent/15 text-accent"
-                : "text-fg-dim hover:text-fg"
+              active ? "bg-accent/15 text-accent" : "text-fg-dim hover:text-fg"
             )}
             data-testid={`timeframe-${o.id}`}
           >

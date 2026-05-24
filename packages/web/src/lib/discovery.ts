@@ -166,9 +166,7 @@ export function groupByTradingDay(
   const groups = [...byDay.values()];
   groups.sort((a, b) => b.dayKey.localeCompare(a.dayKey)); // newest day first
   for (const g of groups) {
-    g.markets.sort(
-      (a, b) => a.ticker - b.ticker || a.strike.cmp(b.strike)
-    );
+    g.markets.sort((a, b) => a.ticker - b.ticker || a.strike.cmp(b.strike));
   }
   return groups;
 }

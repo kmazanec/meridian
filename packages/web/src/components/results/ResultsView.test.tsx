@@ -31,7 +31,9 @@ const results: DailyResults = {
   complete: true,
 };
 
-function renderView(over: Partial<React.ComponentProps<typeof ResultsView>> = {}) {
+function renderView(
+  over: Partial<React.ComponentProps<typeof ResultsView>> = {}
+) {
   return render(
     <ResultsView
       results={results}

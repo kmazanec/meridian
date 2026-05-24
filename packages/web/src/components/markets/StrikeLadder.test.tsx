@@ -50,7 +50,9 @@ describe("StrikeLadder", () => {
   });
 
   it("does not render a Spread column (kept narrow; spread lives in the book)", () => {
-    render(<StrikeLadder rows={[row(680_000_000, { spread: new BN(100_000) })]} />);
+    render(
+      <StrikeLadder rows={[row(680_000_000, { spread: new BN(100_000) })]} />
+    );
     const ladder = screen.getByTestId("strike-ladder");
     expect(within(ladder).queryByText("Spread")).not.toBeInTheDocument();
     // The $0.10 spread value must not appear in the row.
@@ -188,10 +190,7 @@ describe("StrikeLadder", () => {
   it("places the marker below all strikes when the close is below every strike", () => {
     // Descending display ($320, $300); close $1 is below the bottom strike → marker last.
     render(
-      <StrikeLadder
-        rows={[row(300_000_000), row(320_000_000)]}
-        lastClose={1}
-      />
+      <StrikeLadder rows={[row(300_000_000), row(320_000_000)]} lastClose={1} />
     );
     const ids = Array.from(
       document.querySelectorAll(
@@ -280,7 +279,9 @@ describe("StrikeLadder", () => {
     expect(marker).toHaveTextContent(/at close/i);
     expect(marker).toHaveTextContent("$311.50");
     expect(screen.queryByTestId("last-close-marker")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("current-price-marker")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("current-price-marker")
+    ).not.toBeInTheDocument();
 
     const ids = Array.from(
       document.querySelectorAll(

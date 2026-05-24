@@ -45,7 +45,11 @@ export default function ResultsPage() {
 
   const results = useMemo(() => {
     if (!publicKey || !tradingDay) return null;
-    return dailyResults(getFills(publicKey.toBase58()), settledMarkets, tradingDay);
+    return dailyResults(
+      getFills(publicKey.toBase58()),
+      settledMarkets,
+      tradingDay
+    );
   }, [publicKey, settledMarkets, tradingDay]);
 
   // Claimable (still-redeemable winnings) from the authoritative on-chain holdings.
