@@ -149,22 +149,25 @@ reads each bot does per tick. The fleet mitigates this two ways:
 These reduce collisions a lot, but the **most effective fix is a dedicated RPC**. The public
 endpoint caps `getProgramAccounts` at ~4/sec across your whole IP (40 per 10s, per-method — see
 [Solana's cluster docs](https://solana.com/docs/references/clusters)), and all the bots share one
-IP, so a gPA-heavy fleet blows past it instantly. A free-tier dedicated endpoint lifts that ceiling
-several-fold. Just point `RPC_URL` at it — the bots read it from the environment:
+IP, so a gPA-heavy fleet blows past it instantly. Point `RPC_URL` at your own endpoint — the bots
+read it from the environment:
 
 ```bash
-# Alchemy — most free throughput (~25 req/s) and the mildest gPA weighting; free WebSockets.
 export RPC_URL="https://solana-devnet.g.alchemy.com/v2/<your-key>"
-
-# QuickNode — no-credit-card free tier (documented), flat per-method metering (gPA not penalized).
-export RPC_URL="https://<your-endpoint>.solana-devnet.quiknode.pro/<your-token>/"
-
 make bots
 ```
 
-For this gPA-heavy workload, **Alchemy** or **QuickNode** are the best fits. Avoid **Helius**'s free
-tier here — it hard-caps `getProgramAccounts` at 5/sec (the exact call the fleet leans on) unless you
-refactor to `getProgramAccountsV2`. **Locally, run against your validator** — no limits at all.
+**Mind the free-tier `getProgramAccounts` policy** — the bots discover open markets with a single
+`getProgramAccounts` scan per tick (cached for 30s), so a provider that *blocks or hard-caps* gPA on
+its free tier will stall the fleet, not just slow it:
+
+- **Alchemy** free tier **blocks `getProgramAccounts` outright** (`"not available on the Free tier"`).
+  Its **Pay As You Go** plan unlocks it; usage is trivial — a 2-hour 8-bot run is on the order of
+  ~20K–120K compute units (well under a cent at $0.45/1M CU), since gPA is only ~1 call per tick.
+- **Helius** free tier hard-caps gPA at 5/sec.
+- **QuickNode** free tier meters per-method (gPA not singled out) — a reasonable no-card option.
+
+**Locally, run against your validator** — no limits, no gPA restrictions at all.
 
 ### Closing the day
 

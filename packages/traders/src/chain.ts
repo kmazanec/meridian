@@ -3,10 +3,11 @@
  *
  * Wraps a Solana {@link Connection} + the bot's {@link Keypair} into a typed
  * {@link MeridianProgram} (so the SDK's instruction builders and account reads work), and
- * provides a `send` that signs with the bot's wallet and confirms with a light retry on
- * transient RPC failures — chiefly the 429 rate-limiting the web app already contends with
- * on the shared devnet endpoint. The bots never hand-roll Anchor encoding; they build
- * instructions via `@meridian/sdk` and submit them here.
+ * provides a `send` that signs with the bot's wallet, submits, and confirms by HTTP polling
+ * (not WebSocket `signatureSubscribe`, which several endpoints don't expose) with a 429-aware
+ * retry on the *send* — the 429 rate-limiting the web app already contends with on shared
+ * endpoints. The bots never hand-roll Anchor encoding; they build instructions via
+ * `@meridian/sdk` and submit them here.
  */
 
 import {
@@ -15,7 +16,6 @@ import {
   PublicKey,
   Transaction,
   TransactionInstruction,
-  sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import { getProgram, fetchConfig, type MeridianProgram } from "@meridian/sdk";
 
@@ -112,22 +112,95 @@ export class BotChain {
     const retries = opts.retries ?? 4;
     const backoffMinMs = opts.backoffMinMs ?? 10_000;
     const backoffMaxMs = opts.backoffMaxMs ?? 30_000;
-    let lastErr: unknown;
-    for (let attempt = 0; attempt <= retries; attempt++) {
+
+    // Phase 1: get the tx on-chain. Retrying here is safe — until sendRawTransaction returns a
+    // signature, nothing has landed, so a 429 backoff + re-send can't double-place an order.
+    let signature: string;
+    let lastValidBlockHeight: number;
+    let attempt = 0;
+    for (;;) {
       try {
-        const tx = new Transaction();
-        for (const ix of instructions) tx.add(ix);
-        return await sendAndConfirmTransaction(this.connection, tx, [
-          this.keypair,
-          ...extraSigners,
-        ]);
+        const sent = await this.sendOnce(instructions, extraSigners);
+        signature = sent.signature;
+        lastValidBlockHeight = sent.lastValidBlockHeight;
+        break;
       } catch (err) {
-        lastErr = err;
-        if (!isRateLimited(err) || attempt === retries) throw err;
+        if (!isRateLimited(err) || attempt >= retries) throw err;
         await sleep(rateLimitBackoffMs(attempt, backoffMinMs, backoffMaxMs));
+        attempt++;
       }
     }
-    throw lastErr;
+
+    // Phase 2: confirm. The tx is already sent, so we must NOT re-send on a 429 here — just keep
+    // polling (a transient 429 on a status read is harmless; we retry the read, not the send).
+    return this.confirmBySignature(signature, lastValidBlockHeight);
+  }
+
+  /**
+   * Build, sign, and submit one transaction with a fresh blockhash; return its signature and
+   * the blockhash's `lastValidBlockHeight` (the confirm deadline). No confirmation here.
+   */
+  private async sendOnce(
+    instructions: TransactionInstruction[],
+    extraSigners: Keypair[]
+  ): Promise<{ signature: string; lastValidBlockHeight: number }> {
+    const { blockhash, lastValidBlockHeight } =
+      await this.connection.getLatestBlockhash("confirmed");
+    const tx = new Transaction({
+      feePayer: this.keypair.publicKey,
+      blockhash,
+      lastValidBlockHeight,
+    });
+    for (const ix of instructions) tx.add(ix);
+    tx.sign(this.keypair, ...extraSigners);
+    const signature = await this.connection.sendRawTransaction(tx.serialize(), {
+      preflightCommitment: "confirmed",
+    });
+    return { signature, lastValidBlockHeight };
+  }
+
+  /**
+   * Confirm a sent transaction by **HTTP polling** (`getSignatureStatuses`), not the WebSocket
+   * `signatureSubscribe` that web3.js's `sendAndConfirmTransaction` uses under the hood. Many
+   * endpoints (e.g. Alchemy's standard Solana endpoints) don't expose `signatureSubscribe`, so
+   * the subscribe path floods the logs with `-32601 Method not found` and falls back to slow
+   * polling anyway. We poll directly: deterministic, no WS dependency, and quiet. A transient
+   * rate-limit on a status read is swallowed (we retry the read); confirmation is bounded by
+   * `lastValidBlockHeight` (once the chain passes it, the tx can never land).
+   */
+  private async confirmBySignature(
+    signature: string,
+    lastValidBlockHeight: number
+  ): Promise<string> {
+    for (;;) {
+      try {
+        const { value } = await this.connection.getSignatureStatuses([
+          signature,
+        ]);
+        const status = value[0];
+        if (status?.err) {
+          throw new Error(
+            `transaction ${signature} failed: ${JSON.stringify(status.err)}`
+          );
+        }
+        if (
+          status?.confirmationStatus === "confirmed" ||
+          status?.confirmationStatus === "finalized"
+        ) {
+          return signature;
+        }
+        const height = await this.connection.getBlockHeight("confirmed");
+        if (height > lastValidBlockHeight) {
+          throw new Error(
+            `transaction ${signature} expired (block height ${height} > ${lastValidBlockHeight})`
+          );
+        }
+      } catch (err) {
+        // A program error / expiry is terminal; a rate-limit on the status read is not.
+        if (!isRateLimited(err)) throw err;
+      }
+      await sleep(1000);
+    }
   }
 
   /**
