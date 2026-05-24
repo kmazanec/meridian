@@ -19,6 +19,10 @@
  *   TRADERS           comma list of keypair paths to fund/create
  *                     (default: ~/.config/solana/trader1.json,~/.config/solana/trader2.json)
  *   SOL_EACH          SOL to give each (default 1 on devnet, 10 on localnet)
+ *   SOL_FALLBACK      SOL to TRANSFER from the deployer to each trader when the devnet faucet
+ *                     is rate-limited (default 0.1). Just enough for tx fees over a demo run;
+ *                     kept small because it comes out of YOUR admin balance, not the faucet.
+ *                     Skipped per-trader if they already hold at least this much.
  *   USDC_EACH         mock USDC (whole dollars) to mint each (default 1000)
  */
 import { readFileSync, existsSync, writeFileSync } from "node:fs";
@@ -29,6 +33,9 @@ import {
   Keypair,
   PublicKey,
   LAMPORTS_PER_SOL,
+  SystemProgram,
+  Transaction,
+  sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import { getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
 
@@ -67,7 +74,37 @@ function resolveUsdcMint() {
   return new PublicKey(m.usdcMint);
 }
 const usdcMint = resolveUsdcMint();
+
+/**
+ * Top up `recipient` to at least `lamports` by transferring the shortfall from the deployer.
+ * Idempotent: a trader who already holds enough is left untouched (so re-runs don't drain the
+ * admin). Throws if the deployer can't cover the transfer (plus a small fee buffer).
+ */
+async function transferShortfall(recipient, lamports) {
+  const have = await conn.getBalance(recipient, "confirmed");
+  if (have >= lamports) return 0;
+  const need = lamports - have;
+  const deployerBal = await conn.getBalance(deployer.publicKey, "confirmed");
+  if (deployerBal < need + 5000 /* fee buffer */) {
+    throw new Error(
+      `deployer balance ${(deployerBal / LAMPORTS_PER_SOL).toFixed(4)} SOL ` +
+        `can't cover a ${(need / LAMPORTS_PER_SOL).toFixed(4)} SOL transfer.`
+    );
+  }
+  const tx = new Transaction().add(
+    SystemProgram.transfer({
+      fromPubkey: deployer.publicKey,
+      toPubkey: recipient,
+      lamports: need,
+    })
+  );
+  await sendAndConfirmTransaction(conn, tx, [deployer], {
+    commitment: "confirmed",
+  });
+  return need;
+}
 const solEach = Number(process.env.SOL_EACH ?? (isLocal ? 10 : 1));
+const solFallback = Number(process.env.SOL_FALLBACK ?? 0.1);
 const usdcEach = Number(process.env.USDC_EACH ?? 1000);
 const traderPaths = (
   process.env.TRADERS ??
@@ -112,9 +149,28 @@ for (const path of traderPaths) {
       );
       console.log(`  + ${solEach} SOL (devnet faucet)`);
     } catch {
-      console.log(
-        `  ! faucet failed (rate limit) — fund ${solEach} SOL manually if needed`
-      );
+      // Faucet rate-limited: top up from the deployer instead, just enough for fees.
+      try {
+        const sent = await transferShortfall(
+          trader.publicKey,
+          Math.round(solFallback * LAMPORTS_PER_SOL)
+        );
+        if (sent > 0) {
+          console.log(
+            `  + ${(sent / LAMPORTS_PER_SOL).toFixed(
+              4
+            )} SOL (deployer transfer — faucet rate-limited)`
+          );
+        } else {
+          console.log(
+            `  = already has ≥ ${solFallback} SOL (faucet rate-limited; no transfer needed)`
+          );
+        }
+      } catch (err) {
+        console.log(
+          `  ! faucet rate-limited AND deployer transfer failed: ${err.message}`
+        );
+      }
     }
   }
 
