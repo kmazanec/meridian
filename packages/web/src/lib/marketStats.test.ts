@@ -21,9 +21,12 @@ import {
   nearestTheMoneyRow,
   featuredCalls,
   activitySummary,
+  buildBoardRow,
+  sortBoardRows,
   type BookMap,
   type StrikeRow,
   type TickerView,
+  type MarketsBoardRow,
 } from "./marketStats";
 
 function order(
@@ -287,7 +290,8 @@ function tickerView(
     ticker,
     symbol,
     tradingDay: new BN(1_700_000_000),
-    activeCount: opts.activeCount ?? rows.filter((r) => r.state === "open").length,
+    activeCount:
+      opts.activeCount ?? rows.filter((r) => r.state === "open").length,
     repYesPrice: rows[0]?.yesPrice ?? null,
     repStrikeDollars: rows[0] ? rows[0].strike.toNumber() / 1_000_000 : null,
     totalRestingSize: new BN(0),
@@ -331,12 +335,9 @@ describe("featuredCalls", () => {
   const aapl = tickerView(Ticker.Aapl, "AAPL", [strikeRowAt(310, 0.78)], {
     openInterest: 6_000_000000,
   });
-  const tsla = tickerView(
-    Ticker.Tsla,
-    "TSLA",
-    [strikeRowAt(430, 0.46)],
-    { openInterest: 7_000_000000 }
-  );
+  const tsla = tickerView(Ticker.Tsla, "TSLA", [strikeRowAt(430, 0.46)], {
+    openInterest: 7_000_000000,
+  });
 
   const spots = {
     [Ticker.Nvda]: { close: 211, changePct: -0.019 },
@@ -390,5 +391,123 @@ describe("activitySummary", () => {
     expect(sum.openMarkets).toBe(3);
     expect(sum.stockCount).toBe(2); // TSLA has no open markets
     expect(sum.tradingDay).not.toBeNull();
+  });
+});
+
+describe("buildBoardRow", () => {
+  it("joins the live price and features the nearest-the-money strike", () => {
+    const view = tickerView(Ticker.Nvda, "NVDA", [
+      strikeRowAt(200, 0.92),
+      strikeRowAt(210, 0.6),
+      strikeRowAt(220, 0.3),
+    ]);
+    const rowData = buildBoardRow(view, { price: 211, pctFromOpen: -0.017 });
+    expect(rowData.livePrice).toBe(211);
+    expect(rowData.pctFromOpen).toBeCloseTo(-0.017);
+    expect(rowData.open).toBe(true);
+    // Open: display columns track the live quote.
+    expect(rowData.displayPrice).toBe(211);
+    expect(rowData.changePct).toBeCloseTo(-0.017);
+    // Live price 211 → nearest strike is $210.
+    expect(rowData.atmRow?.strike.toNumber()).toBe(210_000_000);
+  });
+
+  it("closed: displays the settled close and the day's open→close move (not a dash)", () => {
+    const settled: StrikeRow = {
+      ...strikeRowAt(210, 0.6),
+      state: "settled",
+      outcome: Outcome.YesWins,
+      settlementPrice: new BN(211_890_000), // closed at $211.89
+    };
+    const view: TickerView = {
+      ...tickerView(Ticker.Nvda, "NVDA", [settled], { activeCount: 0 }),
+      history: [{ date: "2026-05-23", open: 215.0, close: 211.89 }],
+    };
+    // No live quote for a past day → live price is null.
+    const rowData = buildBoardRow(view, { price: null, pctFromOpen: null });
+    expect(rowData.open).toBe(false);
+    expect(rowData.outcome).toBe(Outcome.YesWins);
+    expect(rowData.settlementPrice?.toNumber()).toBe(211_890_000);
+    // Closed row still shows a real price (the close) and a real move (215 → 211.89).
+    expect(rowData.displayPrice).toBeCloseTo(211.89);
+    expect(rowData.changePct).toBeCloseTo(211.89 / 215.0 - 1);
+  });
+});
+
+describe("sortBoardRows", () => {
+  const open = (
+    symbol: string,
+    ticker: Ticker,
+    yes: number,
+    price: number,
+    pct: number,
+    liq = 0
+  ): MarketsBoardRow => {
+    const view = tickerView(ticker, symbol, [strikeRowAt(100, yes)]);
+    return {
+      ...buildBoardRow(view, { price, pctFromOpen: pct }),
+      liquidity: new BN(liq),
+    };
+  };
+  const closed = (symbol: string, ticker: Ticker): MarketsBoardRow => {
+    const settled: StrikeRow = {
+      ...strikeRowAt(100, 0.5),
+      state: "settled",
+      outcome: Outcome.NoWins,
+    };
+    const view = tickerView(ticker, symbol, [settled], { activeCount: 0 });
+    return buildBoardRow(view, { price: 99, pctFromOpen: 0 });
+  };
+
+  it("keeps open stocks above closed ones regardless of key", () => {
+    const rows = [
+      closed("AAPL", Ticker.Aapl),
+      open("NVDA", Ticker.Nvda, 0.5, 100, 0),
+    ];
+    const sorted = sortBoardRows(rows, "action");
+    expect(sorted.map((r) => r.symbol)).toEqual(["NVDA", "AAPL"]);
+  });
+
+  it("action: ranks the nearest coin-flip first, ties broken by liquidity", () => {
+    const flip = open("NVDA", Ticker.Nvda, 0.5, 100, 0, 10); // exactly 50/50
+    const decided = open("MSFT", Ticker.Msft, 0.9, 100, 0, 999); // lopsided
+    const flip2 = open("AAPL", Ticker.Aapl, 0.5, 100, 0, 50); // 50/50, more liquid
+    const sorted = sortBoardRows([decided, flip, flip2], "action");
+    // Both coin-flips beat the decided bet; among them the deeper book (AAPL) leads.
+    expect(sorted.map((r) => r.symbol)).toEqual(["AAPL", "NVDA", "MSFT"]);
+  });
+
+  it("mover: ranks the biggest absolute move first", () => {
+    const a = open("NVDA", Ticker.Nvda, 0.5, 100, -0.03);
+    const b = open("MSFT", Ticker.Msft, 0.5, 100, 0.01);
+    const c = open("AAPL", Ticker.Aapl, 0.5, 100, 0.05);
+    expect(sortBoardRows([a, b, c], "mover").map((r) => r.symbol)).toEqual([
+      "AAPL",
+      "NVDA",
+      "MSFT",
+    ]);
+  });
+
+  it("symbol: sorts A→Z", () => {
+    const rows = [
+      open("TSLA", Ticker.Tsla, 0.5, 100, 0),
+      open("AAPL", Ticker.Aapl, 0.5, 100, 0),
+      open("MSFT", Ticker.Msft, 0.5, 100, 0),
+    ];
+    expect(sortBoardRows(rows, "symbol").map((r) => r.symbol)).toEqual([
+      "AAPL",
+      "MSFT",
+      "TSLA",
+    ]);
+  });
+
+  it("does not mutate the input array", () => {
+    const rows = [
+      open("TSLA", Ticker.Tsla, 0.5, 100, 0),
+      open("AAPL", Ticker.Aapl, 0.5, 100, 0),
+    ];
+    const before = rows.map((r) => r.symbol);
+    sortBoardRows(rows, "symbol");
+    expect(rows.map((r) => r.symbol)).toEqual(before);
   });
 });

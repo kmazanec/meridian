@@ -1,43 +1,45 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import BN from "bn.js";
-import { Ticker, TICKER_SYMBOLS } from "@meridian/sdk";
-import type { TickerView } from "@/lib/marketStats";
+import { Outcome, Ticker, TICKER_SYMBOLS } from "@meridian/sdk";
+import type { MarketsBoardRow } from "@/lib/marketStats";
 import { MarketsView } from "./MarketsView";
 
-/** A minimal TickerView for one symbol; overrides tune the fields under test. */
-function ticker(
+/** A minimal board row for one symbol; overrides tune the fields under test. */
+function boardRow(
   ordinal: Ticker,
-  overrides: Partial<TickerView> = {}
-): TickerView {
+  overrides: Partial<MarketsBoardRow> = {}
+): MarketsBoardRow {
   return {
     ticker: ordinal,
     symbol: TICKER_SYMBOLS[ordinal],
+    displayPrice: null,
+    changePct: null,
+    livePrice: null,
+    pctFromOpen: null,
+    open: false,
+    atmRow: null,
+    liquidity: new BN(0),
     tradingDay: null,
-    activeCount: 0,
-    repYesPrice: null,
-    repStrikeDollars: null,
-    totalRestingSize: new BN(0),
-    totalPairsMinted: new BN(0),
-    totalCollateral: new BN(0),
+    settlementPrice: null,
+    outcome: Outcome.Unsettled,
     rows: [],
     history: null,
     ...overrides,
   };
 }
 
-/** All seven tickers, with optional per-ordinal overrides. */
-function allTickers(
-  overrides: Partial<Record<Ticker, Partial<TickerView>>> = {}
-): TickerView[] {
+function allRows(
+  overrides: Partial<Record<Ticker, Partial<MarketsBoardRow>>> = {}
+): MarketsBoardRow[] {
   return TICKER_SYMBOLS.map((_, ordinal) =>
-    ticker(ordinal as Ticker, overrides[ordinal as Ticker] ?? {})
+    boardRow(ordinal as Ticker, overrides[ordinal as Ticker] ?? {})
   );
 }
 
 describe("MarketsView", () => {
-  it("renders all seven MAG7 tickers", () => {
-    render(<MarketsView tickers={allTickers()} />);
+  it("renders all seven MAG7 tickers as board rows", () => {
+    render(<MarketsView rows={allRows()} />);
     for (const sym of [
       "AAPL",
       "MSFT",
@@ -47,54 +49,18 @@ describe("MarketsView", () => {
       "META",
       "TSLA",
     ]) {
-      expect(screen.getByText(sym)).toBeInTheDocument();
+      expect(screen.getByTestId(`board-row-${sym}`)).toBeInTheDocument();
     }
   });
 
-  it("shows the live Yes price and implied probability per ticker", () => {
+  it("shows the price per ticker", () => {
     render(
       <MarketsView
-        tickers={allTickers({
-          [Ticker.Meta]: { activeCount: 1, repYesPrice: new BN(650_000) },
+        rows={allRows({
+          [Ticker.Meta]: { open: true, displayPrice: 610.26 },
         })}
       />
     );
-    expect(screen.getByText("$0.65")).toBeInTheDocument();
-    expect(screen.getByText("65% implied")).toBeInTheDocument();
-  });
-
-  it("counts open contracts per ticker", () => {
-    render(
-      <MarketsView
-        tickers={allTickers({ [Ticker.Aapl]: { activeCount: 2 } })}
-      />
-    );
-    expect(screen.getByText("2 open")).toBeInTheDocument();
-  });
-
-  it("links each card to the stock's trade/detail page", () => {
-    render(<MarketsView tickers={allTickers()} />);
-    expect(screen.getByLabelText("View NVDA")).toHaveAttribute(
-      "href",
-      "/trade/NVDA"
-    );
-    expect(screen.getByLabelText("View TSLA")).toHaveAttribute(
-      "href",
-      "/trade/TSLA"
-    );
-  });
-
-  it("deep-links to the representative strike when one is open", () => {
-    render(
-      <MarketsView
-        tickers={allTickers({
-          [Ticker.Nvda]: { activeCount: 1, repStrikeDollars: 270 },
-        })}
-      />
-    );
-    expect(screen.getByLabelText("View NVDA")).toHaveAttribute(
-      "href",
-      "/trade/NVDA?strike=270"
-    );
+    expect(screen.getByText("$610.26")).toBeInTheDocument();
   });
 });

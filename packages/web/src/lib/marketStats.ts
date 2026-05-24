@@ -74,7 +74,10 @@ function yesView(market: DiscoveredMarket, books: BookMap): BookView {
  * Unlike {@link strikeRow}'s `yesPrice` (which falls back to 50/50 for display), this returns
  * null so callers can treat an unmarkable position as *unpriceable* rather than guessing.
  */
-export function yesMarkFor(market: DiscoveredMarket, books: BookMap): BN | null {
+export function yesMarkFor(
+  market: DiscoveredMarket,
+  books: BookMap
+): BN | null {
   return midPrice(yesView(market, books));
 }
 
@@ -220,11 +223,14 @@ export function livePricesByTicker(
 export interface ClosePoint {
   date: string;
   close: number;
+  /** Day's opening price; omitted if the feed didn't report a finite value. */
+  open?: number;
 }
 
 /**
- * Everything one ticker's card needs, derived once upstream so the components stay
- * presentational (no hooks, no RPC, no BN math beyond formatting).
+ * Everything one ticker needs for the Markets board (and the trade-page header), derived once
+ * upstream so the components stay presentational (no hooks, no RPC, no BN math beyond
+ * formatting). {@link buildBoardRow} joins this with a live price into a {@link MarketsBoardRow}.
  */
 export interface TickerView {
   ticker: Ticker;
@@ -392,4 +398,131 @@ export function activitySummary(views: TickerView[]): ActivitySummary {
     }
   }
   return { openInterest, openMarkets, stockCount, tradingDay };
+}
+
+// --- Markets board: one sortable row per stock, with the live price joined in ---
+
+/**
+ * One stock's row on the Markets board. Combines the ticker's derived view with its *live*
+ * underlying price (from `/api/price`) so the board leads with real-time signals rather than
+ * the prior session's close. The featured bet is the nearest-the-money open strike — the
+ * genuine coin-flip — carried whole so the row can deep-link and the expander can highlight it.
+ */
+export interface MarketsBoardRow {
+  ticker: Ticker;
+  symbol: string;
+  /**
+   * The price to show in the PRICE column, in dollars, or null if unknown. Open stocks: the
+   * live underlying price. Closed stocks: the price it settled (closed) at — so a closed row
+   * shows a real number, never a dash.
+   */
+  displayPrice: number | null;
+  /**
+   * The move to show in the TODAY column (0.012 = +1.2%), or null. Open: % from today's open.
+   * Closed: the settled day's open→close move (from history), so the column isn't blank.
+   */
+  changePct: number | null;
+  /** Live underlying price in dollars, or null when no live quote is available. */
+  livePrice: number | null;
+  /** Fractional move from today's open (0.012 = +1.2%), or null. */
+  pctFromOpen: number | null;
+  /** True when the stock has at least one open (tradable) strike today. */
+  open: boolean;
+  /** The nearest-the-money open strike (the featured bet), or null when none is open. */
+  atmRow: StrikeRow | null;
+  /** Σ resting size across the ticker's books (token base units) — the liquidity signal. */
+  liquidity: BN;
+  /** Settlement instant (unix seconds, BN) for the countdown, or null. */
+  tradingDay: BN | null;
+  /** The day's settlement (close) price once settled, in USDC base units, or null. */
+  settlementPrice: BN | null;
+  /** The settled outcome (Yes/No won) when closed. */
+  outcome: Outcome;
+  /** Every strike row (strike-ascending) for the inline expander. */
+  rows: StrikeRow[];
+  /** Recent closes for the row sparkline (null until loaded). */
+  history: ClosePoint[] | null;
+}
+
+/** Build a board row from a ticker view + its live price (dollars) and move-from-open. */
+export function buildBoardRow(
+  view: TickerView,
+  live: { price: number | null; pctFromOpen: number | null }
+): MarketsBoardRow {
+  const open = view.activeCount > 0;
+  const atmRow = nearestTheMoneyRow(view, live.price);
+  // A settled ticker shares one outcome/close across its strikes — read it off any settled row.
+  const settledRow = view.rows.find((r) => r.state === "settled");
+  const settlementPrice = settledRow?.settlementPrice ?? null;
+
+  // The PRICE / TODAY columns read the same whether open or closed: open stocks use the live
+  // quote; closed stocks use the price they settled at and the settled day's open→close move
+  // (from the latest history point) — so a closed row never shows a bare dash.
+  const settledClose = settlementPrice
+    ? settlementPrice.toNumber() / STRIKE_SCALE
+    : null;
+  const lastDay = view.history?.[view.history.length - 1] ?? null;
+  const settledChange =
+    settledClose != null && lastDay?.open != null && lastDay.open !== 0
+      ? settledClose / lastDay.open - 1
+      : null;
+
+  return {
+    ticker: view.ticker,
+    symbol: view.symbol,
+    displayPrice: open ? live.price : settledClose,
+    changePct: open ? live.pctFromOpen : settledChange,
+    livePrice: live.price,
+    pctFromOpen: live.pctFromOpen,
+    open,
+    atmRow,
+    liquidity: view.totalRestingSize,
+    tradingDay: view.tradingDay,
+    settlementPrice,
+    outcome: settledRow?.outcome ?? Outcome.Unsettled,
+    rows: view.rows,
+    history: view.history,
+  };
+}
+
+/** Columns the board can sort by. */
+export type BoardSort = "action" | "mover" | "price" | "symbol";
+
+/** How close the featured bet is to a coin flip (0 = exactly 50/50; larger = more decided). */
+function atmCoinFlipDistance(row: MarketsBoardRow): number {
+  if (!row.atmRow) return Number.POSITIVE_INFINITY;
+  return Math.abs(row.atmRow.yesPrice.sub(PRICE_SCALE.divn(2)).toNumber());
+}
+
+/**
+ * Sort board rows for the chosen key. Open stocks always rank above closed ones (you can only
+ * trade what's open), then the key orders within each group:
+ *  - `action`  : nearest a coin-flip first, ties broken by deeper liquidity — "where the action is".
+ *  - `mover`   : biggest absolute move from open first.
+ *  - `price`   : highest live price first.
+ *  - `symbol`  : A→Z.
+ * Returns a new array; the input is not mutated.
+ */
+export function sortBoardRows(
+  rows: MarketsBoardRow[],
+  key: BoardSort
+): MarketsBoardRow[] {
+  const within = (a: MarketsBoardRow, b: MarketsBoardRow): number => {
+    switch (key) {
+      case "action":
+        return (
+          atmCoinFlipDistance(a) - atmCoinFlipDistance(b) ||
+          b.liquidity.cmp(a.liquidity)
+        );
+      case "mover":
+        return Math.abs(b.pctFromOpen ?? 0) - Math.abs(a.pctFromOpen ?? 0);
+      case "price":
+        return (b.livePrice ?? 0) - (a.livePrice ?? 0);
+      case "symbol":
+        return a.symbol.localeCompare(b.symbol);
+    }
+  };
+  return [...rows].sort(
+    (a, b) => Number(b.open) - Number(a.open) || within(a, b)
+  );
 }
