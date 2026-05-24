@@ -93,3 +93,12 @@ export function recordFill(wallet: string, fill: FillRecord): void {
 export function loadBasis(wallet: string): Map<string, CostBasis> {
   return aggregateBasis(readFills(wallet));
 }
+
+/**
+ * All raw fills recorded for a wallet (each with its own `ts` and `price`), for analytics
+ * that need cost per market/side rather than the size-weighted average from
+ * {@link loadBasis}. Empty when there's no store / it's unavailable.
+ */
+export function getFills(wallet: string): FillRecord[] {
+  return readFills(wallet);
+}

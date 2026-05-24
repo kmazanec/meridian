@@ -13,6 +13,7 @@ const openRow: OpenRow = {
   strike: new BN(680_000_000),
   side: "yes",
   amount: new BN(2_000_000),
+  tradingDay: new BN(1_700_000_000),
   markPrice: new BN(600_000),
   entryPrice: new BN(500_000),
   value: new BN(1_200_000),
@@ -26,6 +27,7 @@ const settledWinner: SettledRow = {
   strike: new BN(120_000_000),
   side: "yes",
   amount: new BN(3_000_000),
+  tradingDay: new BN(1_700_000_000),
   payout: new BN(3_000_000),
   redeemable: true,
 };

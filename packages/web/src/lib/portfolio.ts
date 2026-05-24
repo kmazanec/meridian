@@ -20,6 +20,8 @@ export interface Holding {
   /** Market lifecycle. */
   state: "open" | "settled";
   outcome: Outcome;
+  /** The market's 4:00 PM ET settlement instant (unix seconds) — the trading day. */
+  tradingDay: BN;
   /** Current Yes price (price scale) for marking open positions. */
   yesMark: BN;
 }
@@ -31,6 +33,8 @@ export interface OpenRow {
   strike: BN;
   side: Side;
   amount: BN;
+  /** The market's settlement instant (unix seconds). */
+  tradingDay: BN;
   /** Current mark for this side (Yes mark for yes, 1−Yes for no). */
   markPrice: BN;
   /** Entry price if known from the local store, else null. */
@@ -46,6 +50,8 @@ export interface SettledRow {
   strike: BN;
   side: Side;
   amount: BN;
+  /** The market's settlement instant (unix seconds). */
+  tradingDay: BN;
   /** USDC the holding redeems for (winning side 1:1, loser 0). */
   payout: BN;
   /** Whether this holding can be redeemed (won and not yet redeemed). */
@@ -79,6 +85,7 @@ export function buildPortfolio(
         strike: h.strike,
         side: h.side,
         amount: h.amount,
+        tradingDay: h.tradingDay,
         payout,
         redeemable: payout.gtn(0),
       });
@@ -100,6 +107,7 @@ export function buildPortfolio(
       strike: h.strike,
       side: h.side,
       amount: h.amount,
+      tradingDay: h.tradingDay,
       markPrice,
       entryPrice,
       value,

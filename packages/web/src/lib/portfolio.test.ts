@@ -18,6 +18,7 @@ function holding(over: Partial<Holding>): Holding {
     amount: new BN(1_000_000),
     state: "open",
     outcome: Outcome.Unsettled,
+    tradingDay: new BN(1_700_000_000),
     yesMark: new BN(600_000),
     ...over,
   };
@@ -102,6 +103,7 @@ describe("portfolioSummary", () => {
       strike: new BN(300_000000),
       side: "yes",
       amount: new BN(5_000000),
+      tradingDay: new BN(1_700_000_000),
       markPrice: new BN(600_000),
       entryPrice: new BN(500_000),
       value: new BN(3_000000), // $3.00
@@ -114,6 +116,7 @@ describe("portfolioSummary", () => {
       strike: new BN(320_000000),
       side: "no",
       amount: new BN(2_000000),
+      tradingDay: new BN(1_700_000_000),
       markPrice: new BN(400_000),
       entryPrice: null, // unknown entry → excluded from P&L
       value: new BN(800_000), // $0.80
@@ -126,6 +129,7 @@ describe("portfolioSummary", () => {
       strike: new BN(1_180_000000),
       side: "yes",
       amount: new BN(4_000000),
+      tradingDay: new BN(1_700_000_000),
       payout: new BN(4_000000), // $4.00 claimable
       redeemable: true,
     },
@@ -136,6 +140,7 @@ describe("portfolioSummary", () => {
       strike: new BN(430_000000),
       side: "yes",
       amount: new BN(2_000000),
+      tradingDay: new BN(1_700_000_000),
       payout: new BN(0),
       redeemable: false, // lost — not claimable
     },

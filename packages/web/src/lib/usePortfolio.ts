@@ -80,6 +80,7 @@ export function usePortfolio(): {
           amount,
           state: market.state,
           outcome: market.outcome,
+          tradingDay: market.tradingDay,
           yesMark,
         });
       }
