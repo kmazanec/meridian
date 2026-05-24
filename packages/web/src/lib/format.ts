@@ -65,3 +65,28 @@ export function shortKey(key: { toBase58: () => string } | string): string {
   const s = typeof key === "string" ? key : key.toBase58();
   return s.length <= 10 ? s : `${s.slice(0, 4)}…${s.slice(-4)}`;
 }
+
+/**
+ * `trading_day` is the 4:00 PM ET close *instant* (unix seconds). Both helpers below resolve it
+ * in ET (`America/New_York`) so a market's day is stable regardless of the viewer's timezone —
+ * important for grouping (a West-Coast viewer must bucket a market on the same day as the close).
+ */
+
+/** A stable, sortable ET date key for grouping, e.g. `2026-05-23`. */
+export function tradingDayKey(tradingDay: BN | number): string {
+  const ms = (typeof tradingDay === "number" ? tradingDay : tradingDay.toNumber()) * 1000;
+  // en-CA gives ISO-ish YYYY-MM-DD, which sorts lexicographically = chronologically.
+  return new Date(ms).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
+
+/** Human label for a trading day, e.g. `Thu, May 23` (ET). */
+export function formatTradingDay(tradingDay: BN | number | null): string {
+  if (tradingDay === null) return "—";
+  const ms = (typeof tradingDay === "number" ? tradingDay : tradingDay.toNumber()) * 1000;
+  return new Date(ms).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "America/New_York",
+  });
+}

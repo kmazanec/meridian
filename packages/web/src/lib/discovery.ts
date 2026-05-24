@@ -7,6 +7,7 @@ import {
   marketPda,
   type MeridianProgram,
 } from "@meridian/sdk";
+import { tradingDayKey } from "./format";
 
 /**
  * Market discovery. There is no on-chain index of all markets, so the frontend
@@ -112,6 +113,40 @@ export function groupByTicker(
 /** Count of *open* (still-trading) markets for a ticker. */
 export function activeCount(markets: DiscoveredMarket[]): number {
   return markets.filter((m) => m.state === "open").length;
+}
+
+/** One trading day's markets, with the day's stable ET key and the raw trading-day instant. */
+export interface MarketDayGroup {
+  /** ET date key, e.g. `2026-05-23` (sortable). */
+  dayKey: string;
+  /** The trading-day instant (unix seconds) — for labelling/formatting. */
+  tradingDay: BN;
+  markets: DiscoveredMarket[];
+}
+
+/**
+ * Group markets by trading day (newest day first), each day's markets sorted by ticker then
+ * strike. Keys on the ET date (via tradingDayKey) so the grouping is stable regardless of the
+ * viewer's timezone. Pure — unit-tested directly.
+ */
+export function groupByTradingDay(
+  markets: DiscoveredMarket[]
+): MarketDayGroup[] {
+  const byDay = new Map<string, MarketDayGroup>();
+  for (const m of markets) {
+    const dayKey = tradingDayKey(m.tradingDay);
+    const group = byDay.get(dayKey);
+    if (group) group.markets.push(m);
+    else byDay.set(dayKey, { dayKey, tradingDay: m.tradingDay, markets: [m] });
+  }
+  const groups = [...byDay.values()];
+  groups.sort((a, b) => b.dayKey.localeCompare(a.dayKey)); // newest day first
+  for (const g of groups) {
+    g.markets.sort(
+      (a, b) => a.ticker - b.ticker || a.strike.cmp(b.strike)
+    );
+  }
+  return groups;
 }
 
 /** Re-derive a market's PDA from its identity (sanity/round-trip helper). */

@@ -5,6 +5,7 @@ import { Outcome, Ticker, type MeridianProgram } from "@meridian/sdk";
 import {
   discoverMarkets,
   groupByTicker,
+  groupByTradingDay,
   activeCount,
   normalizeDiscovered,
 } from "./discovery";
@@ -105,5 +106,42 @@ describe("discovery", () => {
     expect(grouped.get(Ticker.Aapl)!.length).toBe(2);
     expect(activeCount(grouped.get(Ticker.Aapl)!)).toBe(1); // one settled
     expect(activeCount(grouped.get(Ticker.Nvda)!)).toBe(1);
+  });
+
+  describe("groupByTradingDay", () => {
+    // 4pm ET close instants on two consecutive ET dates.
+    const DAY1 = 1_716_499_200; // 2024-05-23 16:00 ET
+    const DAY2 = 1_716_585_600; // 2024-05-24 16:00 ET
+
+    it("buckets by ET day, newest first, markets sorted by ticker then strike", async () => {
+      const program = programWith([
+        rawMarket({ ticker: "aapl", strike: 190_000_000, tradingDay: DAY1 }),
+        rawMarket({ ticker: "aapl", strike: 180_000_000, tradingDay: DAY1 }),
+        rawMarket({ ticker: "nvda", strike: 120_000_000, tradingDay: DAY2 }),
+        rawMarket({ ticker: "aapl", strike: 200_000_000, tradingDay: DAY2 }),
+      ]);
+      const markets = await discoverMarkets(program);
+      const groups = groupByTradingDay(markets);
+
+      expect(groups.map((g) => g.dayKey)).toEqual(["2024-05-24", "2024-05-23"]); // newest first
+      // Day 2: AAPL before NVDA (ticker order).
+      expect(groups[0].markets.map((m) => m.ticker)).toEqual([Ticker.Aapl, Ticker.Nvda]);
+      // Day 1: same ticker, ascending strike.
+      expect(groups[1].markets.map((m) => m.strike.toNumber())).toEqual([
+        180_000_000, 190_000_000,
+      ]);
+    });
+
+    it("keeps same ticker+strike on different days in separate groups", async () => {
+      // The exact bug from the screenshot: AAPL $280 appears on two days.
+      const program = programWith([
+        rawMarket({ ticker: "aapl", strike: 280_000_000, tradingDay: DAY1, state: "settled", outcome: "yesWins" }),
+        rawMarket({ ticker: "aapl", strike: 280_000_000, tradingDay: DAY2 }),
+      ]);
+      const markets = await discoverMarkets(program);
+      const groups = groupByTradingDay(markets);
+      expect(groups).toHaveLength(2);
+      expect(groups.every((g) => g.markets.length === 1)).toBe(true);
+    });
   });
 });
