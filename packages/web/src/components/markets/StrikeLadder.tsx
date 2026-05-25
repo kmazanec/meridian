@@ -127,7 +127,10 @@ export function StrikeLadder({
                   className={cx(
                     "border-t border-line-soft/60",
                     selectable && "cursor-pointer hover:bg-panel-2/60",
-                    selected && "bg-accent/10",
+                    // The selected row is what the chart / book / ticket on the right are
+                    // showing, so it gets a deliberately strong tie: brighter accent wash
+                    // plus an accent left-bar (added on the first cell below).
+                    selected && "bg-accent/15",
                     // Settled rows read dimmer (not tradable), but stay legible/interactive.
                     row.state === "settled" && !selected && "opacity-70"
                   )}
@@ -139,7 +142,18 @@ export function StrikeLadder({
                     selectable ? () => onSelect!(row.address) : undefined
                   }
                 >
-                  <td className="py-2 pr-2 text-fg">
+                  <td
+                    className={cx(
+                      "py-2 pr-2 text-fg",
+                      // Accent left-bar marks the active strike (box-shadow, not border, so it
+                      // doesn't shift the cell or fight the row's top border). Gold (#e8b14c) is
+                      // the brand `accent`; this config predates Tailwind's CSS color vars, so the
+                      // hex is inlined rather than referencing a (nonexistent) --color-accent.
+                      selected
+                        ? "font-medium text-accent shadow-[inset_2px_0_0_0_#e8b14c]"
+                        : "shadow-[inset_2px_0_0_0_transparent]"
+                    )}
+                  >
                     {formatUsdc(row.strike, 0)}
                   </td>
                   <td className="py-2 pr-2 text-yes">

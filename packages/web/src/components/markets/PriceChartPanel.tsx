@@ -10,11 +10,16 @@ import { useIntradaySession } from "@/lib/useIntradaySession";
 /**
  * The trade-page chart panel: a Day/Month timeframe toggle over the {@link PriceChart}.
  *
+ * - **Day** (the default) plots the current session's intraday path from {@link useIntradaySession},
+ *   with a gold "live" dot at the session's current edge. Today's path is the most relevant view
+ *   for a contract that settles today, so the panel opens here.
  * - **Month** plots the daily closes already loaded for the page (`closes`).
- * - **Day** plots the current session's intraday path from {@link useIntradaySession}, with a
- *   gold "live" dot at the session's current edge. Intraday is synthetic/dev-only, so when the
- *   endpoint isn't available (e.g. production, which captures no intraday) the panel shows a tidy
- *   "not available" note and the user stays on Month.
+ *
+ * Intraday is synthetic/dev-only, so when the endpoint isn't available (e.g. production, which
+ * captures no intraday) the Day view has nothing to draw. Because Day is the default, we don't
+ * want users landing on a bare "not available" note: if intraday is missing *and the user hasn't
+ * explicitly chosen Day*, the panel silently falls back to Month (reflecting Month as active). The
+ * "not available" note only appears when the user deliberately switches to Day and there's no data.
  *
  * The chart itself is timeframe-agnostic — this panel just maps each source into labelled
  * {@link ChartPoint}s (dates for Month, clock times for Day).
@@ -63,7 +68,15 @@ export function PriceChartPanel({
   tradingDay: number | null;
   className?: string;
 }) {
-  const [timeframe, setTimeframe] = useState<Timeframe>("month");
+  // Day is the default view. `userPicked` records whether the user has actively toggled, so we
+  // can silently fall back to Month when intraday is missing on the default Day view but still
+  // honor a deliberate Day choice (showing the "not available" note) once they've clicked.
+  const [timeframe, setTimeframe] = useState<Timeframe>("day");
+  const [userPicked, setUserPicked] = useState(false);
+  const pick = (t: Timeframe) => {
+    setUserPicked(true);
+    setTimeframe(t);
+  };
 
   // Only fetch intraday when the user is actually on the Day tab (and a market exists).
   const session = useIntradaySession(
@@ -77,12 +90,17 @@ export function PriceChartPanel({
       label: fmtClock(p.timestamp),
     })) ?? [];
 
-  const showDay = timeframe === "day";
-  // Day view is unavailable when intraday returned nothing (prod, or no market today).
-  const dayUnavailable =
-    showDay &&
-    !session.loading &&
-    (session.points == null || session.points.length < 2);
+  // Intraday has nothing to draw (prod has no intraday, or no market today).
+  const noIntraday =
+    !session.loading && (session.points == null || session.points.length < 2);
+  // On the default Day view with no intraday, quietly render Month instead of an empty note.
+  const fallBackToMonth = timeframe === "day" && noIntraday && !userPicked;
+  const showDay = timeframe === "day" && !fallBackToMonth;
+  // The note only appears when the user deliberately chose Day and there's no data.
+  const dayUnavailable = timeframe === "day" && userPicked && noIntraday;
+
+  // Reflect the effective view in the toggle so the active segment matches what's drawn.
+  const activeToggle: Timeframe = showDay ? "day" : "month";
 
   const heading = showDay
     ? `${symbol} · today's session`
@@ -96,17 +114,17 @@ export function PriceChartPanel({
         </h2>
         <div className="flex items-center gap-3">
           <SpotLine spot={spot} />
-          <TimeframeToggle value={timeframe} onChange={setTimeframe} />
+          <TimeframeToggle value={activeToggle} onChange={pick} />
         </div>
       </div>
 
-      {showDay ? (
+      {dayUnavailable ? (
+        <ChartMessage>
+          Intraday isn't available for this market yet.
+        </ChartMessage>
+      ) : showDay ? (
         session.loading && intradayPoints.length === 0 ? (
           <ChartMessage>Loading today's session…</ChartMessage>
-        ) : dayUnavailable ? (
-          <ChartMessage>
-            Intraday isn't available for this market yet.
-          </ChartMessage>
         ) : (
           <PriceChart points={intradayPoints} liveIndex={session.liveIndex} />
         )

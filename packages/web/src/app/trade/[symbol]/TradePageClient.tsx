@@ -39,7 +39,7 @@ import { MergedBookView } from "@/components/trade/MergedBookView";
 import { PayoffLine } from "@/components/trade/PayoffLine";
 import { Countdown } from "@/components/trade/Countdown";
 import { TradePanel, type TradeFill } from "@/components/trade/TradePanel";
-import { SettledMarketPanel } from "@/components/trade/SettledMarketPanel";
+import { SettledMarketBanner } from "@/components/trade/SettledMarketPanel";
 import { TxStatusBanner } from "@/components/trade/TxStatusBanner";
 import { Panel, cx } from "@/components/ui";
 import BN from "bn.js";
@@ -177,6 +177,10 @@ export default function TradePageClient() {
     ? `Will ${symbol} close ≥ ${formatUsdc(heroStrike, 0)} today?`
     : `Will ${symbol} close above today's strike?`;
 
+  // A closed (settled) strike has no trade ticket: the layout drops the right column
+  // and surfaces the verdict as a thin banner above the chart instead.
+  const isSettled = market?.state === "settled";
+
   return (
     <div className="space-y-6">
       {/* Question hero: the contract in plain language + the three numbers that matter. */}
@@ -242,14 +246,30 @@ export default function TradePageClient() {
       </header>
 
       {/* Persistent trading terminal: strikes · chart + book · ticket.
-          Three columns at xl; ladder + (chart/book) at lg with the ticket below;
-          a single focus-mode stack on mobile. */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(280px,320px)_minmax(0,1fr)] xl:grid-cols-[minmax(280px,320px)_minmax(0,1fr)_minmax(340px,380px)]">
-        {/* Left: strike ladder (the picker). */}
-        <section className="panel order-2 p-5 lg:order-1">
-          <h2 className="mb-3 text-xs uppercase tracking-wide text-fg-faint">
-            Strikes
-          </h2>
+          A closed strike has no ticket, so the page collapses to two columns
+          (strikes · chart) and the closed-market verdict becomes a thin banner
+          above the chart — keeping the same two-column rhythm rather than spending
+          a whole right column on a read-only result.
+          Open: three columns at xl; ladder + (chart/book) at lg with the ticket
+          below. Mobile is a single stack with the strike picker first. */}
+      <div
+        className={cx(
+          "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(280px,320px)_minmax(0,1fr)]",
+          !isSettled &&
+            "xl:grid-cols-[minmax(280px,320px)_minmax(0,1fr)_minmax(340px,380px)]"
+        )}
+      >
+        {/* Left: strike ladder (the picker). First in the source so it leads on
+            mobile; pinned to the left column on lg+. */}
+        <section className="panel order-1 p-5">
+          <div className="mb-3 flex items-baseline justify-between gap-2">
+            <h2 className="text-xs uppercase tracking-wide text-fg-faint">
+              Strikes
+            </h2>
+            <span className="text-xs uppercase tracking-wide text-accent/70">
+              Showing →
+            </span>
+          </div>
           <StrikeLadder
             rows={ladderRows}
             selectedAddress={selected?.toBase58() ?? null}
@@ -259,8 +279,12 @@ export default function TradePageClient() {
           />
         </section>
 
-        {/* Center: price chart over the order book for the selected strike. */}
-        <section className="order-1 space-y-6 lg:order-2">
+        {/* Center: closed-market banner (settled only), then the price chart over
+            the order book for the selected strike. */}
+        <section className="order-2 space-y-6">
+          {market && selected && market.state === "settled" && (
+            <SettledMarketBanner ticker={ticker} market={market} />
+          )}
           <PriceChartPanel
             symbol={symbol}
             closes={history ?? []}
@@ -282,13 +306,12 @@ export default function TradePageClient() {
           ) : null}
         </section>
 
-        {/* Right: the trade ticket (drops below the chart at lg, beside it at xl). */}
-        <section className="order-3 space-y-6 lg:col-span-2 xl:col-span-1">
-          {market && selected ? (
-            market.state === "settled" ? (
-              // Closed market: inspect the outcome instead of a trade ticket.
-              <SettledMarketPanel ticker={ticker} market={market} />
-            ) : (
+        {/* Right: the trade ticket (open markets only). Drops below the chart at
+            lg, beside it at xl. A closed strike shows its verdict in the banner
+            above instead, so this column is omitted entirely. */}
+        {!isSettled && (
+          <section className="order-3 space-y-6 lg:col-span-2 xl:col-span-1">
+            {market && selected ? (
               <>
                 <PayoffLine
                   ticker={ticker}
@@ -308,13 +331,13 @@ export default function TradePageClient() {
                   busy={tx.status === "signing" || tx.status === "confirming"}
                 />
               </>
-            )
-          ) : (
-            <Panel>
-              <p className="text-fg-dim">Select a strike.</p>
-            </Panel>
-          )}
-        </section>
+            ) : (
+              <Panel>
+                <p className="text-fg-dim">Select a strike.</p>
+              </Panel>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );

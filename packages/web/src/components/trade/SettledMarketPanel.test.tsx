@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import BN from "bn.js";
 import { PublicKey } from "@solana/web3.js";
 import { Outcome, symbolToTicker, type MarketAccount } from "@meridian/sdk";
-import { SettledMarketPanel } from "./SettledMarketPanel";
+import { SettledMarketBanner } from "./SettledMarketPanel";
 
 function market(overrides: Partial<MarketAccount> = {}): MarketAccount {
   return {
@@ -29,9 +29,9 @@ function market(overrides: Partial<MarketAccount> = {}): MarketAccount {
 
 const ticker = symbolToTicker("NVDA");
 
-describe("SettledMarketPanel", () => {
+describe("SettledMarketBanner", () => {
   it("shows the Yes-won verdict and the close price", () => {
-    render(<SettledMarketPanel ticker={ticker} market={market()} />);
+    render(<SettledMarketBanner ticker={ticker} market={market()} />);
     expect(screen.getByTestId("settled-verdict")).toHaveTextContent(/yes won/i);
     expect(screen.getByTestId("settled-close")).toHaveTextContent("$223.45");
     expect(screen.getByText(/closed at or above/i)).toHaveTextContent(
@@ -41,7 +41,7 @@ describe("SettledMarketPanel", () => {
 
   it("shows the No-won verdict", () => {
     render(
-      <SettledMarketPanel
+      <SettledMarketBanner
         ticker={ticker}
         market={market({
           outcome: Outcome.NoWins,
@@ -53,11 +53,8 @@ describe("SettledMarketPanel", () => {
     expect(screen.getByText(/closed below/i)).toBeInTheDocument();
   });
 
-  it("notes the market is closed", () => {
-    render(<SettledMarketPanel ticker={ticker} market={market()} />);
-    expect(screen.getByTestId("settled-market-panel")).toHaveTextContent(
-      /market closed/i
-    );
+  it("notes that trading is closed and where to redeem", () => {
+    render(<SettledMarketBanner ticker={ticker} market={market()} />);
     expect(
       screen.getByText(/trading is closed for this strike/i)
     ).toBeInTheDocument();
@@ -65,7 +62,7 @@ describe("SettledMarketPanel", () => {
 
   it("omits the close line when there is no settlement price", () => {
     render(
-      <SettledMarketPanel
+      <SettledMarketBanner
         ticker={ticker}
         market={market({ settlementPrice: null })}
       />

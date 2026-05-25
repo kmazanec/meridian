@@ -4,12 +4,14 @@ import { formatUsdc } from "@/lib/format";
 import { cx } from "@/components/ui";
 
 /**
- * The right-column view for a *settled* (closed) strike, shown in place of the trade ticket —
- * you can't trade a closed market, but you can inspect its result. States the outcome (Yes or
- * No won), the price the stock actually closed at, and that the market is closed. Redemption
- * of winning tokens lives on the Portfolio page; this is read-only inspection.
+ * A thin, horizontal banner for a *settled* (closed) strike — you can't trade a closed market,
+ * but you can inspect its result. It sits *above* the chart so the trade page keeps its
+ * two-column (strikes · chart) rhythm instead of spending a whole right column on a read-only
+ * result. States the outcome (Yes or No won) with a colored dot, the price the stock actually
+ * closed at, and a short redeem note. Redemption of winning tokens lives on the Portfolio page;
+ * this is read-only inspection.
  */
-export function SettledMarketPanel({
+export function SettledMarketBanner({
   ticker,
   market,
 }: {
@@ -34,58 +36,52 @@ export function SettledMarketPanel({
     ? `${symbol} closed below ${strikeLabel}.`
     : "This market has settled.";
 
+  const tone = yesWon
+    ? "border-yes/30 bg-yes/5"
+    : noWon
+    ? "border-no/30 bg-no/5"
+    : "border-line-soft bg-panel-2/40";
+  const verdictColor = yesWon ? "text-yes" : noWon ? "text-no" : "text-fg-dim";
+  const dotColor = yesWon ? "bg-yes" : noWon ? "bg-no" : "bg-fg-dim";
+
   return (
-    <div className="panel p-4" data-testid="settled-market-panel">
-      <div className="flex items-center justify-between">
-        <span className="text-xs uppercase tracking-wide text-fg-faint">
-          Market closed
-        </span>
-        <span className="text-xs uppercase tracking-wide text-fg-faint">
-          Yes · closes ≥ {strikeLabel}
-        </span>
-      </div>
-
-      <div
+    <div
+      className={cx(
+        "panel flex flex-wrap items-center gap-x-4 gap-y-1 border px-4 py-2.5",
+        tone
+      )}
+      data-testid="settled-market-banner"
+    >
+      <span
+        className={cx("h-2 w-2 shrink-0 rounded-full", dotColor)}
+        aria-hidden
+      />
+      <span
         className={cx(
-          "mt-3 rounded-lg border p-3",
-          yesWon
-            ? "border-yes/30 bg-yes/5"
-            : noWon
-            ? "border-no/30 bg-no/5"
-            : "border-line-soft bg-panel-2/40"
+          "stat-mono text-sm uppercase tracking-wide",
+          verdictColor
         )}
+        data-testid="settled-verdict"
       >
-        <div
-          className={cx(
-            "stat-mono text-2xl uppercase tracking-wide",
-            yesWon ? "text-yes" : noWon ? "text-no" : "text-fg-dim"
-          )}
-          data-testid="settled-verdict"
-        >
-          {verdict}
-        </div>
-        <p className="mt-1 text-sm text-fg-dim">{explanation}</p>
-      </div>
-
+        {verdict}
+      </span>
+      <span className="text-sm text-fg-dim">{explanation}</span>
       {closeLabel && (
-        <div className="mt-3 flex items-baseline justify-between">
-          <span className="text-xs uppercase tracking-wide text-fg-faint">
-            Closed at
-          </span>
+        <span className="ml-auto text-xs uppercase tracking-wide text-fg-faint">
+          Closed at{" "}
           <span
-            className="stat-mono text-lg text-fg"
+            className="stat-mono normal-case text-fg"
             data-testid="settled-close"
           >
             {closeLabel}
           </span>
-        </div>
+        </span>
       )}
-
-      <p className="mt-3 text-xs text-fg-faint">
+      <span className="basis-full text-xs text-fg-faint">
         Trading is closed for this strike. Winning tokens redeem for{" "}
         <span className="font-mono text-usdc">$1.00</span> on your{" "}
         <span className="text-fg-dim">Portfolio</span>.
-      </p>
+      </span>
     </div>
   );
 }
