@@ -188,7 +188,8 @@ describe("LandingView", () => {
     // Yes won by closing $12.40 above the $300 strike.
     expect(row).toHaveTextContent(/cleared by/i);
     expect(row).toHaveTextContent(/\$12\.40/);
-    expect(row).toHaveAttribute("href", "/trade/TSLA");
+    // Deep-links to the $300 line it was decided on, not just the symbol.
+    expect(row).toHaveAttribute("href", "/trade/TSLA?strike=300");
   });
 
   it("frames a No win as the close missing the strike", () => {

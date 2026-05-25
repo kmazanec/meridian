@@ -371,9 +371,14 @@ function WinCard({ win }: { win: RecentWin }) {
   // clear (close ≥ strike), No wins on a miss; sign of (close − strike) agrees with the outcome.
   const marginUsdc =
     win.settlementPrice != null ? win.settlementPrice.sub(win.strike) : null;
+  // Deep-link to the line this result was decided on (dollars), so the trade page opens on
+  // that strike — matching today's open market at the same line when the board has reopened,
+  // and falling back to the first open strike otherwise. Same `?strike=` contract as the
+  // featured cards.
+  const strikeDollars = win.strike.toNumber() / 1_000_000;
   return (
     <Link
-      href={`/trade/${win.symbol}`}
+      href={`/trade/${win.symbol}?strike=${strikeDollars}`}
       className={cx(
         "panel group relative block overflow-hidden p-4 transition-colors",
         yesWon ? "hover:border-yes/40" : "hover:border-no/40"
