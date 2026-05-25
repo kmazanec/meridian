@@ -57,6 +57,7 @@ export function PriceChartPanel({
   closes,
   spot,
   tradingDay,
+  strike,
   className,
 }: {
   symbol: string;
@@ -66,6 +67,11 @@ export function PriceChartPanel({
   spot: Spot | null;
   /** The selected market's settlement instant (unix seconds) — powers the Day view. */
   tradingDay: number | null;
+  /**
+   * The selected strike (dollars). Drawn as a reference line with Yes/No markers on both the
+   * Day and Month views, so the chart always shows where the contract's line sits.
+   */
+  strike?: number | null;
   className?: string;
 }) {
   // Day is the default view. `userPicked` records whether the user has actively toggled, so we
@@ -126,10 +132,14 @@ export function PriceChartPanel({
         session.loading && intradayPoints.length === 0 ? (
           <ChartMessage>Loading today's session…</ChartMessage>
         ) : (
-          <PriceChart points={intradayPoints} liveIndex={session.liveIndex} />
+          <PriceChart
+            points={intradayPoints}
+            liveIndex={session.liveIndex}
+            strike={strike}
+          />
         )
       ) : (
-        <PriceChart points={monthPoints(closes)} />
+        <PriceChart points={monthPoints(closes)} strike={strike} />
       )}
     </div>
   );

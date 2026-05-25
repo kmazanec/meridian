@@ -47,24 +47,55 @@ export interface ChartLayout {
     x: number;
     anchor: "start" | "middle" | "end";
   }>;
+  /** The strike overlay: the line's y and the plot edges it spans (only when a strike is given). */
+  strike: {
+    value: number;
+    y: number;
+    left: number;
+    right: number;
+    /** Top/bottom of the plot area, for placing the Yes (above) / No (below) markers. */
+    plotTop: number;
+    plotBottom: number;
+  } | null;
 }
+
+/**
+ * The y-domain is padded by this fraction of its span on each side so the line — and especially
+ * the strike line — is never pinned to the very top or bottom of the plot. There's always a
+ * little air above the highest value and below the lowest.
+ */
+const Y_PAD_FRACTION = 0.08;
 
 /**
  * Pure layout: map points to pixel coords + line/area paths + y ticks + evenly-spaced x labels.
  * `xLabelCount` is the *target* number of bottom labels (capped at the point count); the first
  * and last are always included and anchored inward so they never clip the chart edges.
+ *
+ * When `strike` (dollars) is given, the y-domain is widened to include it and the layout carries
+ * a `strike` overlay (its y and span) so the chart can draw the line + Yes/No markers. The domain
+ * is always padded ({@link Y_PAD_FRACTION}) so neither the data nor the strike touches an edge.
  */
 export function chartLayout(
   points: ChartPoint[],
   width: number,
   height: number,
   tickCount = 4,
-  xLabelCount = 5
+  xLabelCount = 5,
+  strike?: number | null
 ): ChartLayout | null {
   if (points.length < 2) return null;
   const closes = points.map((p) => p.close);
-  const min = Math.min(...closes);
-  const max = Math.max(...closes);
+  // The domain must contain every close *and* the strike (so its line is always on-chart),
+  // then gets symmetric padding so nothing sits flush against the top or bottom edge.
+  const hasStrike = strike != null && Number.isFinite(strike);
+  const dataMin = Math.min(...closes);
+  const dataMax = Math.max(...closes);
+  const rawMin = hasStrike ? Math.min(dataMin, strike) : dataMin;
+  const rawMax = hasStrike ? Math.max(dataMax, strike) : dataMax;
+  const rawSpan = rawMax - rawMin || Math.abs(rawMax) || 1;
+  const pad = rawSpan * Y_PAD_FRACTION;
+  const min = rawMin - pad;
+  const max = rawMax + pad;
   const span = max - min || 1;
   const innerW = width - PAD.left - PAD.right;
   const innerH = height - PAD.top - PAD.bottom;
@@ -110,7 +141,18 @@ export function chartLayout(
         : ("middle" as const),
   }));
 
-  return { pts, line, area, min, max, ticks, xLabels };
+  const strikeOverlay = hasStrike
+    ? {
+        value: strike,
+        y: yFor(strike),
+        left: PAD.left,
+        right: width - PAD.right,
+        plotTop: PAD.top,
+        plotBottom: height - PAD.bottom,
+      }
+    : null;
+
+  return { pts, line, area, min, max, ticks, xLabels, strike: strikeOverlay };
 }
 
 const fmtUsd = (n: number) =>
@@ -124,16 +166,22 @@ export function PriceChart({
   height = 160,
   className,
   liveIndex,
+  strike,
 }: {
   points: ChartPoint[];
   height?: number;
   className?: string;
   /** When set, marks this point's index as the session's live edge with a gold dot. */
   liveIndex?: number;
+  /**
+   * The selected strike (dollars). When given, a horizontal line is drawn at the strike with
+   * Yes (above) / No (below) markers, and the y-scale widens to keep the line off the edges.
+   */
+  strike?: number | null;
 }) {
   // Fixed viewBox width; the SVG scales to its container via width=100%.
   const width = 720;
-  const layout = chartLayout(points, width, height);
+  const layout = chartLayout(points, width, height, 4, 5, strike);
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -229,6 +277,57 @@ export function PriceChart({
           strokeLinecap="round"
           vectorEffect="non-scaling-stroke"
         />
+
+        {/* The selected strike: a gold reference line with Yes (above) / No (below) markers.
+            Close above the line ⇒ Yes pays; below ⇒ No pays. The y-scale already reserves
+            headroom so the line is never flush with the top/bottom edge. */}
+        {layout.strike && (
+          <g data-testid="price-chart-strike">
+            <line
+              x1={layout.strike.left}
+              y1={layout.strike.y}
+              x2={layout.strike.right}
+              y2={layout.strike.y}
+              className="stroke-accent"
+              strokeWidth={1.25}
+              strokeDasharray="5 4"
+              strokeOpacity={0.85}
+              vectorEffect="non-scaling-stroke"
+            />
+            {/* Strike price tag, pinned at the left edge just above the line. */}
+            <text
+              x={layout.strike.left + 2}
+              y={layout.strike.y - 5}
+              textAnchor="start"
+              className="fill-accent stat-mono"
+              fontSize={11}
+              fillOpacity={0.95}
+            >
+              Strike {fmtUsd(layout.strike.value)}
+            </text>
+            {/* Yes/No side markers at the right edge, hugging the line above and below it. */}
+            <text
+              x={layout.strike.right - 2}
+              y={Math.max(layout.strike.plotTop + 10, layout.strike.y - 6)}
+              textAnchor="end"
+              className="fill-yes stat-mono"
+              fontSize={10}
+              letterSpacing={0.5}
+            >
+              YES ↑
+            </text>
+            <text
+              x={layout.strike.right - 2}
+              y={Math.min(layout.strike.plotBottom - 3, layout.strike.y + 13)}
+              textAnchor="end"
+              className="fill-no stat-mono"
+              fontSize={10}
+              letterSpacing={0.5}
+            >
+              NO ↓
+            </text>
+          </g>
+        )}
 
         {/* Evenly-spaced x-axis labels (dates for Month, times for Day). */}
         {layout.xLabels.map((l, i) => (

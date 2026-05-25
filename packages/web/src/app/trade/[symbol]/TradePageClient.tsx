@@ -118,6 +118,12 @@ export default function TradePageClient() {
     () => strikes.find((m) => m.address.equals(selected ?? PublicKey.default)),
     [strikes, selected]
   );
+  // The selected strike in dollars, for the chart's strike reference line (USDC base units, 6dp).
+  const selectedStrikeDollars = useMemo(() => {
+    const strikeBase = selectedDiscovered?.strike ?? market?.strike ?? null;
+    return strikeBase ? strikeBase.toNumber() / 1_000_000 : null;
+  }, [selectedDiscovered, market]);
+
   const rawBook = useMemo(() => {
     if (!selectedDiscovered) return null;
     return books.get(selectedDiscovered.orderBook.toBase58()) ?? null;
@@ -292,6 +298,7 @@ export default function TradePageClient() {
             tradingDay={
               headerTradingDay != null ? Number(headerTradingDay) : null
             }
+            strike={selectedStrikeDollars}
           />
           {market && selected ? (
             dual ? (

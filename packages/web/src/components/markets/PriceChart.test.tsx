@@ -21,10 +21,13 @@ describe("chartLayout", () => {
     expect(Math.min(...ys)).toBe(ys[1]);
   });
 
-  it("spans min/max from the close values and emits y ticks", () => {
+  it("spans a padded domain around the close values and emits y ticks", () => {
     const layout = chartLayout(series, 700, 160, 4)!;
-    expect(layout.min).toBe(100);
-    expect(layout.max).toBe(110);
+    // The domain brackets the raw [100, 110] range with a little air on each side.
+    expect(layout.min).toBeLessThan(100);
+    expect(layout.max).toBeGreaterThan(110);
+    expect(layout.min).toBeGreaterThan(90);
+    expect(layout.max).toBeLessThan(120);
     expect(layout.ticks).toHaveLength(4);
     expect(layout.area.endsWith("Z")).toBe(true);
   });
@@ -44,6 +47,39 @@ describe("chartLayout", () => {
   it("caps x labels at the point count and dedupes", () => {
     const layout = chartLayout(series, 700, 160, 4, 10)!;
     expect(layout.xLabels.length).toBeLessThanOrEqual(series.length);
+  });
+
+  it("pads the y-domain so the top/bottom values are never flush with the edges", () => {
+    const layout = chartLayout(series, 700, 160)!;
+    // Padded domain sits strictly outside the raw data range.
+    expect(layout.min).toBeLessThan(100);
+    expect(layout.max).toBeGreaterThan(110);
+  });
+
+  it("emits no strike overlay without a strike", () => {
+    expect(chartLayout(series, 700, 160)!.strike).toBeNull();
+    expect(chartLayout(series, 700, 160, 4, 5, null)!.strike).toBeNull();
+  });
+
+  it("includes the strike in the y-domain and places its line", () => {
+    // Strike below the data range must still fit on-chart, padded off the bottom edge.
+    const layout = chartLayout(series, 700, 160, 4, 5, 90)!;
+    expect(layout.min).toBeLessThan(90); // padded below the strike
+    expect(layout.strike).not.toBeNull();
+    expect(layout.strike!.value).toBe(90);
+    // The strike line spans the plot width and sits inside the plot box.
+    expect(layout.strike!.right).toBeGreaterThan(layout.strike!.left);
+    expect(layout.strike!.y).toBeLessThanOrEqual(layout.strike!.plotBottom);
+    expect(layout.strike!.y).toBeGreaterThanOrEqual(layout.strike!.plotTop);
+  });
+
+  it("never pins the strike line to the very top or bottom edge", () => {
+    // Strike at the data max (110) — without padding it would sit on the top edge.
+    const layout = chartLayout(series, 700, 160, 4, 5, 110)!;
+    expect(layout.strike!.y).toBeGreaterThan(layout.strike!.plotTop);
+    // And a strike at the data min (100) must clear the bottom edge.
+    const low = chartLayout(series, 700, 160, 4, 5, 100)!;
+    expect(low.strike!.y).toBeLessThan(low.strike!.plotBottom);
   });
 });
 
@@ -79,5 +115,19 @@ describe("PriceChart", () => {
   it("draws a live marker at the given liveIndex", () => {
     render(<PriceChart points={series} liveIndex={1} />);
     expect(screen.getByTestId("price-chart-live")).toBeInTheDocument();
+  });
+
+  it("draws no strike line by default", () => {
+    render(<PriceChart points={series} />);
+    expect(screen.queryByTestId("price-chart-strike")).not.toBeInTheDocument();
+  });
+
+  it("draws the strike line with Yes/No side markers when a strike is given", () => {
+    render(<PriceChart points={series} strike={105} />);
+    const strike = screen.getByTestId("price-chart-strike");
+    expect(strike).toBeInTheDocument();
+    expect(strike).toHaveTextContent("Strike $105.00");
+    expect(strike).toHaveTextContent(/YES/);
+    expect(strike).toHaveTextContent(/NO/);
   });
 });
