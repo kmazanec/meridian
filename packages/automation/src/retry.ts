@@ -14,6 +14,34 @@
 const realSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Map `items` through `fn` with at most `limit` calls in flight at once, preserving input
+ * order in the result. Used to bound the settlement job's RPC fan-out: a single close
+ * instant produces dozens of due markets, and firing every settle (each several RPC-heavy
+ * ops from one fee-payer) at once thunders the shared, rate-limited endpoint. A small pool
+ * spreads the burst while still letting independent markets settle without serializing on
+ * each other. `limit` is clamped to at least 1.
+ */
+export async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const max = Math.max(1, Math.floor(limit));
+  const results = new Array<R>(items.length);
+  let next = 0;
+  async function worker(): Promise<void> {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  const workers = Array.from({ length: Math.min(max, items.length) }, worker);
+  await Promise.all(workers);
+  return results;
+}
+
 export interface BackoffOptions {
   /** Number of retries after the initial attempt (so attempts = retries + 1). */
   retries: number;

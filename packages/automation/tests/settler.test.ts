@@ -133,4 +133,53 @@ describe("PythSettler classification", () => {
     expect(r.status).to.equal(SettleStatus.Error);
     expect(r.error).to.match(/feed id/i);
   });
+
+  it("retries a 429 and succeeds without paging the operator", async () => {
+    let calls = 0;
+    const settler = new PythSettler({
+      chain: fakeChain,
+      feedIds: { [Ticker.Meta]: "0xmeta" },
+      settleFn: async () => {
+        calls++;
+        if (calls < 3) throw new Error("failed to send: 429 Too Many Requests");
+      },
+      sleep: async () => {}, // instant backoff in tests
+    });
+    const r = await settler.settle(market());
+    expect(r.status).to.equal(SettleStatus.Settled);
+    expect(calls).to.equal(3); // two 429s, then success
+  });
+
+  it("gives up on a persistent 429 after exhausting retries (hard error)", async () => {
+    let calls = 0;
+    const settler = new PythSettler({
+      chain: fakeChain,
+      feedIds: { [Ticker.Meta]: "0xmeta" },
+      settleFn: async () => {
+        calls++;
+        throw new Error("429 Too Many Requests");
+      },
+      rateLimitRetries: 2,
+      sleep: async () => {},
+    });
+    const r = await settler.settle(market());
+    expect(r.status).to.equal(SettleStatus.Error);
+    expect(calls).to.equal(3); // initial + 2 retries
+  });
+
+  it("does NOT retry a wide-confidence rejection as if it were a 429", async () => {
+    let calls = 0;
+    const settler = new PythSettler({
+      chain: fakeChain,
+      feedIds: { [Ticker.Meta]: "0xmeta" },
+      settleFn: async () => {
+        calls++;
+        throw new Error("Error Code: WideConfidence.");
+      },
+      sleep: async () => {},
+    });
+    const r = await settler.settle(market());
+    expect(r.status).to.equal(SettleStatus.WideConfidence);
+    expect(calls).to.equal(1); // classified on first attempt, no rate-limit retry
+  });
 });

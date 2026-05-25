@@ -346,4 +346,37 @@ describe("runSettlementJob", () => {
     // not back-to-back at t=0.
     expect(attemptClocks).to.deep.equal([0, 30_000]);
   });
+
+  it("bounds phase-1 settle concurrency to maxConcurrency", async () => {
+    const { logger } = captureLogger();
+    const alerter = new RecordingAlerter();
+    const markets = Array.from({ length: 12 }, () => freshMarket());
+
+    let inFlight = 0;
+    let peak = 0;
+    const settler: Settler = {
+      settle: async () => {
+        inFlight++;
+        peak = Math.max(peak, inFlight);
+        // Yield to the event loop so all slots that *can* start have started before any
+        // settle resolves — this is what makes the peak observable.
+        await Promise.resolve();
+        await Promise.resolve();
+        inFlight--;
+        return { status: SettleStatus.Settled };
+      },
+    };
+
+    const summary = await runSettlementJob({
+      discovery: discoveryOf(markets),
+      settler,
+      alerter,
+      logger,
+      nowSeconds: () => NOW_SECONDS,
+      maxConcurrency: 4,
+    });
+
+    expect(peak).to.equal(4); // never more than the cap in flight
+    expect(summary.settled).to.equal(12); // all still settled
+  });
 });

@@ -18,6 +18,12 @@ import { PublicKey } from "@solana/web3.js";
 import type { ChainClient } from "./chain";
 import { SettleStatus, type SettleResult, type Settler } from "./settlementJob";
 
+/** Whether an error looks like RPC rate-limiting (HTTP 429) worth backing off on. */
+function isRateLimited(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return msg.includes("429") || msg.includes("too many requests");
+}
+
 /** A function that runs the SDK pull-oracle settle for a market+feed (injectable for tests). */
 export type SettleWithPythFn = (
   feedIdHex: string,
@@ -31,6 +37,12 @@ export interface PythSettlerOptions {
   hermesUrl?: string;
   /** Injectable settle fn (defaults to the SDK's `settleWithPyth`). */
   settleFn?: SettleWithPythFn;
+  /** Retries for a rate-limited (429) settle before it counts as a failure. Default 3. */
+  rateLimitRetries?: number;
+  /** Base backoff for the rate-limit retry (ms), doubling each attempt. Default 1000. */
+  rateLimitBaseDelayMs?: number;
+  /** Injectable sleep for the rate-limit backoff (tests). Default real setTimeout. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 // Anchor offsets custom error codes by 6000; these are the deployed program's ordinals
@@ -79,12 +91,18 @@ export class PythSettler implements Settler {
   private readonly feedIds: Partial<Record<Ticker, string>>;
   private readonly hermesUrl?: string;
   private readonly settleFn: SettleWithPythFn;
+  private readonly rateLimitRetries: number;
+  private readonly rateLimitBaseDelayMs: number;
+  private readonly sleep?: (ms: number) => Promise<void>;
 
   constructor(opts: PythSettlerOptions) {
     this.chain = opts.chain;
     this.feedIds = opts.feedIds;
     this.hermesUrl = opts.hermesUrl;
     this.settleFn = opts.settleFn ?? this.defaultSettleFn.bind(this);
+    this.rateLimitRetries = opts.rateLimitRetries ?? 3;
+    this.rateLimitBaseDelayMs = opts.rateLimitBaseDelayMs ?? 1000;
+    this.sleep = opts.sleep;
   }
 
   private async defaultSettleFn(
@@ -102,6 +120,32 @@ export class PythSettler implements Settler {
     );
   }
 
+  /**
+   * Run the settle, retrying *only* on RPC rate-limiting (429), with exponential backoff.
+   * The settlement burst hits a shared, rate-limited endpoint, and a 429 is transient —
+   * without this it would be classified as a hard `Error` and page the operator for what a
+   * short backoff clears. Real settle errors (wide confidence, stale price, wrong feed) are
+   * not rate-limit errors, so they propagate on the first attempt and the caller classifies
+   * them as before.
+   */
+  private async settleWithRateLimitBackoff(
+    feedIdHex: string,
+    market: PublicKey
+  ): Promise<void> {
+    const sleep =
+      this.sleep ??
+      ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await this.settleFn(feedIdHex, market);
+        return;
+      } catch (err) {
+        if (!isRateLimited(err) || attempt >= this.rateLimitRetries) throw err;
+        await sleep(this.rateLimitBaseDelayMs * 2 ** attempt);
+      }
+    }
+  }
+
   async settle(m: {
     address: PublicKey;
     account: MarketAccount;
@@ -115,7 +159,7 @@ export class PythSettler implements Settler {
     }
 
     try {
-      await this.settleFn(feedId, m.address);
+      await this.settleWithRateLimitBackoff(feedId, m.address);
       return { status: SettleStatus.Settled };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

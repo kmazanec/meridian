@@ -6,7 +6,12 @@
  */
 
 import { expect } from "chai";
-import { withBackoff, retryEvery, RetryGaveUp } from "../src/retry";
+import {
+  withBackoff,
+  retryEvery,
+  RetryGaveUp,
+  mapWithConcurrency,
+} from "../src/retry";
 
 /** A controllable clock + sleep: time only advances when `sleep` is awaited. */
 function virtualClock(startMs = 0) {
@@ -203,5 +208,55 @@ describe("retryEvery (wide-confidence settlement loop)", () => {
     );
     expect(ok).to.be.true;
     expect(attemptClocks).to.deep.equal([30_000]); // attempted only after one sleep
+  });
+});
+
+describe("mapWithConcurrency", () => {
+  it("preserves input order in the results", async () => {
+    const out = await mapWithConcurrency(
+      [1, 2, 3, 4, 5],
+      2,
+      async (n) => n * 10
+    );
+    expect(out).to.deep.equal([10, 20, 30, 40, 50]);
+  });
+
+  it("never runs more than `limit` calls at once", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    await mapWithConcurrency(
+      Array.from({ length: 10 }, (_, i) => i),
+      3,
+      async () => {
+        inFlight++;
+        peak = Math.max(peak, inFlight);
+        await Promise.resolve();
+        await Promise.resolve();
+        inFlight--;
+      }
+    );
+    expect(peak).to.equal(3);
+  });
+
+  it("passes the index and handles an empty list", async () => {
+    const idx = await mapWithConcurrency(
+      ["a", "b", "c"],
+      5,
+      async (_v, i) => i
+    );
+    expect(idx).to.deep.equal([0, 1, 2]);
+    expect(await mapWithConcurrency([], 4, async (n) => n)).to.deep.equal([]);
+  });
+
+  it("clamps a limit below 1 up to serial execution", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    await mapWithConcurrency([1, 2, 3], 0, async () => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await Promise.resolve();
+      inFlight--;
+    });
+    expect(peak).to.equal(1);
   });
 });

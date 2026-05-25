@@ -19,7 +19,7 @@ import { PublicKey } from "@solana/web3.js";
 import type { MarketDiscovery } from "./markets";
 import type { Alerter } from "./alerter";
 import type { Logger } from "./logger";
-import { retryEvery, RetryGaveUp } from "./retry";
+import { retryEvery, RetryGaveUp, mapWithConcurrency } from "./retry";
 
 /** Outcome of a single settle attempt against the chain. */
 export enum SettleStatus {
@@ -56,6 +56,11 @@ export interface SettlementJobOptions {
   retryIntervalMs?: number;
   /** Wide-confidence total budget (ms). Default 15 min. */
   retryMaxMs?: number;
+  /**
+   * Max settles in flight at once, bounding the RPC fan-out against the shared endpoint.
+   * Default 5. Must be > 1 so a market stuck in its retry window can't block a ready one.
+   */
+  maxConcurrency?: number;
   /** Injectable clock for the retry loop (ms). Default Date.now. */
   now?: () => number;
   /** Injectable sleep for the retry loop. Default real setTimeout. */
@@ -81,16 +86,24 @@ type Market = { address: PublicKey; account: MarketAccount };
  * Markets are settled **concurrently**, in two phases, so one market stuck in its
  * wide-confidence retry window never delays another market that is ready to settle now
  * (settlement is time-sensitive — users redeem only after a market settles):
- *   1. attempt every due, open market once, in parallel;
- *   2. for those that came back wide-confidence, run their 30s/15min retry loops in
- *      parallel; a market that settles in this phase succeeds, one whose band stays wide
- *      for the whole window alerts the admin to run `admin_settle`.
+ *   1. attempt every due, open market once;
+ *   2. for those that came back wide-confidence, run their 30s/15min retry loops; a market
+ *      that settles in this phase succeeds, one whose band stays wide for the whole window
+ *      alerts the admin to run `admin_settle`.
+ *
+ * Phase 1 runs through a bounded pool (`maxConcurrency`, default 5) rather than an
+ * unbounded `Promise.all`: a single close instant makes dozens of markets due at once, and
+ * settling them all simultaneously from one fee-payer floods the shared, rate-limited RPC
+ * endpoint. Phase 2's retry loops stay unbounded — each is mostly idle between 30s polls,
+ * and bounding them would let a stuck market hold a slot for its whole window, defeating
+ * the anti-blocking split.
  */
 export async function runSettlementJob(
   opts: SettlementJobOptions
 ): Promise<SettlementJobSummary> {
   const retryIntervalMs = opts.retryIntervalMs ?? 30_000;
   const retryMaxMs = opts.retryMaxMs ?? 15 * 60_000;
+  const maxConcurrency = opts.maxConcurrency ?? 5;
 
   const markets = await opts.discovery.listMarkets();
   opts.logger.info("settlement job starting", { markets: markets.length });
@@ -115,9 +128,14 @@ export async function runSettlementJob(
     }
   }
 
-  // Phase 1: one settle attempt per due market, all in parallel.
-  const firstResults = await Promise.all(
-    due.map(async (m) => ({ m, result: await firstAttempt(m, opts) }))
+  // Phase 1: one settle attempt per due market, through the bounded pool.
+  const firstResults = await mapWithConcurrency(
+    due,
+    maxConcurrency,
+    async (m) => ({
+      m,
+      result: await firstAttempt(m, opts),
+    })
   );
 
   const needRetry: Market[] = [];
@@ -140,6 +158,10 @@ export async function runSettlementJob(
   }
 
   // Phase 2: wide-confidence retry loops, all in parallel (no market blocks another).
+  // These are NOT pool-bounded: a retry loop is mostly idle (sleeping 30s between
+  // attempts), so running them all costs little, and bounding them would let a stuck
+  // market hold a pool slot for the full 15-min window — exactly the blocking the two-phase
+  // split exists to avoid. Wide-confidence is rare, so this set is small in practice.
   const retryResults = await Promise.all(
     needRetry.map(async (m) => ({
       m,
