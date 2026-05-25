@@ -116,6 +116,35 @@ describe("TradePanel", () => {
     expect(onSubmit.mock.calls[0][1].action).toBe(TradeAction.BuyYes);
   });
 
+  it("shows the brief's payoff sentence in the confirm dialog for a buy", async () => {
+    renderPanel();
+    await userEvent.click(screen.getByTestId("submit-trade"));
+    // Buy Yes @ 0.50, META strike $680 → "win if META closes above $680".
+    expect(screen.getByTestId("payoff-line").textContent).toBe(
+      "You pay 0.50 USDC. You win $1.00 if META closes above $680.00."
+    );
+  });
+
+  it("phrases Buy No as winning below the strike", async () => {
+    renderPanel({
+      position: { usdc: new BN(100_000_000), yes: new BN(0), no: new BN(0) },
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Buy No" }));
+    await userEvent.click(screen.getByTestId("submit-trade"));
+    expect(screen.getByTestId("payoff-line").textContent).toMatch(
+      /You win \$1\.00 if META closes below \$680\.00\./
+    );
+  });
+
+  it("omits the payoff sentence for a sell (exit) action", async () => {
+    renderPanel({
+      position: { usdc: new BN(0), yes: new BN(100_000_000), no: new BN(0) },
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Sell Yes" }));
+    await userEvent.click(screen.getByTestId("submit-trade"));
+    expect(screen.queryByTestId("payoff-line")).not.toBeInTheDocument();
+  });
+
   it("routes each of the four actions through the SDK with the right action", async () => {
     // Each action has different needs: a per-action position that satisfies BOTH the
     // affordability pre-check AND the position-constraint guard (Buy Yes blocked by No,

@@ -40,6 +40,25 @@ describe("computeStrikes", () => {
     expect(dollars).to.deep.equal([620, 640, 660, 680, 700, 720, 740]);
   });
 
+  it("produces the brief's AAPL $230 example: 5 unique strikes with the close", () => {
+    // The brief's worked example. AAPL prev close $230:
+    //   -3% = 223.1 → 220, -6% = 216.2 → 220, -9% = 209.3 → 210   (down legs collapse 220,220 → 220)
+    //   +3% = 236.9 → 240, +6% = 243.8 → 240, +9% = 250.7 → 250   (up legs collapse 240,240 → 240)
+    //   close 230 → 230
+    // The ± legs alone yield only 4 ({210,220,240,250}); the rounded close fills the
+    // at-the-money gap to give the brief's 5: {210,220,230,240,250}. This is why the
+    // at-the-money strike is on by default — see config INCLUDE_CLOSE.
+    const strikes = computeStrikes(usd(230), { includeClose: true });
+    const dollars = strikes.map((s) => s.div(PAYOFF_UNIT).toNumber());
+    expect(dollars).to.deep.equal([210, 220, 230, 240, 250]);
+
+    // Without the close, the same input collapses to 4 (the ± legs only).
+    const withoutClose = computeStrikes(usd(230), { includeClose: false }).map(
+      (s) => s.div(PAYOFF_UNIT).toNumber()
+    );
+    expect(withoutClose).to.deep.equal([210, 220, 240, 250]);
+  });
+
   it("collapses an AAPL-style low price to fewer unique strikes", () => {
     // $30 ± {3,6,9}% = {27.3, 28.2, 29.1} / {30.9, 31.8, 32.7}.
     // Rounded to $10 the down-legs all become 30 and up-legs all become 30 too →

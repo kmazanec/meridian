@@ -295,14 +295,29 @@ User wallet                  Program                    Vault
 | 9:00 AM | Frontend | Markets visible; minting enabled |
 | 9:30 AM | Market | US open; live trading |
 | 4:00 PM | Market | US close |
-| ~4:05 PM | Automation | `settle_market` per open contract (read oracle, write outcome). Retry on wide confidence every 30s up to 15 min; else alert admin for `admin_settle` |
+| ~4:05 PM | Automation | `settle_market` per open contract (read oracle, write outcome). Happy path settles every contract on the first pass — well inside the 10-min-of-close target. Only a contract whose oracle confidence band is *too wide* enters a fallback retry loop (every 30s, up to 15 min), then alerts admin for `admin_settle` |
 | 4:05 PM+ | Users | Redemption enabled; winners claim USDC |
 | Ongoing | Users | Unredeemed winning tokens remain redeemable indefinitely |
 
+> **Settlement SLA.** The success criterion is settlement within **10 minutes of
+> close**. The first settle pass fires at ~4:05 PM and settles all contracts whose
+> oracle price is fresh and confident — comfortably within the window. The 15-minute
+> figure is *not* the happy-path latency: it is the maximum the job will keep retrying a
+> single contract that reports a persistently wide confidence band before giving up and
+> paging the admin for a time-delayed `admin_settle`. In other words, 10 minutes is the
+> target for normal settlement; 15 minutes is the patience budget before declaring the
+> oracle unreliable for a given contract.
+
 **Strike algorithm (example, META prev close $680):** strikes at −9/−6/−3/+3/+6/+9%
-rounded to nearest $10 → $620, $640, $660, $700, $720, $740, plus optionally the
-rounded close ($680). Deduplicate (low-priced stocks like AAPL collapse to fewer
-unique strikes).
+rounded to nearest $10 → $620, $640, $660, $700, $720, $740, plus the rounded close
+($680) as an at-the-money strike. The close strike is **on by default** (`INCLUDE_CLOSE`,
+set `0` to drop it) — it is the most-traded level and it backfills the at-the-money gap
+that appears when ±% legs collide under rounding. Deduplicate.
+
+For **low-priced stocks** the ±% legs round onto the same $10 grid points and collapse.
+AAPL prev close $230: −3%/−6% both round to $220 and +3%/+6% both round to $240, so the
+six ± legs yield only `{$210, $220, $240, $250}`; the at-the-money close ($230) fills the
+gap for the brief's five unique strikes `{$210, $220, $230, $240, $250}`.
 
 ---
 

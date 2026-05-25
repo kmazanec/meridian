@@ -29,7 +29,10 @@ const ROUND_STEP = new BN(STRIKE_ROUND_DOLLARS).mul(PAYOFF_UNIT);
 const TWO = new BN(2);
 
 export interface ComputeStrikesOptions {
-  /** Also emit the (rounded) previous close as an at-the-money strike. Default false. */
+  /**
+   * Also emit the (rounded) previous close as an at-the-money strike. Defaults to
+   * false at this layer; the morning job's config default is true (INCLUDE_CLOSE).
+   */
   includeClose?: boolean;
 }
 

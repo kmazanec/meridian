@@ -207,7 +207,7 @@ separate, secret keypair for mainnet.
 
 ## Testing
 
-The suite under `programs/meridian/tests/` (87 tests across 11 files) covers each
+The suite under `programs/meridian/tests/` (96 tests across 11 files) covers each
 instruction plus the on-chain invariants:
 
 | File | Focus |

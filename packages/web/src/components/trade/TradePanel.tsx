@@ -7,11 +7,13 @@ import {
   buildTradeIntent,
   TradeAction,
   PAYOFF_UNIT,
+  TICKER_SYMBOLS,
   type MarketAccount,
   type OrderBookAccount,
   type UserPosition,
   type MeridianProgram,
 } from "@meridian/sdk";
+import { formatUsdc } from "@/lib/format";
 import { makerAccountsFor } from "@/lib/crossing";
 import {
   yesSideFor,
@@ -41,6 +43,27 @@ const ACTIONS: { action: TradeAction; label: string; variant: "yes" | "no" }[] =
     { action: TradeAction.BuyNo, label: "Buy No", variant: "no" },
     { action: TradeAction.SellNo, label: "Sell No", variant: "no" },
   ];
+
+/**
+ * The brief's plain-language payoff sentence for a *buy* action, e.g.
+ * "You pay 0.50 USDC. You win $1.00 if AAPL closes above $230." Yes wins at-or-above
+ * the strike; No wins below it. Returns null for sell actions, where "you pay … you win"
+ * doesn't apply (the user is exiting, not taking a payoff position).
+ */
+function payoffSentence(
+  action: TradeAction,
+  cost: TradeCost,
+  symbol: string,
+  strikeLabel: string
+): string | null {
+  if (action !== TradeAction.BuyYes && action !== TradeAction.BuyNo)
+    return null;
+  const direction =
+    action === TradeAction.BuyYes ? "closes above" : "closes below";
+  return `You pay ${formatAmount(cost.required)} ${
+    cost.asset
+  }. You win $1.00 if ${symbol} ${direction} ${strikeLabel}.`;
+}
 
 /** What the panel reports about a submitted trade (for cost-basis tracking). */
 export interface TradeFill {
@@ -331,6 +354,19 @@ export function TradePanel({
             {costSummary(pending.cost)} · balance{" "}
             {formatAmount(pending.cost.have)} {pending.cost.asset}
           </p>
+          {(() => {
+            const sentence = payoffSentence(
+              pending.fill.action,
+              pending.cost,
+              TICKER_SYMBOLS[market.ticker],
+              formatUsdc(market.strike, 2)
+            );
+            return sentence ? (
+              <p className="mt-2 text-sm text-fg-dim" data-testid="payoff-line">
+                {sentence}
+              </p>
+            ) : null;
+          })()}
           <div className="mt-4 flex gap-2">
             <Button
               variant="accent"
