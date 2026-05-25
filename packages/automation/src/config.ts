@@ -20,7 +20,6 @@ import {
   PAYOFF_UNIT,
 } from "@meridian/sdk";
 import { loadKeypairFromEnv, AUTOMATION_KEYPAIR_ENV } from "./keypair";
-import { dollarsToBaseUnits } from "./strikes";
 import type { Keypair } from "@solana/web3.js";
 
 /** Which previous-close price source the morning job uses. */
@@ -218,12 +217,9 @@ function dollarsExactToBaseUnits(dollars: number): BN {
   return new BN(Math.round(dollars * Number(PAYOFF_UNIT.toString())));
 }
 
-// Re-export so a consumer can snap a raw dollar value to the strike grid if needed.
-export { dollarsToBaseUnits };
-
 /**
- * The environment keys this service reads. Documented here so F-10 can populate
- * `.env.example` (which it owns). Required keys are marked.
+ * The environment keys this service reads, the single source of truth for
+ * populating `.env.example`. Required keys are marked.
  */
 export const ENV_KEYS = {
   required: [

@@ -193,5 +193,3 @@ export function formatWinRate(winRate: number | null): string {
   if (winRate === null) return "—";
   return `${Math.round(winRate * 100)}%`;
 }
-
-export { PRICE_SCALE_NUM };

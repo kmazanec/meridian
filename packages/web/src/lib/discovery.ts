@@ -4,7 +4,6 @@ import {
   Outcome,
   Ticker,
   tickerFromArg,
-  marketPda,
   type MeridianProgram,
 } from "@meridian/sdk";
 import { tradingDayKey } from "./format";
@@ -168,9 +167,4 @@ export function groupByTradingDay(
     g.markets.sort((a, b) => a.ticker - b.ticker || a.strike.cmp(b.strike));
   }
   return groups;
-}
-
-/** Re-derive a market's PDA from its identity (sanity/round-trip helper). */
-export function addressFor(m: DiscoveredMarket): PublicKey {
-  return marketPda(m.ticker, m.strike, m.tradingDay);
 }

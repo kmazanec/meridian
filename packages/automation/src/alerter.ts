@@ -12,7 +12,7 @@
  * monitoring gap, not a correctness bug). Failures to deliver are themselves logged.
  */
 
-import { Logger, LogLevel } from "./logger";
+import { Logger } from "./logger";
 
 /** Severity of an operator alert. */
 export type AlertSeverity = "warning" | "critical";
@@ -129,6 +129,3 @@ export function makeAlerter(opts: MakeAlerterOptions): Alerter {
   );
   return new LogAlerter(opts.logger);
 }
-
-// Re-export LogLevel so consumers that only import the alerter can reference it.
-export { LogLevel };

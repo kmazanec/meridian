@@ -181,15 +181,6 @@ export function representativeYesPrice(
   return rep ? priceFromBook(yesView(rep, books)) : null;
 }
 
-/** Representative mid price (or null) — used for the spread chip. */
-export function representativeMid(
-  markets: DiscoveredMarket[],
-  books: BookMap
-): BN | null {
-  const rep = representativeMarket(markets);
-  return rep ? midPrice(yesView(rep, books)) : null;
-}
-
 /** A live Yes price per ticker, keyed by ticker ordinal. */
 export type LivePrices = Partial<Record<Ticker, BN>>;
 

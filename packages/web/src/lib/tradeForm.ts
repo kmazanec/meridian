@@ -110,8 +110,3 @@ export function parseSize(input: string): BN | null {
   if (!Number.isFinite(n) || n <= 0) return null;
   return new BN(Math.round(n * PAYOFF_UNIT.toNumber()));
 }
-
-/** True if the wallet pubkey is set (used to gate the panel). */
-export function hasWallet(user: PublicKey | null): user is PublicKey {
-  return user !== null;
-}

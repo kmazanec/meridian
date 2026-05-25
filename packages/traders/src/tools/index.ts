@@ -25,12 +25,3 @@ export function makeTools(ctx: BotContext): StructuredToolInterface[] {
     makePlaceOrderTool(ctx),
   ];
 }
-
-export {
-  makeMarketPriceTool,
-  makePriceHistoryTool,
-  makeWalletBalanceTool,
-  makeListStrikesTool,
-  makeStrikePricesTool,
-  makePlaceOrderTool,
-};

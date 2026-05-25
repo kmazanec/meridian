@@ -5,11 +5,9 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import {
   fetchMarket,
-  fetchOrderBook,
   fetchUserPosition,
   type ConfigAccount,
   type MarketAccount,
-  type OrderBookAccount,
   type UserPosition,
 } from "@meridian/sdk";
 import { useProgram } from "./useProgram";
@@ -121,7 +119,7 @@ export function usePolled<T>(
  * The shared reads below — Config, USDC mint, all markets, all order books — are polled
  * **once app-wide** by {@link ChainDataProvider}. These hooks just read that context, so
  * any number of components/pages share a single poll (no per-caller fan-out, which is what
- * was tripping the devnet rate limit). Per-instance reads (`useMarket`, `useOrderBook`,
+ * was tripping the devnet rate limit). Per-instance reads (`useMarket`,
  * `useUserPosition`) below keep their own `usePolled` — they're correctly scoped, not
  * app-wide.
  */
@@ -162,25 +160,6 @@ export function useMarket(
         : Promise.resolve<MarketAccount | null>(null),
     [program, market?.toBase58()],
     { enabled: !!market }
-  );
-}
-
-/**
- * The raw order book for a market. Callers derive the dual-perspective view with the
- * SDK's pure `dualBook` (cheap) and use the raw book for crossing/maker computation —
- * one fetch serves both. Polls fast (the trading surface).
- */
-export function useOrderBook(
-  market: PublicKey | null
-): AsyncResource<OrderBookAccount> {
-  const program = useProgram();
-  return usePolled(
-    () =>
-      market
-        ? fetchOrderBook(program, market)
-        : Promise.resolve<OrderBookAccount | null>(null),
-    [program, market?.toBase58()],
-    { enabled: !!market, pollMs: 12_000 }
   );
 }
 
