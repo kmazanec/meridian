@@ -30,6 +30,7 @@ const settledWinner: SettledRow = {
   tradingDay: new BN(1_700_000_000),
   payout: new BN(3_000_000),
   redeemable: true,
+  redeemed: false,
 };
 
 describe("PortfolioView", () => {
@@ -77,12 +78,32 @@ describe("PortfolioView", () => {
   it("shows Lost (no redeem) for a settled loser", () => {
     render(
       <PortfolioView
-        rows={[{ ...settledWinner, payout: new BN(0), redeemable: false }]}
+        rows={[
+          {
+            ...settledWinner,
+            payout: new BN(0),
+            redeemable: false,
+            redeemed: false,
+          },
+        ]}
         onRedeem={() => {}}
         connected
       />
     );
     expect(screen.getAllByText("Lost").length).toBeGreaterThan(0);
     expect(screen.queryByTestId("redeem-MKT2:yes")).not.toBeInTheDocument();
+  });
+
+  it("shows a claimed winner as Won (not Lost, no redeem button)", () => {
+    render(
+      <PortfolioView
+        rows={[{ ...settledWinner, redeemable: false, redeemed: true }]}
+        onRedeem={() => {}}
+        connected
+      />
+    );
+    expect(screen.getAllByText(/Won · claimed/).length).toBeGreaterThan(0);
+    expect(screen.queryByTestId("redeem-MKT2:yes")).not.toBeInTheDocument();
+    expect(screen.queryAllByText("Lost")).toHaveLength(0);
   });
 });

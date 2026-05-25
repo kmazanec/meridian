@@ -92,6 +92,52 @@ describe("buildPortfolio", () => {
       []
     );
   });
+
+  it("surfaces a claimed winner from redeem history (not in holdings)", () => {
+    const rows = buildPortfolio([], new Map(), [
+      {
+        market: "MKT2",
+        ticker: Ticker.Googl,
+        strike: new BN(150_000_000),
+        side: "yes",
+        tradingDay: new BN(1_700_000_000),
+        amount: new BN(6_000_000),
+        payout: new BN(6_000_000),
+      },
+    ]);
+    expect(rows).toHaveLength(1);
+    const [row] = rows;
+    if (row.kind !== "settled") throw new Error("expected settled");
+    expect(row.redeemed).toBe(true);
+    expect(row.redeemable).toBe(false); // already claimed
+    expect(row.payout.toNumber()).toBe(6_000_000);
+  });
+
+  it("does not double-count a position present in both holdings and redeem history", () => {
+    const held = holding({
+      market: "MKT3",
+      state: "settled",
+      outcome: Outcome.YesWins,
+      side: "yes",
+      amount: new BN(1_000_000),
+    });
+    const rows = buildPortfolio([held], new Map(), [
+      {
+        market: "MKT3",
+        ticker: Ticker.Meta,
+        strike: new BN(680_000_000),
+        side: "yes",
+        tradingDay: new BN(1_700_000_000),
+        amount: new BN(1_000_000),
+        payout: new BN(1_000_000),
+      },
+    ]);
+    // The live holding wins; the history entry for the same market:side is skipped.
+    expect(rows).toHaveLength(1);
+    if (rows[0].kind !== "settled") throw new Error("expected settled");
+    expect(rows[0].redeemed).toBe(false);
+    expect(rows[0].redeemable).toBe(true);
+  });
 });
 
 describe("portfolioSummary", () => {
@@ -132,6 +178,7 @@ describe("portfolioSummary", () => {
       tradingDay: new BN(1_700_000_000),
       payout: new BN(4_000000), // $4.00 claimable
       redeemable: true,
+      redeemed: false,
     },
     {
       kind: "settled",
@@ -143,6 +190,7 @@ describe("portfolioSummary", () => {
       tradingDay: new BN(1_700_000_000),
       payout: new BN(0),
       redeemable: false, // lost — not claimable
+      redeemed: false,
     },
   ];
 

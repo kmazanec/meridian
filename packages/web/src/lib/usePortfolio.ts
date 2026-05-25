@@ -7,12 +7,19 @@ import {
   fetchMarket,
   fetchOrderBook,
   fetchUserPosition,
+  fetchRedeemHistory,
+  Outcome,
 } from "@meridian/sdk";
 import { useProgram } from "./useProgram";
 import { useMarkets, useUsdcMint } from "./useChain";
 import { priceFromBook } from "./market-math";
 import { loadBasis, type CostBasis } from "./tradeStore";
-import { buildPortfolio, type Holding, type PortfolioRow } from "./portfolio";
+import {
+  buildPortfolio,
+  type Holding,
+  type PortfolioRow,
+  type RedeemedPosition,
+} from "./portfolio";
 import BN from "bn.js";
 
 /**
@@ -87,11 +94,38 @@ export function usePortfolio(): {
       return out;
     };
 
+    // Reconstruct claimed winners from redeem history, joined to the discovered markets for
+    // their ticker/strike/day. A winning redeem is the winning side of a settled market, so we
+    // derive the side from the market outcome (YesWins → yes, NoWins → no).
+    const loadRedeemed = async (): Promise<RedeemedPosition[]> => {
+      const byAddr = new Map(markets.map((m) => [m.address.toBase58(), m]));
+      const history = await fetchRedeemHistory(connection, program, publicKey);
+      const out: RedeemedPosition[] = [];
+      for (const r of history) {
+        if (!r.won) continue; // losers linger in holdings; we only need claimed winners here
+        const m = byAddr.get(r.market);
+        if (!m || m.outcome === Outcome.Unsettled) continue;
+        out.push({
+          market: r.market,
+          ticker: m.ticker,
+          strike: m.strike,
+          side: m.outcome === Outcome.YesWins ? "yes" : "no",
+          tradingDay: m.tradingDay,
+          amount: r.tokensBurned,
+          payout: r.usdcPaid,
+        });
+      }
+      return out;
+    };
+
     const load = async () => {
       const basis: Map<string, CostBasis> = loadBasis(publicKey.toBase58());
-      const perMarket = await Promise.all(markets.map(loadOne));
+      const [perMarket, redeemed] = await Promise.all([
+        Promise.all(markets.map(loadOne)),
+        loadRedeemed().catch(() => [] as RedeemedPosition[]),
+      ]);
       if (cancelled) return;
-      setRows(buildPortfolio(perMarket.flat(), basis));
+      setRows(buildPortfolio(perMarket.flat(), basis, redeemed));
       setLoading(false);
     };
 

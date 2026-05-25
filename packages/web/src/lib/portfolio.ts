@@ -56,6 +56,28 @@ export interface SettledRow {
   payout: BN;
   /** Whether this holding can be redeemed (won and not yet redeemed). */
   redeemable: boolean;
+  /**
+   * True when this is a *claimed* winner reconstructed from redeem history — its tokens were
+   * already burned, so it no longer appears in holdings. `payout` is the USDC it paid out.
+   * (A still-held winner has `redeemable: true`; a held loser has both false.)
+   */
+  redeemed: boolean;
+}
+
+/**
+ * A past redemption recovered from on-chain logs, joined to its market for display. Lets the
+ * portfolio show *claimed winners* that no longer exist in the wallet's token balances.
+ */
+export interface RedeemedPosition {
+  market: string;
+  ticker: Ticker;
+  strike: BN;
+  side: Side;
+  tradingDay: BN;
+  /** Tokens burned by the redeem (= the position size). */
+  amount: BN;
+  /** USDC paid out by the redeem. */
+  payout: BN;
 }
 
 export type PortfolioRow = OpenRow | SettledRow;
@@ -67,17 +89,27 @@ function sideMark(side: Side, yesMark: BN): BN {
   return side === "yes" ? yesMark : PRICE_SCALE.sub(yesMark);
 }
 
-/** Build the portfolio rows for a set of holdings, given the local cost basis. */
+/**
+ * Build the portfolio rows from current holdings + the local cost basis, plus any
+ * `redeemed` positions reconstructed from on-chain redeem history. The redeemed list is what
+ * surfaces **claimed winners** — without it, a redeemed (burned) winning position would simply
+ * be absent, leaving only the still-held losers and making a profitable wallet look all-red.
+ */
 export function buildPortfolio(
   holdings: Holding[],
-  basis: Map<string, CostBasis>
+  basis: Map<string, CostBasis>,
+  redeemed: RedeemedPosition[] = []
 ): PortfolioRow[] {
   const rows: PortfolioRow[] = [];
+  // Track which (market:side) we've emitted as settled from live holdings, so a redeem-history
+  // entry for the same position doesn't double-count it.
+  const settledSeen = new Set<string>();
   for (const h of holdings) {
     if (h.amount.lten(0)) continue;
 
     if (h.state === "settled" && h.outcome !== Outcome.Unsettled) {
       const payout = settledPayout(h, h.side, h.amount);
+      settledSeen.add(`${h.market}:${h.side}`);
       rows.push({
         kind: "settled",
         market: h.market,
@@ -88,6 +120,7 @@ export function buildPortfolio(
         tradingDay: h.tradingDay,
         payout,
         redeemable: payout.gtn(0),
+        redeemed: false,
       });
       continue;
     }
@@ -112,6 +145,25 @@ export function buildPortfolio(
       entryPrice,
       value,
       pnl: entryPrice ? pnl : null,
+    });
+  }
+
+  // Claimed winners: positions the wallet redeemed (tokens burned, so not in holdings). Skip
+  // any already shown from live holdings (e.g. a partial redeem that left a balance).
+  for (const r of redeemed) {
+    if (r.amount.lten(0)) continue;
+    if (settledSeen.has(`${r.market}:${r.side}`)) continue;
+    rows.push({
+      kind: "settled",
+      market: r.market,
+      ticker: r.ticker,
+      strike: r.strike,
+      side: r.side,
+      amount: r.amount,
+      tradingDay: r.tradingDay,
+      payout: r.payout,
+      redeemable: false, // already claimed
+      redeemed: true,
     });
   }
   return rows;

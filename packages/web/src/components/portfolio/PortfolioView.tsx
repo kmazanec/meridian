@@ -293,18 +293,27 @@ function SettledTable({
 }) {
   const action = (r: SettledRow) => {
     const key = `${r.market}:${r.side}`;
-    return r.redeemable ? (
-      <Button
-        variant="accent"
-        data-testid={`redeem-${key}`}
-        disabled={redeemingKey === key}
-        onClick={() => onRedeem(r)}
-      >
-        {redeemingKey === key ? "Redeeming…" : "Redeem"}
-      </Button>
-    ) : (
-      <span className="text-sm text-fg-faint">Lost</span>
-    );
+    if (r.redeemable) {
+      return (
+        <Button
+          variant="accent"
+          data-testid={`redeem-${key}`}
+          disabled={redeemingKey === key}
+          onClick={() => onRedeem(r)}
+        >
+          {redeemingKey === key ? "Redeeming…" : "Redeem"}
+        </Button>
+      );
+    }
+    if (r.redeemed) {
+      // A claimed winner: tokens already burned for USDC. Show it as won, not "Lost".
+      return (
+        <span className="text-sm text-usdc" data-testid={`claimed-${key}`}>
+          Won · claimed
+        </span>
+      );
+    }
+    return <span className="text-sm text-fg-faint">Lost</span>;
   };
   return (
     <div className="panel overflow-hidden p-0" data-testid="settled-positions">
