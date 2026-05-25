@@ -20,15 +20,11 @@
     "run-bot": "ts-node src/bin/run-bot.ts"
   },
   "dependencies": {
-    "@anchor-lang/core": "^1.0.2",
     "@langchain/core": "^0.3.40",
     "@langchain/langgraph": "^0.2.44",
     "@langchain/openai": "^0.3.17",
     "@meridian/sdk": "workspace:^",
-    "@pythnetwork/hermes-client": "^1.0.0",
-    "@solana/spl-token": "^0.4.9",
     "@solana/web3.js": "^1.98.0",
-    "axios": "^1.7.0",
     "bn.js": "^5.2.1",
     "zod": "^3.23.8"
   },
