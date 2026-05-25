@@ -66,6 +66,100 @@ describe("reads: dual-perspective book + payouts", () => {
     });
   });
 
+  // dualBook is pure: it takes a decoded OrderBookAccount and computes both perspectives.
+  // These hand-build a book (no chain), so the aggregation + No-side mirror run in CI —
+  // the on-chain block below exercises the same paths against a real LiteSVM book.
+  describe("dualBook (pure aggregation)", () => {
+    const order = (
+      price: number,
+      size: number,
+      seq: number,
+      side: OrderSide
+    ): OrderEntry => ({
+      owner: PublicKey.default,
+      price: new BN(price),
+      size: new BN(size),
+      seq: new BN(seq),
+      side,
+      active: true,
+    });
+    const book = (
+      bids: OrderEntry[],
+      asks: OrderEntry[]
+    ): OrderBookAccount => ({
+      market: PublicKey.default,
+      nextSeq: new BN(0),
+      bids,
+      asks,
+      bump: 0,
+    });
+
+    it("collapses same-price orders into one level with summed size and count", () => {
+      const dual = dualBook(
+        book(
+          [
+            order(400_000, 1_000_000, 0, OrderSide.Bid),
+            order(400_000, 2_500_000, 1, OrderSide.Bid),
+          ],
+          []
+        )
+      );
+      expect(dual.yes.bids).to.have.length(1);
+      expect(dual.yes.bids[0].price.toString()).to.equal("400000");
+      expect(dual.yes.bids[0].size.toString()).to.equal("3500000"); // 1.0 + 2.5
+      expect(dual.yes.bids[0].count).to.equal(2);
+    });
+
+    it("sorts levels best-first per side (bids high→low, asks low→high)", () => {
+      const dual = dualBook(
+        book(
+          [
+            order(300_000, 1, 0, OrderSide.Bid),
+            order(500_000, 1, 1, OrderSide.Bid),
+          ],
+          [
+            order(800_000, 1, 2, OrderSide.Ask),
+            order(700_000, 1, 3, OrderSide.Ask),
+          ]
+        )
+      );
+      expect(dual.yes.bids.map((l) => l.price.toString())).to.deep.equal([
+        "500000",
+        "300000",
+      ]);
+      expect(dual.yes.asks.map((l) => l.price.toString())).to.deep.equal([
+        "700000",
+        "800000",
+      ]);
+    });
+
+    it("mirrors the No side: a Yes bid @ p becomes a No ask @ 1−p, size preserved", () => {
+      const dual = dualBook(
+        book([order(400_000, 1_000_000, 0, OrderSide.Bid)], [])
+      );
+      // No asks come from Yes bids, mirrored to 1 − price.
+      expect(dual.no.asks).to.have.length(1);
+      expect(dual.no.asks[0].price.toString()).to.equal("600000"); // 1.00 − 0.40
+      expect(dual.no.asks[0].size.toString()).to.equal("1000000"); // size unchanged
+    });
+
+    it("drops inactive and zero-size orders from the aggregation", () => {
+      const dual = dualBook(
+        book(
+          [
+            { ...order(400_000, 1_000_000, 0, OrderSide.Bid), active: false },
+            order(400_000, 0, 1, OrderSide.Bid),
+            order(400_000, 500_000, 2, OrderSide.Bid),
+          ],
+          []
+        )
+      );
+      expect(dual.yes.bids).to.have.length(1);
+      expect(dual.yes.bids[0].size.toString()).to.equal("500000");
+      expect(dual.yes.bids[0].count).to.equal(1);
+    });
+  });
+
   describeOnChain("dualBook on a real book (LiteSVM)", () => {
     let h: Harness;
     let usdc: PublicKey;

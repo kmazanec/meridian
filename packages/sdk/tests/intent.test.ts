@@ -166,20 +166,6 @@ describeOnChain("four-button intent translation", () => {
       expect(a.size.toString()).to.equal("250000");
     });
 
-    it("reflectPrice is its own inverse (No↔Yes)", () => {
-      const p = new BN(370_000);
-      expect(reflectPrice(reflectPrice(p)).toString()).to.equal(p.toString());
-      expect(reflectPrice(p).add(p).eq(PRICE_SCALE)).to.equal(true);
-    });
-
-    it("reflectPrice rejects prices outside [0, PRICE_SCALE] (no negative order price)", () => {
-      expect(() => reflectPrice(PRICE_SCALE.addn(1))).to.throw(/out of range/);
-      expect(() => reflectPrice(new BN(-1))).to.throw(/out of range/);
-      // Boundaries are allowed: 0 → PRICE_SCALE, PRICE_SCALE → 0.
-      expect(reflectPrice(0).eq(PRICE_SCALE)).to.equal(true);
-      expect(reflectPrice(PRICE_SCALE).isZero()).to.equal(true);
-    });
-
     it("BUY_NO rejects a size exceeding the per-transaction mint cap", async () => {
       let threw = false;
       try {
@@ -332,5 +318,23 @@ describeOnChain("four-button intent translation", () => {
         PAYOFF_UNIT.toString()
       );
     });
+  });
+});
+
+// reflectPrice is pure (no chain), so it runs in CI unconditionally — outside the
+// LiteSVM-gated block above. It is the No↔Yes price mirror the four-button intent relies on.
+describe("reflectPrice", () => {
+  it("is its own inverse (No↔Yes)", () => {
+    const p = new BN(370_000);
+    expect(reflectPrice(reflectPrice(p)).toString()).to.equal(p.toString());
+    expect(reflectPrice(p).add(p).eq(PRICE_SCALE)).to.equal(true);
+  });
+
+  it("rejects prices outside [0, PRICE_SCALE] (no negative order price)", () => {
+    expect(() => reflectPrice(PRICE_SCALE.addn(1))).to.throw(/out of range/);
+    expect(() => reflectPrice(new BN(-1))).to.throw(/out of range/);
+    // Boundaries are allowed: 0 → PRICE_SCALE, PRICE_SCALE → 0.
+    expect(reflectPrice(0).eq(PRICE_SCALE)).to.equal(true);
+    expect(reflectPrice(PRICE_SCALE).isZero()).to.equal(true);
   });
 });
