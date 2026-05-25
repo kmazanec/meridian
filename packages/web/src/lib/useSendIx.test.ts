@@ -75,6 +75,16 @@ describe("useSendIx", () => {
     expect(result.current.error?.message).toBe("user rejected");
   });
 
+  it("surfaces a pre-send failure via fail()", async () => {
+    const { result } = renderHook(() => useSendIx());
+    act(() => {
+      result.current.fail(new Error("could not build instruction"));
+    });
+    await waitFor(() => expect(result.current.status).toBe("error"));
+    expect(result.current.error?.message).toBe("could not build instruction");
+    expect(sendTransaction).not.toHaveBeenCalled();
+  });
+
   it("treats a confirmed-but-reverted transaction as an error, not success", async () => {
     // The tx lands on-chain but the program reverts: confirmTransaction resolves with
     // a non-null value.err. This must surface as an error, never as "success".

@@ -31,6 +31,12 @@ export function useSendIx() {
 
   const reset = useCallback(() => setState(INITIAL), []);
 
+  /** Surface a failure that happened before `send` (e.g. building the instruction). */
+  const fail = useCallback((e: unknown) => {
+    const error = e instanceof Error ? e : new Error(String(e));
+    setState({ status: "error", signature: null, error });
+  }, []);
+
   const send = useCallback(
     async (
       instructions: TransactionInstruction[]
@@ -74,5 +80,5 @@ export function useSendIx() {
     [connection, publicKey, sendTransaction]
   );
 
-  return { ...state, send, reset };
+  return { ...state, send, reset, fail };
 }

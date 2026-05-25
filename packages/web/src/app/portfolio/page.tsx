@@ -46,8 +46,10 @@ export default function PortfolioPage() {
       });
       await tx.send([ix]);
       refresh();
-    } catch {
-      // The status banner surfaces the error.
+    } catch (e) {
+      // `send` already sets the banner on its own failures; this also surfaces an
+      // error from building the redeem instruction (before `send` runs).
+      tx.fail(e);
     } finally {
       setRedeemingKey(null);
     }
