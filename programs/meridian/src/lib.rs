@@ -35,6 +35,20 @@ pub use state::*;
 
 declare_id!("9R3jRbvh9jeQLGEggB3VXQTwj88YjUKqKM8x75SefGen");
 
+// On-chain `security.txt` — surfaced as a "Security" tab on the Solana Explorer.
+// Embedded in the program binary, so it lands with the next `program upgrade`.
+// Excluded from CPI/no-entrypoint builds (no point carrying it in a consumer's
+// binary), matching how the rest of the entrypoint-only glue is gated.
+#[cfg(not(feature = "no-entrypoint"))]
+solana_security_txt::security_txt! {
+    name: "Meridian",
+    project_url: "https://meridian.llmonster.dev",
+    contacts: "email:keith@devforward.com",
+    policy: "https://github.com/kmazanec/meridian/blob/main/SECURITY.md",
+    source_code: "https://github.com/kmazanec/meridian",
+    preferred_languages: "en"
+}
+
 #[program]
 pub mod meridian {
     use super::*;

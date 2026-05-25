@@ -32,6 +32,10 @@ anchor-spl = "1.0.2"
 # token_interface. Pinning 1.0.0 lets the full anchor-spl compile so we can use
 # Anchor's idiomatic init constraints. (Meridian uses standard SPL Token USDC.)
 solana-zero-copy = "=1.0.0"
+# On-chain `security.txt`: embeds contact/policy/source metadata in the program
+# binary so the Solana Explorer renders a Security tab. Compiled into the
+# entrypoint build only (gated off for CPI/no-entrypoint builds in lib.rs).
+solana-security-txt = "1.1.1"
 
 [dev-dependencies]
 litesvm = "0.10.0"
