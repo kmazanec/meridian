@@ -23,12 +23,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  Connection,
-  Keypair,
-  Transaction,
-  sendAndConfirmTransaction,
-} from "@solana/web3.js";
+import { Connection, Keypair, Transaction } from "@solana/web3.js";
 import {
   getProgram,
   fetchConfig,
@@ -59,6 +54,48 @@ function expandHome(p) {
 function loadKeypair(path) {
   const secret = JSON.parse(readFileSync(expandHome(path), "utf8"));
   return Keypair.fromSecretKey(Uint8Array.from(secret));
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Send a signed transaction and confirm it by HTTP polling (getSignatureStatuses), NOT the
+ * WebSocket signatureSubscribe that web3.js's sendAndConfirmTransaction uses — Alchemy's
+ * standard Solana endpoints don't expose signatureSubscribe and flood the logs with
+ * "-32601 Method not found". Mirrors packages/traders/src/chain.ts. Returns the signature.
+ */
+async function sendAndConfirmByPolling(connection, tx, signers) {
+  const { blockhash, lastValidBlockHeight } =
+    await connection.getLatestBlockhash("confirmed");
+  tx.recentBlockhash = blockhash;
+  tx.lastValidBlockHeight = lastValidBlockHeight;
+  tx.feePayer = signers[0].publicKey;
+  tx.sign(...signers);
+
+  const signature = await connection.sendRawTransaction(tx.serialize(), {
+    preflightCommitment: "confirmed",
+  });
+
+  for (;;) {
+    const { value } = await connection.getSignatureStatuses([signature]);
+    const status = value[0];
+    if (status?.err) {
+      throw new Error(
+        `transaction ${signature} failed: ${JSON.stringify(status.err)}`
+      );
+    }
+    if (
+      status?.confirmationStatus === "confirmed" ||
+      status?.confirmationStatus === "finalized"
+    ) {
+      return signature;
+    }
+    const height = await connection.getBlockHeight("confirmed");
+    if (height > lastValidBlockHeight) {
+      throw new Error(`transaction ${signature} expired`);
+    }
+    await sleep(1000);
+  }
 }
 
 async function main() {
@@ -153,7 +190,7 @@ async function main() {
               usdcMint,
             })
           );
-          const sig = await sendAndConfirmTransaction(connection, tx, [
+          const sig = await sendAndConfirmByPolling(connection, tx, [
             bot.keypair,
           ]);
           console.log(`${line}  ✓ ${sig.slice(0, 12)}…`);
