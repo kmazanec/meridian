@@ -122,24 +122,16 @@ export async function fetchConfig(
 ): Promise<ConfigAccount | null> {
   const raw = await program.account.config.fetchNullable(configPda());
   if (!raw) return null;
-  const r = raw as unknown as {
-    admin: PublicKey;
-    usdcMint: PublicKey;
-    tickers: { ticker: Record<string, unknown>; feedId: number[] }[];
-    paused: boolean;
-    feeAccount: PublicKey | null;
-    bump: number;
-  };
   return {
-    admin: r.admin,
-    usdcMint: r.usdcMint,
-    tickers: r.tickers.map((t) => ({
+    admin: raw.admin,
+    usdcMint: raw.usdcMint,
+    tickers: raw.tickers.map((t) => ({
       ticker: tickerFromArg(t.ticker),
       feedId: t.feedId,
     })),
-    paused: r.paused,
-    feeAccount: r.feeAccount,
-    bump: r.bump,
+    paused: raw.paused,
+    feeAccount: raw.feeAccount,
+    bump: raw.bump,
   };
 }
 
@@ -150,27 +142,23 @@ export async function fetchMarket(
 ): Promise<MarketAccount | null> {
   const raw = await program.account.market.fetchNullable(market);
   if (!raw) return null;
-  const r = raw as unknown as Record<string, unknown>;
   return {
-    ticker: tickerFromArg(r.ticker as Record<string, unknown>),
-    strike: r.strike as BN,
-    tradingDay: r.tradingDay as BN,
-    yesMint: r.yesMint as PublicKey,
-    noMint: r.noMint as PublicKey,
-    vault: r.vault as PublicKey,
-    orderBook: r.orderBook as PublicKey,
-    pairsMinted: r.pairsMinted as BN,
-    winningRedeemed: r.winningRedeemed as BN,
-    state:
-      enumKey(r.state as Record<string, unknown>) === "settled"
-        ? "settled"
-        : "open",
-    outcome: normalizeOutcome(r.outcome as Record<string, unknown>),
-    settlementPrice: (r.settlementPrice as BN | null) ?? null,
-    settledAt: (r.settledAt as BN | null) ?? null,
-    bump: r.bump as number,
-    vaultBump: r.vaultBump as number,
-    mintAuthorityBump: r.mintAuthorityBump as number,
+    ticker: tickerFromArg(raw.ticker),
+    strike: raw.strike,
+    tradingDay: raw.tradingDay,
+    yesMint: raw.yesMint,
+    noMint: raw.noMint,
+    vault: raw.vault,
+    orderBook: raw.orderBook,
+    pairsMinted: raw.pairsMinted,
+    winningRedeemed: raw.winningRedeemed,
+    state: enumKey(raw.state) === "settled" ? "settled" : "open",
+    outcome: normalizeOutcome(raw.outcome),
+    settlementPrice: raw.settlementPrice ?? null,
+    settledAt: raw.settledAt ?? null,
+    bump: raw.bump,
+    vaultBump: raw.vaultBump,
+    mintAuthorityBump: raw.mintAuthorityBump,
   };
 }
 
@@ -193,31 +181,12 @@ export async function fetchOrderBook(
     orderBookPda(market)
   );
   if (!raw) return null;
-  const r = raw as unknown as {
-    market: PublicKey;
-    nextSeq: BN;
-    bids: Parameters<typeof normalizeOrder>[0][];
-    asks: Parameters<typeof normalizeOrder>[0][];
-    bump: number;
-  };
   return {
-    market: r.market,
-    nextSeq: r.nextSeq,
-    bids: r.bids.map(normalizeOrder),
-    asks: r.asks.map(normalizeOrder),
-    bump: r.bump,
-  };
-}
-
-/** Shape of one raw `OrderBook` account from Anchor's `.all()` (publicKey + account). */
-interface RawOrderBookEntry {
-  publicKey: PublicKey;
-  account: {
-    market: PublicKey;
-    nextSeq: BN;
-    bids: Parameters<typeof normalizeOrder>[0][];
-    asks: Parameters<typeof normalizeOrder>[0][];
-    bump: number;
+    market: raw.market,
+    nextSeq: raw.nextSeq,
+    bids: raw.bids.map(normalizeOrder),
+    asks: raw.asks.map(normalizeOrder),
+    bump: raw.bump,
   };
 }
 
@@ -231,8 +200,7 @@ interface RawOrderBookEntry {
 export async function fetchAllOrderBooks(
   program: MeridianProgram
 ): Promise<Map<string, OrderBookAccount>> {
-  const raw =
-    (await program.account.orderBook.all()) as unknown as RawOrderBookEntry[];
+  const raw = await program.account.orderBook.all();
   const byAddress = new Map<string, OrderBookAccount>();
   for (const { publicKey, account } of raw) {
     byAddress.set(publicKey.toBase58(), {

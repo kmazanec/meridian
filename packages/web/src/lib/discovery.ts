@@ -85,8 +85,7 @@ export function normalizeDiscovered(raw: RawMarketAccount): DiscoveredMarket {
 export async function discoverMarkets(
   program: MeridianProgram
 ): Promise<DiscoveredMarket[]> {
-  const raw =
-    (await program.account.market.all()) as unknown as RawMarketAccount[];
+  const raw = await program.account.market.all();
   const markets = raw.map(normalizeDiscovered);
   markets.sort(
     (a, b) =>

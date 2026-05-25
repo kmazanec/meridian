@@ -1,7 +1,6 @@
 import {
   AnchorProvider,
   Program,
-  type Idl,
   type Provider,
   type Wallet,
 } from "@anchor-lang/core";
@@ -27,10 +26,7 @@ export type MeridianProgram = Program<Meridian>;
  * provider; only sending requires a wallet that can sign.
  */
 export function getProgram(provider: Provider): MeridianProgram {
-  return new Program(
-    MERIDIAN_IDL as Idl,
-    provider
-  ) as unknown as MeridianProgram;
+  return new Program<Meridian>(MERIDIAN_IDL, provider);
 }
 
 /**

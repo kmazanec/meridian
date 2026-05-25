@@ -51,16 +51,6 @@ export interface SettledMarket {
   alreadySettled: boolean;
 }
 
-interface RawMarketAll {
-  publicKey: PublicKey;
-  account: {
-    ticker: Record<string, unknown>;
-    strike: BN;
-    tradingDay: BN;
-    state: Record<string, unknown>;
-  };
-}
-
 const SCALE = Number(PAYOFF_UNIT.toString());
 const dollarsToBaseUnits = (d: number): BN => new BN(Math.round(d * SCALE));
 
@@ -101,7 +91,7 @@ export async function settleDue(
   } as never);
   const fx = Fixture.attach(connection, opts.deployer, opts.usdcMint);
 
-  const all = (await program.account.market.all()) as unknown as RawMarketAll[];
+  const all = await program.account.market.all();
   const results: SettledMarket[] = [];
 
   for (const raw of all) {

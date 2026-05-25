@@ -41,21 +41,11 @@ export interface OpenMarket {
   tradingDay: BN;
 }
 
-interface RawMarketAll {
-  publicKey: PublicKey;
-  account: {
-    ticker: Record<string, unknown>;
-    strike: BN;
-    tradingDay: BN;
-    state: Record<string, unknown>;
-  };
-}
-
 /** Raw `getProgramAccounts` market scan + normalize to open markets (uncached). */
 async function scanOpenMarkets(
   program: MeridianProgram
 ): Promise<OpenMarket[]> {
-  const raw = (await program.account.market.all()) as unknown as RawMarketAll[];
+  const raw = await program.account.market.all();
   const open: OpenMarket[] = [];
   for (const r of raw) {
     const state = Object.keys(r.account.state)[0] ?? "";
