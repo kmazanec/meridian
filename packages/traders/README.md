@@ -184,6 +184,32 @@ ran the stack with `PRICE_SOURCE=synthetic`, `make dev` already built + deployed
 the `demo-fast-settle` feature (5-min delay) — so `settle-due` works ~5 min after close with no
 extra build step. See `docs/local-development.md` for the full flow.
 
+### Wrapping up: claim winnings, reclaim order escrow
+
+After settlement a bot's money sits in two places that need separate cleanup — neither is lost,
+but each takes its own instruction:
+
+- **Winning tokens** (settled positions) → reclaim with **`redeem`**.
+- **Resting limit orders that never filled** → reclaim with **`cancel_order`** (a bid escrows
+  USDC, an ask escrows Yes tokens, locked until cancelled). This is why a bot can show `$0`
+  positions yet still have money "in orders" after you claim.
+
+Two scripts do this for the whole fleet (each bot self-signs its own; `DRY_RUN=1` previews):
+
+```bash
+# Local stack
+make claim-bot-winnings        # redeem every bot's winning tokens -> USDC
+make cancel-bot-orders         # cancel every bot's resting orders -> refund escrow
+
+# Devnet (uses RPC_URL; defaults to public devnet — override for your own endpoint)
+RPC_URL=… make claim-bot-winnings-devnet
+RPC_URL=… make cancel-bot-orders-devnet
+```
+
+Run `claim` then `cancel` to bring every bot back to all-cash. The
+[Trader leaderboard](../web) already counts both buckets as net worth (USDC + positions +
+in-orders), so a bot's *score* is correct either way — this cleanup just realizes it as USDC.
+
 To run a single bot in the foreground (handy for development):
 
 ```bash
