@@ -54,10 +54,19 @@ describe("ResultsView", () => {
     expect(screen.getByText(/connect a wallet/i)).toBeInTheDocument();
   });
 
-  it("shows the no-results state when there's nothing settled", () => {
-    renderView({ results: null });
+  it("shows the no-results state when nothing has settled yet", () => {
+    renderView({ results: null, tradingDay: null });
     expect(screen.getByTestId("no-results")).toBeInTheDocument();
+    expect(screen.getByText(/once today.*markets settle/i)).toBeInTheDocument();
     expect(screen.queryByTestId("today-recap")).not.toBeInTheDocument();
+  });
+
+  it("explains the browser-fills caveat when markets settled but this wallet has none", () => {
+    // results null (or zero positions) WITH a settled day → the wallet just has no local fills.
+    renderView({ results: null, tradingDay: DAY });
+    expect(screen.getByTestId("no-results")).toBeInTheDocument();
+    expect(screen.getByText(/no results for this wallet/i)).toBeInTheDocument();
+    expect(screen.getByText(/in this browser/i)).toBeInTheDocument();
   });
 
   it("renders the today recap: net P&L, wagered, earned, lost, win rate", () => {

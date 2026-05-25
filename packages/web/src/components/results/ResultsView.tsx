@@ -56,10 +56,25 @@ export function ResultsView({
 
       {!hasResults ? (
         <div className="panel py-12 text-center" data-testid="no-results">
-          <p className="text-fg-dim">No settled results yet.</p>
-          <p className="mt-1 text-sm text-fg-faint">
-            Once today's markets settle at the close, your recap shows up here.
-          </p>
+          {tradingDay === null ? (
+            <>
+              <p className="text-fg-dim">No settled results yet.</p>
+              <p className="mt-1 text-sm text-fg-faint">
+                Once today&rsquo;s markets settle at the close, your recap shows
+                up here.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-fg-dim">No results for this wallet.</p>
+              <p className="mt-1 text-sm text-fg-faint">
+                Markets have settled, but this recap is built from the trades
+                you placed <em>in this browser</em> — so a wallet you
+                haven&rsquo;t traded with here (or trades made elsewhere)
+                won&rsquo;t appear.
+              </p>
+            </>
+          )}
         </div>
       ) : (
         <>
