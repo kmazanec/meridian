@@ -1,7 +1,7 @@
-//! F-02 tests for `redeem` (LiteSVM).
+//! Tests for `redeem` (LiteSVM).
 //!
-//! Settlement is F-04, so these tests use the `force_settle` shim to set the
-//! market's outcome before redeeming.
+//! These tests use the `force_settle` shim to set the market's outcome before
+//! redeeming, rather than running the real settlement path.
 
 mod common;
 

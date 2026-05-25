@@ -1,10 +1,9 @@
 //! Meridian — binary stock-outcome markets on Solana.
 //!
-//! F-01 (this feature) delivers the program scaffold, the account/data model,
-//! the frozen-contract constants, shared errors/events, and the one-time
-//! `initialize_config` instruction. Trading, minting, settlement, and redemption
-//! are implemented by later features (F-02–F-05) against the account shapes
-//! defined here.
+//! The program scaffold, the account/data model, the frozen-contract constants,
+//! shared errors/events, and the one-time `initialize_config` instruction.
+//! Trading, minting, settlement, and redemption are implemented against the
+//! account shapes defined here.
 
 // `diverging_sub_expression` fires inside Anchor's `#[program]` macro expansion
 // (the generated dispatch/handler glue), not in our handler bodies. The lint is
@@ -62,7 +61,7 @@ pub mod meridian {
     }
 
     /// Provision one stock-strike-day market: Market PDA, Yes/No mints, and the
-    /// USDC vault. Admin-gated. (F-02)
+    /// USDC vault. Admin-gated.
     pub fn create_strike_market(
         ctx: Context<CreateStrikeMarket>,
         args: CreateStrikeMarketArgs,
@@ -70,30 +69,30 @@ pub mod meridian {
         instructions::create_strike_market::handler(ctx, args)
     }
 
-    /// Deposit $1.00 USDC, receive 1 Yes + 1 No token. (F-02)
+    /// Deposit $1.00 USDC, receive 1 Yes + 1 No token.
     pub fn mint_pair(ctx: Context<MintPair>) -> Result<()> {
         instructions::mint_pair::handler(ctx)
     }
 
-    /// Burn settled tokens for their payout (winning side pays $1.00 each). (F-02)
+    /// Burn settled tokens for their payout (winning side pays $1.00 each).
     pub fn redeem(ctx: Context<Redeem>, side: RedeemSide, amount: u64) -> Result<()> {
         instructions::redeem::handler(ctx, side, amount)
     }
 
     /// Create the bounded order book (at initial size) + escrow accounts.
-    /// Permissionless; first half of two-step creation (see `grow_order_book`). (F-03)
+    /// Permissionless; first half of two-step creation (see `grow_order_book`).
     pub fn init_order_book(ctx: Context<InitOrderBook>) -> Result<()> {
         instructions::init_order_book::handler(ctx)
     }
 
     /// Realloc the order book to full size and wire it into the market (enables
-    /// trading). Second half of two-step creation. Permissionless. (F-03)
+    /// trading). Second half of two-step creation. Permissionless.
     pub fn grow_order_book(ctx: Context<GrowOrderBook>) -> Result<()> {
         instructions::grow_order_book::handler(ctx)
     }
 
     /// Post a limit or market order: cross the resting opposite side at price-time
-    /// priority (settling atomically), then rest the limit remainder. (F-03)
+    /// priority (settling atomically), then rest the limit remainder.
     pub fn place_order<'info>(
         ctx: Context<'info, PlaceOrder<'info>>,
         args: PlaceOrderArgs,
@@ -101,12 +100,12 @@ pub mod meridian {
         instructions::place_order::handler(ctx, args)
     }
 
-    /// Cancel a caller's own resting order and return its escrow. (F-03)
+    /// Cancel a caller's own resting order and return its escrow.
     pub fn cancel_order(ctx: Context<CancelOrder>, args: CancelOrderArgs) -> Result<()> {
         instructions::cancel_order::handler(ctx, args)
     }
 
-    /// Permissionless crank: settle any crossed resting bid/ask pairs. (F-03)
+    /// Permissionless crank: settle any crossed resting bid/ask pairs.
     pub fn match_orders<'info>(
         ctx: Context<'info, MatchOrders<'info>>,
         args: MatchOrdersArgs,
@@ -115,29 +114,29 @@ pub mod meridian {
     }
 
     /// After 4:00 PM ET: read the Pyth oracle, validate it, and write the
-    /// immutable Yes/No outcome. Permissionless and idempotent. (F-04)
+    /// immutable Yes/No outcome. Permissionless and idempotent.
     pub fn settle_market(ctx: Context<SettleMarket>) -> Result<()> {
         instructions::settle_market::handler(ctx)
     }
 
     /// Admin-only, time-delayed settlement fallback when the oracle path can't
-    /// run. Admin supplies the closing price (USDC base units). Idempotent. (F-04)
+    /// run. Admin supplies the closing price (USDC base units). Idempotent.
     pub fn admin_settle(ctx: Context<AdminSettle>, settlement_price: u64) -> Result<()> {
         instructions::admin_settle::handler(ctx, settlement_price)
     }
 
     /// Provision an additional strike market intraday for an existing
-    /// ticker/day. Admin-gated; same provisioning as the initial create. (F-05)
+    /// ticker/day. Admin-gated; same provisioning as the initial create.
     pub fn add_strike(ctx: Context<AddStrike>, args: CreateStrikeMarketArgs) -> Result<()> {
         instructions::add_strike::handler(ctx, args)
     }
 
-    /// Admin emergency stop: halt new minting and all trading program-wide. (F-05)
+    /// Admin emergency stop: halt new minting and all trading program-wide.
     pub fn pause(ctx: Context<SetPause>) -> Result<()> {
         instructions::admin_pause::pause(ctx)
     }
 
-    /// Admin: lift the emergency stop, restoring minting and trading. (F-05)
+    /// Admin: lift the emergency stop, restoring minting and trading.
     pub fn unpause(ctx: Context<SetPause>) -> Result<()> {
         instructions::admin_pause::unpause(ctx)
     }

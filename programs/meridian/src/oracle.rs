@@ -1,4 +1,4 @@
-//! Oracle abstraction for settlement (F-04, ARCHITECTURE.md ADR-004).
+//! Oracle abstraction for settlement (ARCHITECTURE.md ADR-004).
 //!
 //! Settlement reads a stock's closing price from a Pyth price-update account that
 //! a client has posted on-chain via the **Pyth Solana Receiver** (program
@@ -10,7 +10,7 @@
 //! `pyth-solana-receiver-sdk` / `pyth-sdk-solana` pull a second major version of
 //! the `solana-program` crate ecosystem (a Borsh-version conflict via
 //! `pythnet-sdk`) that does **not** BPF-compile against this toolchain
-//! (Anchor 1.0.2 / Solana 3.1.x) — the same dependency class F-01 hit with
+//! (Anchor 1.0.2 / Solana 3.1.x) — the same dependency class hit by
 //! `spl-token-2022-interface`. So we vendor a minimal, defensive byte-parser for
 //! the `PriceUpdateV2` account here. This keeps the dependency surface tiny and
 //! fully under our control; correctness is pinned by the layout tests below.
@@ -98,7 +98,7 @@ impl OraclePrice {
     ///
     /// Real value is `price × 10^exponent`; expressed in 6-dp base units that is
     /// `price × 10^(exponent + 6)`. We rescale with integer math only (no floats,
-    /// ROADMAP concern #2):
+    /// see ROADMAP.md):
     /// - if `exponent + 6 >= 0`: multiply by `10^(exponent+6)`
     /// - else: divide by `10^-(exponent+6)` (truncating toward zero)
     ///

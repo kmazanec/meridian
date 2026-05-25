@@ -1,8 +1,8 @@
-//! Shared test scaffolding for F-02 (mint/redeem) LiteSVM tests.
+//! Shared test scaffolding for the mint/redeem LiteSVM tests.
 //!
 //! Provides a fixture that loads the program, seeds a USDC mint + a funded user,
 //! and writes the singleton `Config` directly (a test shim — `initialize_config`
-//! is proven separately in F-01; here we just need a Config to exist). Also
+//! is proven separately; here we just need a Config to exist). Also
 //! exposes PDA derivations and instruction builders.
 
 #![allow(dead_code)]
@@ -308,8 +308,8 @@ pub fn read_token_account(svm: &LiteSVM, addr: &Pubkey) -> Option<SplAccount> {
     }
 }
 
-/// Set a market to settled with a given outcome (test shim for redeem — settle
-/// is F-04). Rewrites the on-chain Market account.
+/// Set a market to settled with a given outcome (test shim for redeem, bypassing
+/// the real settlement path). Rewrites the on-chain Market account.
 pub fn force_settle(svm: &mut LiteSVM, market: &Pubkey, outcome: Outcome) {
     let mut m = read_market(svm, market);
     m.state = meridian::state::MarketState::Settled;
@@ -736,7 +736,7 @@ pub fn create_market_and_book(
     market
 }
 
-// -------- settlement (F-04) test helpers --------
+// -------- settlement test helpers --------
 
 /// Set the cluster clock's `unix_timestamp` so timing-gated instructions can be
 /// exercised deterministically (LiteSVM `set_sysvar::<Clock>`).
@@ -842,7 +842,7 @@ pub fn ix_admin_settle(admin: &Pubkey, market: &Pubkey, settlement_price: u64) -
     )
 }
 
-// -------- admin: pause / unpause / add_strike (F-05) test helpers --------
+// -------- admin: pause / unpause / add_strike test helpers --------
 
 pub fn ix_pause(admin: &Pubkey) -> Instruction {
     let (config, _) = config_pda();

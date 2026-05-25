@@ -1,4 +1,4 @@
-//! F-02 tests for `mint_pair` (LiteSVM).
+//! Tests for `mint_pair` (LiteSVM).
 
 mod common;
 

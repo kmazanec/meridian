@@ -2,8 +2,8 @@
 //!
 //! Proves the collateralization invariant holds across interleaved mint/redeem,
 //! the full mint → settle → redeem cycle conserves value, and the payout side
-//! is correct. The original F-02 cases shim settlement (`force_settle`); the
-//! payout-completeness sweep (F-04, invariant 2) settles via the *real*
+//! is correct. The mint/redeem cases shim settlement (`force_settle`); the
+//! payout-completeness sweep (invariant 2) settles via the *real*
 //! `settle_market` instruction so the invariant is proven end-to-end.
 
 mod common;
@@ -238,7 +238,7 @@ fn cross_market_vault_substitution_rejected() {
     );
 }
 
-/// Payout-completeness invariant (ARCHITECTURE §7.2, owned by F-04): for a
+/// Payout-completeness invariant (ARCHITECTURE §7.2): for a
 /// settled market, `Yes_payout + No_payout == $1.00` per pair, for every price —
 /// including the at-strike boundary. Settles via the **real** `settle_market`
 /// (exponent -8 Pyth fixture), then redeems both sides and checks the sum.

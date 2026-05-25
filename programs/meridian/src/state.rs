@@ -1,9 +1,9 @@
 //! On-chain account & data model for Meridian (ARCHITECTURE.md §4).
 //!
-//! Solana programs are stateless; all state lives in these accounts. F-01 defines
-//! the *shape* and size of every account plus `initialize_config`'s logic. The
-//! trading/settlement/mint logic is implemented by later features (F-02–F-05),
-//! but the account layouts here are frozen so those features never reshape them.
+//! Solana programs are stateless; all state lives in these accounts. This module
+//! defines the *shape* and size of every account plus `initialize_config`'s
+//! logic. The trading/settlement/mint logic lives elsewhere, but the account
+//! layouts here are frozen so that logic never reshapes them.
 
 use crate::constants::{NUM_TICKERS, ORDERBOOK_N};
 use anchor_lang::prelude::*;
@@ -66,9 +66,9 @@ pub enum OrderSide {
 
 /// Per-ticker configuration: which underlying and its oracle feed id.
 ///
-/// The `feed_id` is a 32-byte Pyth feed identifier (the on-chain settlement
-/// feature, F-04, uses it to validate the price update account). Stored as raw
-/// bytes so it is oracle-implementation-agnostic at this layer.
+/// The `feed_id` is a 32-byte Pyth feed identifier (on-chain settlement uses it
+/// to validate the price update account). Stored as raw bytes so it is
+/// oracle-implementation-agnostic at this layer.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, InitSpace)]
 pub struct TickerConfig {
     pub ticker: Ticker,
@@ -165,9 +165,10 @@ pub struct Order {
 /// The bounded, on-chain order book for one market.
 /// PDA: `[ORDER_BOOK_SEED, market.key()]`.
 ///
-/// Bids and asks are fixed-capacity arrays (`ORDERBOOK_N` each). Matching logic
-/// is implemented in F-03; F-01 only freezes this shape and size. Default-derive
-/// is intentionally NOT used (the arrays exceed the std `Default` impl bound of
+/// Bids and asks are fixed-capacity arrays (`ORDERBOOK_N` each). The matching
+/// logic lives elsewhere; this struct only freezes the shape and size.
+/// Default-derive is intentionally NOT used (the arrays exceed the std `Default`
+/// impl bound of
 /// 32); the account is zero-initialized by Anchor `init`, which leaves all
 /// orders with `active = false`.
 #[account]

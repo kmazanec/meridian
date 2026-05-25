@@ -1,4 +1,4 @@
-//! `mint_pair` — deposit $1.00 USDC, receive 1 Yes + 1 No token (F-02).
+//! `mint_pair` — deposit $1.00 USDC, receive 1 Yes + 1 No token.
 //!
 //! Transfers `PAYOFF_UNIT` USDC base units from the user into the market vault,
 //! then mints `PAYOFF_UNIT` of each outcome token to the user (PDA-signed). Each

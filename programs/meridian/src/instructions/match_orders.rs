@@ -1,4 +1,4 @@
-//! `match_orders` — permissionless crank that settles crossed resting pairs (F-03).
+//! `match_orders` — permissionless crank that settles crossed resting pairs.
 //!
 //! With taker-crosses-on-placement (`place_order`), the book is normally un-crossed, so
 //! this is usually a no-op. It exists for **trustlessness and liveness** (ARCHITECTURE.md

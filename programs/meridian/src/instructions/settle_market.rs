@@ -1,4 +1,4 @@
-//! `settle_market` — read the oracle and write the immutable outcome (F-04).
+//! `settle_market` — read the oracle and write the immutable outcome.
 //!
 //! After the market's close instant (`Market.trading_day`, the 4:00 PM ET unix
 //! timestamp set at creation), anyone may settle: the caller supplies the Pyth

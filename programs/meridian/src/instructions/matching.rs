@@ -1,4 +1,4 @@
-//! Shared order-book matching engine (F-03).
+//! Shared order-book matching engine.
 //!
 //! Pure helpers (`bid_cost_ceil`, `insert_sorted`, ordering predicates) plus the
 //! `cross_incoming` routine used by `place_order` (taker crosses on placement). The
@@ -92,9 +92,9 @@ pub fn insert_sorted(book: &mut OrderBook, order: Order) {
 /// Validate a maker payout account supplied via `remaining_accounts` and return its
 /// deserialized token-account view. Enforces the full trust boundary:
 ///   - the account is *owned by the SPL Token program* (so `try_deserialize` of raw bytes
-///     can't be spoofed by a crafted non-token account — H-1);
-///   - it is writable (clear error vs. a generic privilege failure — L-1);
-///   - it is not frozen (a frozen payout account would revert the whole batch — M-1);
+///     can't be spoofed by a crafted non-token account);
+///   - it is writable (clear error vs. a generic privilege failure);
+///   - it is not frozen (a frozen payout account would revert the whole batch);
 ///   - its token-`owner` is the recorded order owner (no fund misdirection);
 ///   - its mint is `expected_mint` (right asset).
 pub(crate) fn verify_maker_account(

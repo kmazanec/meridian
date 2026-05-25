@@ -1,4 +1,4 @@
-//! `cancel_order` — remove a caller's resting order and return its escrow (F-03).
+//! `cancel_order` — remove a caller's resting order and return its escrow.
 //!
 //! Finds the caller's own resting order by `(side, seq)`, refunds its full remaining
 //! escrow (a bid escrowed `ceil(price*remaining)` USDC; an ask escrowed `remaining` Yes

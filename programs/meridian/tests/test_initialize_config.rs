@@ -1,4 +1,4 @@
-//! F-01 acceptance tests for `initialize_config`, run in-process with LiteSVM.
+//! Acceptance tests for `initialize_config`, run in-process with LiteSVM.
 //!
 //! Covers: happy path (Config fields written correctly), re-initialization
 //! rejected (idempotency via PDA `init` — asserted strongly), the optional

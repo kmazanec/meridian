@@ -1,4 +1,4 @@
-//! F-04 tests for `admin_settle` — the time-delayed admin fallback (LiteSVM).
+//! Tests for `admin_settle` — the time-delayed admin fallback (LiteSVM).
 
 mod common;
 

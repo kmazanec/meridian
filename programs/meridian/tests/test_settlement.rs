@@ -1,4 +1,4 @@
-//! F-04 tests for `settle_market` (LiteSVM).
+//! Tests for `settle_market` (LiteSVM).
 //!
 //! Exercises the real settlement instruction end to end: timing gate, oracle
 //! validation (feed match / staleness / confidence), the outcome decision incl.

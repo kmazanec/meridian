@@ -1,12 +1,13 @@
-//! `create_strike_market` — provision one stock-strike-day market (F-02).
+//! `create_strike_market` — provision one stock-strike-day market.
 //!
 //! Creates the `Market` PDA, the Yes and No SPL mints (6 decimals, mint+freeze
 //! authority = the per-market mint-authority PDA), and the PDA-owned USDC vault
-//! token account. Admin-gated. The order book account is created later by F-03;
-//! `Market.order_book` is left as the default pubkey until then.
+//! token account. Admin-gated. The order book account is created later by
+//! `init_order_book`; `Market.order_book` is left as the default pubkey until
+//! then.
 //!
-//! Scope note: provisioning lives here (F-02 owns the single creation path);
-//! F-05 reuses this for `add_strike`. See ROADMAP.md.
+//! Scope note: this is the single market-creation path; `add_strike` reuses it.
+//! See ROADMAP.md.
 
 use crate::constants::{
     MARKET_SEED, MINT_AUTH_SEED, NO_MINT_SEED, TOKEN_DECIMALS, VAULT_SEED, YES_MINT_SEED,

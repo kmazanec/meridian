@@ -1,9 +1,9 @@
 //! Shared events for Meridian.
 //!
-//! F-01 declares the events emitted by the scaffold + `initialize_config`.
-//! Later features add their own events here (e.g. `PairMinted`, `MarketSettled`,
-//! `OrderPlaced`). Keeping them in one module gives the SDK (F-06) and any
-//! indexer a single place to find the event schema.
+//! The events emitted by the scaffold + `initialize_config`, plus the events
+//! emitted by minting, trading, and settlement (e.g. `PairMinted`,
+//! `MarketSettled`, `OrderPlaced`). Keeping them in one module gives the SDK and
+//! any indexer a single place to find the event schema.
 
 use crate::state::{Outcome, Ticker};
 use anchor_lang::prelude::*;
@@ -16,7 +16,7 @@ pub struct ConfigInitialized {
     pub fee_account: Option<Pubkey>,
 }
 
-/// Emitted when a stock-strike-day market is provisioned (F-02).
+/// Emitted when a stock-strike-day market is provisioned.
 #[event]
 pub struct MarketCreated {
     pub market: Pubkey,
@@ -27,7 +27,7 @@ pub struct MarketCreated {
     pub no_mint: Pubkey,
 }
 
-/// Emitted when a user mints a Yes/No pair (F-02).
+/// Emitted when a user mints a Yes/No pair.
 #[event]
 pub struct PairMinted {
     pub market: Pubkey,
@@ -37,7 +37,7 @@ pub struct PairMinted {
     pub pairs_minted: u64,
 }
 
-/// Emitted when a user redeems settled tokens (F-02).
+/// Emitted when a user redeems settled tokens.
 #[event]
 pub struct Redeemed {
     pub market: Pubkey,
@@ -47,7 +47,7 @@ pub struct Redeemed {
     pub usdc_paid: u64,
 }
 
-// --- Order book (F-03) ---
+// --- Order book ---
 
 /// Emitted when the order book + escrow accounts are created for a market.
 #[event]
@@ -95,7 +95,7 @@ pub struct OrderCancelled {
     pub refunded: u64,
 }
 
-/// Emitted once when a market is settled, via either path (F-04).
+/// Emitted once when a market is settled, via either path.
 #[event]
 pub struct MarketSettled {
     pub market: Pubkey,

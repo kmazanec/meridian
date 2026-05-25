@@ -1,4 +1,4 @@
-//! `admin_settle` — admin-only, time-delayed settlement fallback (F-04, ADR-004).
+//! `admin_settle` — admin-only, time-delayed settlement fallback (ADR-004).
 //!
 //! The guaranteed escape hatch for when the oracle path can't run (no fresh feed
 //! on the cluster, persistently wide confidence, receiver outage). The admin

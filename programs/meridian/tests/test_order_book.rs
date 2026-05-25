@@ -1,5 +1,5 @@
-//! F-03 tests for the order book: init, place_order, cancel_order, match_orders
-//! (LiteSVM). Mirrors the adversarial style of the F-02 suites.
+//! Tests for the order book: init, place_order, cancel_order, match_orders
+//! (LiteSVM). Mirrors the adversarial style of the mint/redeem suites.
 
 mod common;
 
@@ -326,7 +326,7 @@ fn place_order_rejects_price_out_of_range() {
 
 #[test]
 fn place_order_rejects_zero_price_limit() {
-    // Adversarial review M-4: a 0-price limit order escrows nothing and could acquire Yes
+    // A 0-price limit order escrows nothing and could acquire Yes
     // for free / squat slots. Limit price must be in [1, PRICE_SCALE].
     let mut f = setup(5 * ONE);
     let market = create_market_and_book(&mut f, Ticker::Meta, STRIKE, DAY);
@@ -1153,7 +1153,7 @@ fn crank_cannot_misdirect_funds_to_wrong_account() {
 
 #[test]
 fn crank_rejects_non_spl_maker_account() {
-    // Adversarial review H-1: the maker payout account must be SPL-Token-owned. Passing a
+    // The maker payout account must be SPL-Token-owned. Passing a
     // program-owned account (e.g. the order_book PDA) whose bytes might parse must be
     // rejected before any transfer, so a maker can't brick matching with a corrupt acct.
     let mut f = setup(10 * ONE);

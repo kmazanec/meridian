@@ -1,4 +1,4 @@
-//! F-02 tests for `create_strike_market` (LiteSVM).
+//! Tests for `create_strike_market` (LiteSVM).
 
 mod common;
 

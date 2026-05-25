@@ -1,4 +1,4 @@
-//! `redeem` — burn settled tokens for their payout (F-02).
+//! `redeem` — burn settled tokens for their payout.
 //!
 //! After settlement, the winning side's tokens each redeem for `PAYOFF_UNIT`
 //! USDC base units (1.0 token ⇄ $1.00); the losing side redeems for $0 (burn

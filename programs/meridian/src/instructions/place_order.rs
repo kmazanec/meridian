@@ -1,4 +1,4 @@
-//! `place_order` — post a limit/market order, crossing the book then resting (F-03).
+//! `place_order` — post a limit/market order, crossing the book then resting.
 //!
 //! Flow (taker-crosses-on-placement, per the brief's "immediately sells Yes … one wallet
 //! approval"):
@@ -114,7 +114,7 @@ pub fn handler<'info>(
     if !args.is_market {
         // Limit price must be in [1, PRICE_SCALE]. A 0-price bid would escrow nothing yet
         // could acquire Yes for free from a market-sell taker and squat a book slot at no
-        // cost (adversarial review M-4); a 0-price ask is economically meaningless.
+        // cost; a 0-price ask is economically meaningless.
         require!(
             args.price > 0 && args.price <= PRICE_SCALE,
             MeridianError::PriceOutOfRange

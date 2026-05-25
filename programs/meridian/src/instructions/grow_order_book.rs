@@ -1,4 +1,4 @@
-//! `grow_order_book` — realloc the order book to full size and wire it (F-03).
+//! `grow_order_book` — realloc the order book to full size and wire it.
 //!
 //! Second half of order-book creation (see `init_order_book` for why this is split):
 //! the ~14.9 KB `OrderBook` exceeds Solana's 10,240-byte per-instruction data-increase

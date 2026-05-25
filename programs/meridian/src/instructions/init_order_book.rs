@@ -1,8 +1,8 @@
-//! `init_order_book` — create and wire the order book for a market (F-03).
+//! `init_order_book` — create and wire the order book for a market.
 //!
-//! F-02's `create_strike_market` provisions the `Market`, the Yes/No mints, and the
-//! collateralization vault, but leaves `Market.order_book = Pubkey::default()` for
-//! F-03 to fill. This instruction creates the bounded `OrderBook` account plus the
+//! `create_strike_market` provisions the `Market`, the Yes/No mints, and the
+//! collateralization vault, but leaves `Market.order_book = Pubkey::default()`.
+//! This instruction creates the bounded `OrderBook` account plus the
 //! two order-book escrow token accounts (USDC for resting bids, Yes for resting
 //! asks) and writes `Market.order_book`, after which trading is possible.
 //!
@@ -17,12 +17,12 @@
 //! can ensure the book exists without being able to create a duplicate or rebind it.
 //!
 //! **Two-step creation (Solana realloc cap).** The `OrderBook` is ~14.9 KB (128 bids +
-//! 128 asks at 58 B each — sizes frozen by F-01). Solana caps account-data growth at
+//! 128 asks at 58 B each — frozen sizes). Solana caps account-data growth at
 //! `MAX_PERMITTED_DATA_INCREASE` = 10,240 bytes **per instruction**, and a PDA can only
 //! be created via an `init`/`realloc` CPI (it has no key to sign a top-level
-//! `createAccount`), so the full size cannot be allocated in one instruction. F-01's
-//! handoff note assumed `init` would pre-allocate the whole budget in one shot; that
-//! assumption is wrong on Solana. We therefore split creation:
+//! `createAccount`), so the full size cannot be allocated in one instruction.
+//! A single `init` cannot pre-allocate the whole budget in one shot on Solana, so
+//! we split creation:
 //!   1. `init_order_book` — `init` the PDA at `INIT_ALLOC` (≤ 10 KB) + both escrow
 //!      accounts; sets the book's fields. Leaves `Market.order_book` UNSET so trading
 //!      can't begin against a half-sized book.
@@ -31,7 +31,7 @@
 //!      `market.order_book == order_book.key()`, so they only succeed after this step.
 //!
 //! Both the frozen PDA seed (`[order_book, market]`) and the frozen `ORDERBOOK_N = 128`
-//! are preserved; only the *creation mechanism* differs from F-01's note.
+//! are preserved; only the *creation mechanism* is the two-step flow above.
 
 use crate::constants::{
     MINT_AUTH_SEED, ORDER_BOOK_SEED, USDC_ESCROW_SEED, YES_ESCROW_SEED, YES_MINT_SEED,

@@ -1,8 +1,7 @@
 //! Shared error codes for Meridian.
 //!
 //! Anchor v1 allows only ONE `#[error_code]` block per program, so every
-//! feature's errors live in this single enum. F-01 declares the codes that
-//! downstream features (F-02–F-05) will attach to logic; declaring them here
+//! error in the program lives in this single enum. Declaring them all here
 //! keeps a single source of truth and stable error numbers. Do not reorder
 //! existing variants (their ordinal positions become the on-chain error codes);
 //! append new variants at the end.
@@ -11,13 +10,13 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum MeridianError {
-    // --- Config / admin (F-01, F-05) ---
+    // --- Config / admin ---
     #[msg("Config has already been initialized")]
     AlreadyInitialized,
     #[msg("Signer is not the configured admin")]
     Unauthorized,
 
-    // --- Global / market lifecycle (F-02, F-03, F-04, F-05) ---
+    // --- Global / market lifecycle ---
     #[msg("Program is paused")]
     MarketPaused,
     #[msg("Market is already settled")]
@@ -27,7 +26,7 @@ pub enum MeridianError {
     #[msg("Market with these parameters already exists")]
     MarketAlreadyExists,
 
-    // --- Mint / redeem / vault (F-02) ---
+    // --- Mint / redeem / vault ---
     #[msg("Arithmetic overflow")]
     MathOverflow,
     #[msg("Insufficient token balance for this operation")]
@@ -35,7 +34,7 @@ pub enum MeridianError {
     #[msg("Vault collateralization invariant violated")]
     InvariantViolated,
 
-    // --- Order book (F-03) ---
+    // --- Order book ---
     #[msg("Order book is full")]
     BookFull,
     #[msg("Order not found")]
@@ -47,7 +46,7 @@ pub enum MeridianError {
     #[msg("Caller does not own this order")]
     NotOrderOwner,
 
-    // --- Settlement / oracle (F-04) ---
+    // --- Settlement / oracle ---
     #[msg("Too early to settle: before market close")]
     TooEarlyToSettle,
     #[msg("Too early for admin override: enforced delay not elapsed")]
@@ -63,7 +62,7 @@ pub enum MeridianError {
     #[msg("Invalid argument")]
     InvalidArgument,
 
-    // --- Settlement / oracle (F-04, appended post-review for ordinal stability) ---
+    // --- Settlement / oracle (appended to preserve error-code ordinals) ---
     #[msg("Oracle price update is not the expected PriceUpdateV2 account")]
     InvalidPriceUpdateAccount,
     #[msg("Oracle price update is not fully verified (Full verification required)")]

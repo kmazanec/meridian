@@ -4,7 +4,7 @@
 //! collateral mint, the supported tickers + their oracle feed ids, the global
 //! pause flag, and an optional fee account.
 //!
-//! Security model (hardened per F-01 adversarial review):
+//! Security model:
 //! - **Idempotency:** the `Config` PDA uses a fixed seed with no per-user
 //!   component, so there is exactly one possible address. Anchor `init` makes a
 //!   second call fail (account already in use).
@@ -40,12 +40,11 @@ pub struct InitializeConfig<'info> {
 
     /// The USDC mint used as collateral across all markets.
     ///
-    /// At F-01 we only store the key, but we sanity-check it is a real,
+    /// Here we only store the key, but we sanity-check it is a real,
     /// token-program-owned account (not a zero/garbage key) so a poison value
     /// can't be frozen into the singleton. We deliberately avoid pulling in the
-    /// full `anchor-spl` token stack here (dependency hygiene — see brief:
-    /// "justify all major dependencies"); F-02 performs full `Mint` typing and
-    /// the actual token CPIs.
+    /// full `anchor-spl` token stack here (dependency hygiene); `mint_pair`
+    /// performs full `Mint` typing and the actual token CPIs.
     /// CHECK: ownership + non-default validated in the handler.
     pub usdc_mint: UncheckedAccount<'info>,
 
@@ -85,7 +84,7 @@ const SPL_TOKEN_2022_ID: Pubkey = pubkey!("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXE
 pub fn handler(ctx: Context<InitializeConfig>, args: InitializeConfigArgs) -> Result<()> {
     // Sanity-check the collateral mint: must be a real, token-program-owned
     // account (rejects the zero key and arbitrary non-mint accounts). Full mint
-    // typing happens in F-02.
+    // typing happens in `mint_pair`.
     let mint_ai = ctx.accounts.usdc_mint.to_account_info();
     let mint_owner = *mint_ai.owner;
     require!(

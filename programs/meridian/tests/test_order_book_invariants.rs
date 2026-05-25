@@ -1,4 +1,4 @@
-//! F-03 invariant + four-path sweep (LiteSVM).
+//! Order-book invariant + four-path sweep (LiteSVM).
 //!
 //! Proves the order book never perturbs the collateralization invariant (#1), that escrow
 //! balances reconcile to the resting book, and that all four trade paths from the brief

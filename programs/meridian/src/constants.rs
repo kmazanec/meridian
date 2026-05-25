@@ -1,14 +1,14 @@
 //! Frozen contracts for Meridian.
 //!
-//! These values are a **cross-cutting contract** (see ROADMAP.md concerns #2 and #3).
-//! Downstream features (F-02 mint/redeem, F-03 order book, F-04 settlement,
-//! F-05 market creation, F-06 SDK) must consume these *verbatim*. Changing any of
-//! them is a breaking change for the whole system.
+//! These values are a **cross-cutting contract** (see ROADMAP.md).
+//! Every consumer — mint/redeem, order book, settlement, market creation, and
+//! the SDK — must consume these *verbatim*. Changing any of them is a breaking
+//! change for the whole system.
 
 use anchor_lang::prelude::*;
 
 // ---------------------------------------------------------------------------
-// Fixed-point / units contract (no floats anywhere — ROADMAP concern #2)
+// Fixed-point / units contract (no floats anywhere — see ROADMAP.md)
 // ---------------------------------------------------------------------------
 
 /// Decimals for the collateral token (USDC). USDC on Solana has 6 decimals,
@@ -35,7 +35,7 @@ pub const PAYOFF_UNIT: u64 = 1_000_000;
 pub const PRICE_SCALE: u64 = 1_000_000;
 
 // ---------------------------------------------------------------------------
-// Order book sizing (ROADMAP concern #3 — frozen account shape)
+// Order book sizing (frozen account shape — see ROADMAP.md)
 // ---------------------------------------------------------------------------
 
 /// Maximum number of resting orders **per side** (bids and asks each).
@@ -47,7 +47,7 @@ pub const ORDERBOOK_N: usize = 128;
 pub const NUM_TICKERS: usize = 7;
 
 // ---------------------------------------------------------------------------
-// Settlement & oracle parameters (F-04)
+// Settlement & oracle parameters
 // ---------------------------------------------------------------------------
 //
 // Timing contract: `Market.trading_day` is the unix timestamp of the market's
@@ -80,7 +80,7 @@ pub const DEFAULT_MAX_STALENESS: i64 = 120;
 pub const MAX_CONFIDENCE_BPS: u64 = 100;
 
 // ---------------------------------------------------------------------------
-// PDA seed prefixes (ROADMAP concern #3 — frozen derivation contract)
+// PDA seed prefixes (frozen derivation contract — see ROADMAP.md)
 // ---------------------------------------------------------------------------
 //
 // Derivation contract (all PDAs are derived from the Meridian program id):
@@ -91,17 +91,17 @@ pub const MAX_CONFIDENCE_BPS: u64 = 100;
 //   Mint authority: [MINT_AUTH_SEED, market.key()]
 //   Yes mint      : [YES_MINT_SEED, market.key()]
 //   No mint       : [NO_MINT_SEED, market.key()]
-//   USDC escrow   : [USDC_ESCROW_SEED, market.key()]   (order-book bid escrow — added in F-03)
-//   Yes escrow    : [YES_ESCROW_SEED, market.key()]    (order-book ask escrow — added in F-03)
+//   USDC escrow   : [USDC_ESCROW_SEED, market.key()]   (order-book bid escrow)
+//   Yes escrow    : [YES_ESCROW_SEED, market.key()]    (order-book ask escrow)
 //
-// Downstream features MUST use these exact byte strings and seed orderings.
+// Every consumer MUST use these exact byte strings and seed orderings.
 //
-// NOTE (F-03 contract addition): the two escrow seeds below were NOT anticipated
-// by F-01. The order book needs token accounts to hold bidders' USDC and askers'
-// Yes tokens *separately from the collateralization vault* (invariant #1 requires
-// the vault to equal PAYOFF_UNIT * pairs_minted - winning_redeemed exactly, so it
-// must never hold order-book funds). These seeds are the source of truth and are
-// mirrored in ROADMAP.md concern #3 so F-06 (SDK) derives them identically.
+// NOTE: the two escrow seeds below exist because the order book needs token
+// accounts to hold bidders' USDC and askers' Yes tokens *separately from the
+// collateralization vault* (invariant #1 requires the vault to equal
+// PAYOFF_UNIT * pairs_minted - winning_redeemed exactly, so it must never hold
+// order-book funds). These seeds are the source of truth and are mirrored in
+// ROADMAP.md so the SDK derives them identically.
 
 /// Singleton global config PDA seed.
 pub const CONFIG_SEED: &[u8] = b"config";
@@ -118,9 +118,9 @@ pub const YES_MINT_SEED: &[u8] = b"yes_mint";
 /// Per-market No mint PDA seed.
 pub const NO_MINT_SEED: &[u8] = b"no_mint";
 /// Per-market order-book USDC escrow token account PDA seed (holds bidders'
-/// escrowed USDC while buy-Yes orders rest). Added in F-03; distinct from the
+/// escrowed USDC while buy-Yes orders rest). Distinct from the
 /// collateralization vault so it never affects invariant #1.
 pub const USDC_ESCROW_SEED: &[u8] = b"usdc_escrow";
 /// Per-market order-book Yes escrow token account PDA seed (holds askers'
-/// escrowed Yes tokens while sell-Yes orders rest). Added in F-03.
+/// escrowed Yes tokens while sell-Yes orders rest).
 pub const YES_ESCROW_SEED: &[u8] = b"yes_escrow";

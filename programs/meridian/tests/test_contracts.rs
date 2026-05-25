@@ -1,6 +1,6 @@
-//! F-01 frozen-contract tests: constant values, PDA derivation, and account
+//! Frozen-contract tests: constant values, PDA derivation, and account
 //! size accounting. Pure Rust (no SVM) — these lock the cross-cutting contracts
-//! (ROADMAP concerns #2 and #3) that downstream features depend on.
+//! (see ROADMAP.md) that the rest of the system depends on.
 
 use {
     anchor_lang::Space,
