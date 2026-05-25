@@ -27,6 +27,14 @@ describe("public surface", () => {
     "MarketState",
     "tickerToArg",
     "symbolToTicker",
+    // calendar
+    "isWeekend",
+    "isHoliday",
+    "isHalfDay",
+    "isTradingDay",
+    "closeInstant",
+    "sessionForDate",
+    "etParts",
     // pdas
     "configPda",
     "marketPda",

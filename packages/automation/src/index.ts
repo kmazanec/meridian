@@ -13,6 +13,8 @@ export {
   STRIKE_ROUND_DOLLARS,
   type ComputeStrikesOptions,
 } from "./strikes";
+// Calendar lives in @meridian/sdk now (shared with the web admin form); re-exported here
+// so automation's public surface — and its consumers — keep these names.
 export {
   isTradingDay,
   isHalfDay,
@@ -22,7 +24,7 @@ export {
   sessionForDate,
   etParts,
   type SessionInfo,
-} from "./calendar";
+} from "@meridian/sdk";
 export {
   createLogger,
   LogLevel,

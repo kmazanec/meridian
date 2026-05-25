@@ -12,10 +12,15 @@
  * calendar. The program later gates settlement on `now >= trading_day`.
  */
 
-import { Ticker, tickerToSymbol, type MarketId } from "@meridian/sdk";
+import {
+  Ticker,
+  tickerToSymbol,
+  closeInstant,
+  isTradingDay,
+  type MarketId,
+} from "@meridian/sdk";
 import BN from "bn.js";
 import { computeStrikes } from "./strikes";
-import { closeInstant, isTradingDay } from "./calendar";
 import type { PriceSource } from "./priceSource";
 import type { MarketProvisioner, ProvisionResult } from "./markets";
 import type { Alerter } from "./alerter";

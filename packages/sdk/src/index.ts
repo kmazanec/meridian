@@ -17,6 +17,19 @@ export {
   NUM_TICKERS,
 } from "./constants";
 export * from "./types";
+// US equity market calendar: which dates are trading sessions and the unix `trading_day`
+// (4:00 PM ET close, 1:00 PM on half-days). Owns the off-chain timing concern (ADR-005);
+// shared by the morning job and the admin "add strike" form. Dependency-free (Intl only).
+export {
+  isWeekend,
+  isHoliday,
+  isHalfDay,
+  isTradingDay,
+  closeInstant,
+  sessionForDate,
+  etParts,
+  type SessionInfo,
+} from "./calendar";
 export * from "./pdas";
 export * from "./instructions";
 export * from "./reads";

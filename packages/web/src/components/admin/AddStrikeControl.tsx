@@ -5,6 +5,7 @@ import BN from "bn.js";
 import type { PublicKey } from "@solana/web3.js";
 import {
   addStrike,
+  closeInstant,
   symbolToTicker,
   TICKER_SYMBOLS,
   type MeridianProgram,
@@ -15,8 +16,10 @@ import { Panel, Button } from "@/components/ui";
 
 /**
  * add_strike: provision an extra strike for a stock intraday (Market + Yes/No mints + vault).
- * Trading day defaults to ~2h out so the new market is open and tradable immediately —
- * mirroring create-markets' convention. Requires the USDC mint (from Config).
+ * The new market closes at today's session close (4:00 PM ET, 1:00 PM on half-days) — the
+ * same `trading_day` the morning job uses, so an intraday strike settles with the day's
+ * other markets. (The 2h test window is a script-only convention, not used from the UI.)
+ * Requires the USDC mint (from Config).
  */
 export function AddStrikeControl({
   program,
@@ -53,8 +56,16 @@ export function AddStrikeControl({
       setErr(parsed.error);
       return;
     }
-    // Open, tradable market: closes ~2h from now (same convention as create-markets).
-    const tradingDay = new BN(Math.floor(Date.now() / 1000) + 2 * 3600);
+    // Close at today's session close (4:00 PM ET, 1:00 PM on half-days) — the same
+    // trading_day the morning job uses, so the strike settles with the day's markets.
+    // closeInstant throws off-session (weekend/holiday); surface that instead of crashing.
+    let tradingDay: BN;
+    try {
+      tradingDay = new BN(closeInstant(new Date()));
+    } catch {
+      setErr("Market is closed today — add strikes during a trading session.");
+      return;
+    }
     const ix = await addStrike(program, {
       admin,
       usdcMint,
@@ -73,7 +84,7 @@ export function AddStrikeControl({
       <h2 className="font-serif text-xl text-fg">Add strike</h2>
       <p className="text-sm text-fg-dim">
         Add an extra strike for a stock. The new market opens immediately and
-        closes ~2h from now.
+        closes at today&rsquo;s market close (4:00 PM ET).
       </p>
 
       <div className="grid grid-cols-2 gap-3">
