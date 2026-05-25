@@ -11,17 +11,25 @@ import type {
 import { Price, Button, cx } from "@/components/ui";
 import { MeridianMark } from "@/components/Logo";
 import { Countdown } from "@/components/trade/Countdown";
+import { OpenCountdown } from "./OpenCountdown";
 
 /**
- * The home page. Bet-centric, not a price grid: a hero, a live activity bar (scale +
- * liveness), then "Today's closest calls" — a curated set of the nearest-the-money markets
- * phrased as real questions with their live odds. Below the fold, two always-on sections keep
- * the page alive even when the board is closed: a "Recent wins" results feed of settled markets
- * and a visual "How it works" flow, capped by the "Why Meridian" differentiators.
+ * The home page. Bet-centric, not a price grid — and it stays alive whether you land mid-session
+ * or after the bell:
  *
- * Presentational: the connect control is injected (so it renders in tests without the wallet
- * provider) and all market data arrives pre-derived as {@link FeaturedCall}s, {@link RecentWin}s,
- * and an {@link ActivitySummary}.
+ *  - OPEN: a hero, a live activity strip (scale + the settlement countdown), then "Today's
+ *    closest calls" — the nearest-the-money markets phrased as real questions with live odds.
+ *  - CLOSED: the strip becomes a dramatic "trading opens in" countdown to the next opening bell,
+ *    building anticipation; "closest calls" hides (there's nothing to trade) so the settled
+ *    results rise to fill the space.
+ *
+ * Always-on below the fold: a "Recent wins" results feed of settled markets, and a vertical
+ * "How it works" timeline that walks a newcomer through one trading day, top to bottom.
+ *
+ * Presentational: the connect control is injected as a *factory* (so it renders in tests
+ * without the wallet provider, and so the page can mount an independent instance in both the
+ * hero and the closing CTA — a React element can't live in two places). All market data arrives
+ * pre-derived as {@link FeaturedCall}s, {@link RecentWin}s, and an {@link ActivitySummary}.
  */
 export function LandingView({
   featured,
@@ -32,8 +40,12 @@ export function LandingView({
   featured: FeaturedCall[];
   activity: ActivitySummary;
   wins: RecentWin[];
-  connect: ReactNode;
+  connect: () => ReactNode;
 }) {
+  // The board is "closed" when nothing is tradable. That single fact reshapes the top of the
+  // page: the strip swaps to an opening-bell countdown and "closest calls" drops out.
+  const closed = activity.openMarkets === 0;
+
   return (
     <div className="space-y-14 py-8">
       {/* Hero */}
@@ -51,7 +63,7 @@ export function LandingView({
           the instant the bell rings — deterministic, no human oracle.
         </p>
         <div className="mt-8 flex items-center justify-center gap-3">
-          {connect}
+          {connect()}
           <Link href="/markets">
             <Button variant="ghost">Browse all markets</Button>
           </Link>
@@ -64,72 +76,88 @@ export function LandingView({
         </p>
       </section>
 
-      {/* Live activity bar — scale + liveness at a glance. */}
-      <ActivityBar activity={activity} />
+      {/* Live activity — the settlement strip when open, the opening-bell countdown when closed. */}
+      {closed ? (
+        <ClosedHero activity={activity} />
+      ) : (
+        <ActivityBar activity={activity} />
+      )}
 
-      {/* Today's closest calls — the curated hero unit. */}
-      <section>
-        <div className="mb-4 flex items-baseline justify-between">
-          <h2 className="font-serif text-2xl tracking-tight text-fg">
-            Today's closest calls
-          </h2>
-          <Link href="/markets" className="text-sm text-accent hover:underline">
-            All markets →
-          </Link>
-        </div>
-        {featured.length === 0 ? (
-          <div className="panel py-12 text-center" data-testid="no-markets">
-            <p className="text-fg-dim">No open markets right now.</p>
-            <p className="mt-1 text-sm text-fg-faint">
-              Today's board opens at 9:00 AM ET — check back then.
-            </p>
+      {/* Today's closest calls — only when the board is live; hidden when closed so wins rise. */}
+      {!closed && featured.length > 0 && (
+        <section>
+          <div className="mb-4 flex items-baseline justify-between">
+            <h2 className="font-serif text-2xl tracking-tight text-fg">
+              Today's closest calls
+            </h2>
+            <Link
+              href="/markets"
+              className="text-sm text-accent hover:underline"
+            >
+              All markets →
+            </Link>
           </div>
-        ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {featured.map((call) => (
               <FeaturedCard key={call.symbol} call={call} />
             ))}
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
       {/* Recent wins — settled results, on-chain. Alive even when the board is closed. */}
       <RecentWins wins={wins} />
 
-      {/* How it works — the lifecycle as a visual flow, for newcomers. */}
+      {/* How it works — one trading day as a vertical timeline, for newcomers. */}
       <HowItWorks />
 
-      {/* Why Meridian — the differentiators, sharpened and numbered. */}
-      <section>
-        <h2 className="mb-4 font-serif text-2xl tracking-tight text-fg">
-          Why Meridian
-        </h2>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <WhyCard
-            n="01"
-            title="Settled by the bell"
-            body="The 4:00 PM closing price decides it, read straight from an on-chain oracle. No proposer, no dispute window, no waiting on a human to call the outcome."
-          />
-          <WhyCard
-            n="02"
-            title="Pick a side, pay a price"
-            body={
-              <>
-                Buy <span className="text-yes">Yes</span> if you think it closes
-                above the strike, <span className="text-no">No</span> if you
-                don't. The price is the market's live probability — trade out
-                anytime.
-              </>
-            }
-          />
-          <WhyCard
-            n="03"
-            title="Non-custodial, on-chain"
-            body="Your wallet signs every action and the program is the only thing that can move funds. No operator ever holds your collateral."
-          />
-        </div>
-      </section>
+      {/* Closing CTA — the scroll lands somewhere, not in a dead end. */}
+      <ClosingCta closed={closed} connect={connect} />
     </div>
+  );
+}
+
+/**
+ * The closing call-to-action: a centered panel that catches the scroll instead of trailing off.
+ * It restates the hook in one line and hands the reader the two next steps — connect a wallet to
+ * trade, or read the FAQ to learn how. The lead copy shifts with the board: an open session
+ * invites you to trade now; a closed one invites you to be set up before the bell.
+ */
+function ClosingCta({
+  closed,
+  connect,
+}: {
+  closed: boolean;
+  connect: () => ReactNode;
+}) {
+  return (
+    <section
+      className="panel relative overflow-hidden px-6 py-12 text-center sm:py-14"
+      data-testid="closing-cta"
+    >
+      {/* A faint gold wash so the footer reads as a destination, not an afterthought. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_320px_at_50%_120%,rgba(232,177,76,0.10),transparent_70%)]"
+      />
+      <div className="relative">
+        <MeridianMark size={36} className="mx-auto mb-5" />
+        <h2 className="font-serif text-3xl tracking-tight text-fg sm:text-4xl">
+          {closed ? "Be on the board at the bell" : "Take your side today"}
+        </h2>
+        <p className="mx-auto mt-3 max-w-md text-fg-dim">
+          {closed
+            ? "Connect your wallet now so you're ready the moment markets open — or read the FAQ while the board is dark."
+            : "Connect your wallet and trade where the Magnificent Seven close — or read the FAQ to learn how it all works first."}
+        </p>
+        <div className="mt-7 flex items-center justify-center gap-3">
+          {connect()}
+          <Link href="/faq">
+            <Button variant="ghost">Read the FAQ</Button>
+          </Link>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -141,7 +169,39 @@ function fmtSpot(n: number): string {
   })}`;
 }
 
-/** The four-stat live activity strip. Countdown is gold; numbers are tone-coded. */
+/**
+ * The closed-board hero: a big, breathing countdown to the next opening bell, framed as an
+ * invitation ("the board reopens at the bell"). The day's results sit right below, so the page
+ * reads as *between sessions*, never dead. A single CTA keeps the next step obvious.
+ */
+function ClosedHero({ activity }: { activity: ActivitySummary }) {
+  return (
+    <section
+      className="panel relative overflow-hidden px-6 py-10 sm:py-12"
+      data-testid="closed-hero"
+    >
+      {/* A faint gold wash so the dark board still feels charged. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(600px_300px_at_50%_-20%,rgba(232,177,76,0.10),transparent_70%)]"
+      />
+      <div className="relative">
+        <OpenCountdown />
+        <p className="mx-auto mt-6 max-w-md text-center text-sm text-fg-dim">
+          The board is closed between sessions. New markets light up at the
+          opening bell — same seven stocks, fresh lines, one trading day.
+        </p>
+        <div className="mt-6 flex justify-center">
+          <Link href="/markets">
+            <Button variant="ghost">See yesterday's board →</Button>
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** The four-stat live activity strip (open session). Countdown is gold; numbers are tone-coded. */
 function ActivityBar({ activity }: { activity: ActivitySummary }) {
   return (
     <section
@@ -262,9 +322,10 @@ function FeaturedCard({ call }: { call: FeaturedCall }) {
 }
 
 /**
- * "Recent wins": the settled-market results feed. Always rendered — when nothing has settled
- * yet it shows an inviting placeholder rather than vanishing, so the page never reads as dead.
- * Each row states the question that was decided, the price it closed at, and which side paid.
+ * "Recent wins": the settled-market results feed, shown as a leaderboard-style ledger. Always
+ * rendered — when nothing has settled yet it shows an inviting placeholder rather than vanishing,
+ * so the page never reads as dead. Each row is the verdict: which side won, the question that was
+ * decided, the price it closed at, and the margin (the row's real drama on a thin devnet).
  */
 function RecentWins({ wins }: { wins: RecentWin[] }) {
   return (
@@ -273,7 +334,11 @@ function RecentWins({ wins }: { wins: RecentWin[] }) {
         <h2 className="font-serif text-2xl tracking-tight text-fg">
           Recent wins
         </h2>
-        <span className="text-xs uppercase tracking-wide text-fg-faint">
+        <span className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wide text-fg-faint">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yes/60" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-yes" />
+          </span>
           Settled on-chain
         </span>
       </div>
@@ -285,9 +350,9 @@ function RecentWins({ wins }: { wins: RecentWin[] }) {
           </p>
         </div>
       ) : (
-        <div className="panel divide-y divide-line-soft p-0">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {wins.map((win) => (
-            <WinRow key={win.address} win={win} />
+            <WinCard key={win.address} win={win} />
           ))}
         </div>
       )}
@@ -295,13 +360,13 @@ function RecentWins({ wins }: { wins: RecentWin[] }) {
   );
 }
 
-/** One settled result: SYMBOL · the question · the close · the winning side · the margin. */
-function WinRow({ win }: { win: RecentWin }) {
+/** One settled result as a card: the verdict pill, the decided question, the close, and margin. */
+function WinCard({ win }: { win: RecentWin }) {
   const yesWon = win.outcome === Outcome.YesWins;
   const strikeLabel = formatUsdc(win.strike, 0);
   const closeLabel =
     win.settlementPrice != null ? formatUsdc(win.settlementPrice) : null;
-  // The margin — how far the close beat or missed the strike — is the row's drama, and it's
+  // The margin — how far the close beat or missed the strike — is the card's drama, and it's
   // meaningful at any scale (unlike the pot, which is ~$0 on a thin devnet). Yes wins on a
   // clear (close ≥ strike), No wins on a miss; sign of (close − strike) agrees with the outcome.
   const marginUsdc =
@@ -309,159 +374,247 @@ function WinRow({ win }: { win: RecentWin }) {
   return (
     <Link
       href={`/trade/${win.symbol}`}
-      className="flex items-center gap-4 px-5 py-3.5 transition-colors first:rounded-t-panel last:rounded-b-panel hover:bg-panel-2/60"
+      className={cx(
+        "panel group relative block overflow-hidden p-4 transition-colors",
+        yesWon ? "hover:border-yes/40" : "hover:border-no/40"
+      )}
       data-testid={`win-${win.address}`}
     >
-      {/* Winning-side pill — the verdict, color-coded teal/terracotta. */}
-      <span
+      {/* A side-coded edge so the verdict reads at a glance, before any number. */}
+      <div
+        aria-hidden
         className={cx(
-          "stat-mono w-12 shrink-0 rounded-md border py-1 text-center text-xs uppercase tracking-wide",
-          yesWon
-            ? "border-yes/30 bg-yes/10 text-yes"
-            : "border-no/30 bg-no/10 text-no"
+          "absolute inset-y-0 left-0 w-1",
+          yesWon ? "bg-yes" : "bg-no"
         )}
-      >
-        {yesWon ? "Yes" : "No"}
-      </span>
-
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm text-fg">
-          <span className="font-serif tracking-tight">{win.symbol}</span>{" "}
-          <span className="text-fg-dim">
-            closed{" "}
-            {closeLabel ? (
-              <span className="stat-mono text-fg">{closeLabel}</span>
-            ) : (
-              "—"
-            )}{" "}
-            vs {strikeLabel}
-          </span>
-        </p>
-        <p className="mt-0.5 text-[0.7rem] text-fg-faint">
-          {formatTradingDay(win.tradingDay)} ·{" "}
-          <span className={yesWon ? "text-yes" : "text-no"}>
+      />
+      <div className="flex items-center justify-between gap-3 pl-2">
+        <div className="flex items-center gap-2.5">
+          <span
+            className={cx(
+              "stat-mono shrink-0 rounded-md border px-2 py-1 text-xs uppercase tracking-wide",
+              yesWon
+                ? "border-yes/30 bg-yes/10 text-yes"
+                : "border-no/30 bg-no/10 text-no"
+            )}
+          >
             {yesWon ? "Yes" : "No"}
-          </span>{" "}
-          paid out
-        </p>
-      </div>
-
-      <div className="shrink-0 text-right">
+          </span>
+          <span className="font-serif text-lg tracking-tight text-fg">
+            {win.symbol}
+          </span>
+        </div>
         {marginUsdc != null ? (
-          <>
+          <div className="text-right">
             <div
               className={cx(
-                "stat-mono text-sm",
+                "stat-mono text-lg",
                 yesWon ? "text-yes" : "text-no"
               )}
             >
               {yesWon ? "+" : "−"}
               {formatUsdc(marginUsdc.abs())}
             </div>
-            <div className="text-[0.65rem] uppercase tracking-wide text-fg-faint">
+            <div className="text-[0.6rem] uppercase tracking-wide text-fg-faint">
               {yesWon ? "cleared by" : "missed by"}
             </div>
-          </>
+          </div>
         ) : (
           <div className="stat-mono text-sm text-fg-faint">—</div>
         )}
       </div>
+
+      <p className="mt-3 pl-2 text-sm text-fg-dim">
+        Closed{" "}
+        {closeLabel ? (
+          <span className="stat-mono text-fg">{closeLabel}</span>
+        ) : (
+          "—"
+        )}{" "}
+        vs <span className="stat-mono text-fg">{strikeLabel}</span> line
+      </p>
+      <p className="mt-1 pl-2 text-[0.7rem] text-fg-faint">
+        {formatTradingDay(win.tradingDay)} ·{" "}
+        <span className={yesWon ? "text-yes" : "text-no"}>
+          {yesWon ? "Yes" : "No"}
+        </span>{" "}
+        paid out
+      </p>
     </Link>
   );
 }
 
-/** One numbered step in the "how it works" flow. */
-function FlowStep({
-  n,
-  title,
-  body,
-  icon,
-}: {
-  n: string;
-  title: string;
-  body: ReactNode;
-  icon: ReactNode;
-}) {
-  return (
-    <li className="panel relative flex-1 p-5">
-      <div className="flex items-center gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-ink-2 text-accent">
-          {icon}
-        </span>
-        <span className="stat-mono text-xs text-fg-faint">{n}</span>
-      </div>
-      <h3 className="mt-3 font-serif text-base text-fg">{title}</h3>
-      <p className="mt-1.5 text-sm text-fg-dim">{body}</p>
-    </li>
-  );
-}
-
 /**
- * "How it works": the contract lifecycle as a four-step flow — pick a side, pay the price,
- * the bell rings, it auto-settles. Laid out as a connected stepper on desktop (the gold
- * connector line traces the meridian motif: price crossing the close), stacked on mobile.
+ * "How it works": one trading day as a vertical timeline. A gold spine runs down the middle
+ * (left on mobile), a node marks each beat, and cards alternate sides on desktop / stack to the
+ * right on mobile. The day flows top-to-bottom: the board opens, you pick a side, you pay the
+ * price, the bell rings, and it auto-settles — the whole lifecycle a newcomer needs.
  */
 function HowItWorks() {
   return (
     <section data-testid="how-it-works">
-      <div className="mb-4">
-        <h2 className="font-serif text-2xl tracking-tight text-fg">
-          How it works
+      <div className="mb-8 text-center">
+        <h2 className="font-serif text-3xl tracking-tight text-fg">
+          How a trading day works
         </h2>
-        <p className="mt-1 text-sm text-fg-dim">
-          One trading day, start to finish — no overnight risk, no human in the
+        <p className="mx-auto mt-2 max-w-lg text-sm text-fg-dim">
+          One session, start to finish — no overnight risk, no human in the
           loop.
         </p>
       </div>
 
-      <ol className="relative grid grid-cols-1 gap-4 md:grid-cols-4">
-        {/* The connector: a faint gold rule the steps sit on (desktop only). */}
+      <ol className="relative mx-auto max-w-3xl" data-testid="timeline">
+        {/* The spine: a gold rule the nodes sit on. Left on mobile, centered on desktop. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-[12.5%] top-[2.6rem] hidden h-px bg-gradient-to-r from-transparent via-accent/30 to-transparent md:block"
+          className="absolute bottom-2 top-2 w-px bg-gradient-to-b from-transparent via-accent/40 to-transparent left-[11px] md:left-1/2 md:-translate-x-1/2"
         />
-        <FlowStep
+        <TimelineStep
           n="01"
+          side="left"
+          time="9:30 AM ET"
+          title="The board opens"
+          icon={<IconSunrise />}
+          body={
+            <>
+              At the bell, fresh markets light up for all seven stocks — a few
+              price lines around where each is trading.
+            </>
+          }
+        />
+        <TimelineStep
+          n="02"
+          side="right"
+          time="All session"
           title="Pick a side"
           icon={<IconSides />}
           body={
             <>
-              Choose a daily question and take{" "}
-              <span className="text-yes">Yes</span> or{" "}
-              <span className="text-no">No</span> on where a stock closes.
+              Choose a question and take <span className="text-yes">Yes</span>{" "}
+              if you think it closes above the line,{" "}
+              <span className="text-no">No</span> if you don't.
             </>
           }
         />
-        <FlowStep
-          n="02"
+        <TimelineStep
+          n="03"
+          side="left"
+          time="All session"
           title="Pay the price"
           icon={<IconCoin />}
           body={
             <>
               The price <em className="not-italic text-fg">is</em> the odds —
-              pay it, and you hold a contract that wins{" "}
-              <Price tone="usdc">$1.00</Price>.
+              pay it and you hold a contract that wins{" "}
+              <Price tone="usdc">$1.00</Price>. Trade out anytime.
             </>
           }
         />
-        <FlowStep
-          n="03"
+        <TimelineStep
+          n="04"
+          side="right"
+          time="4:00 PM ET"
           title="The bell rings"
           icon={<IconBell />}
-          body="At 4:00 PM ET the official closing price is read straight from an on-chain oracle."
+          body="The official closing price is read straight from an on-chain oracle — no proposer, no dispute window."
         />
-        <FlowStep
-          n="04"
+        <TimelineStep
+          n="05"
+          side="left"
+          time="Instantly"
           title="Auto-settle"
           icon={<MeridianMark size={18} />}
-          body="Winners redeem $1.00 each, instantly. No proposer, no dispute window, no waiting."
+          body="The winning side redeems $1.00 each, on-chain, the moment the close is in. No waiting on anyone."
+          last
         />
       </ol>
     </section>
   );
 }
 
+/**
+ * One beat in the timeline. `side` places the card left/right of the spine on desktop; on
+ * mobile every card sits to the right of the left-pinned spine. The node straddles the spine.
+ */
+function TimelineStep({
+  n,
+  side,
+  time,
+  title,
+  body,
+  icon,
+  last,
+}: {
+  n: string;
+  side: "left" | "right";
+  time: string;
+  title: string;
+  body: ReactNode;
+  icon: ReactNode;
+  last?: boolean;
+}) {
+  return (
+    <li className={cx("relative md:grid md:grid-cols-2", last ? "" : "pb-8")}>
+      {/* The node on the spine. */}
+      <span
+        aria-hidden
+        className="timeline-node absolute left-0 top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-accent/50 bg-ink-2 text-accent md:left-1/2 md:-translate-x-1/2"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+      </span>
+
+      {/* Spacer for the empty column on desktop so the card lands on the chosen side. */}
+      {side === "right" && <div className="hidden md:block" aria-hidden />}
+
+      <div
+        className={cx(
+          "pl-10 md:pl-0",
+          side === "left" ? "md:pr-10 md:text-right" : "md:pl-10"
+        )}
+      >
+        <div
+          className={cx(
+            "panel inline-block w-full p-5 text-left transition-colors hover:border-accent/30"
+          )}
+        >
+          <div
+            className={cx(
+              "flex items-center gap-3",
+              side === "left" ? "md:flex-row-reverse" : ""
+            )}
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-ink-2 text-accent">
+              {icon}
+            </span>
+            <div className={side === "left" ? "md:text-right" : ""}>
+              <div className="stat-mono text-[0.65rem] uppercase tracking-wide text-accent">
+                {n} · {time}
+              </div>
+              <h3 className="font-serif text-base text-fg">{title}</h3>
+            </div>
+          </div>
+          <p className="mt-2.5 text-sm text-fg-dim">{body}</p>
+        </div>
+      </div>
+    </li>
+  );
+}
+
 /* --- Inline step icons (stroke = currentColor, gold via the badge). --- */
+
+function IconSunrise() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M3 18h18M5.5 18a6.5 6.5 0 0113 0M12 3v3M4.2 8.2l2 1.2M19.8 8.2l-2 1.2"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 function IconSides() {
   return (
@@ -508,23 +661,5 @@ function IconBell() {
         strokeLinecap="round"
       />
     </svg>
-  );
-}
-
-function WhyCard({
-  n,
-  title,
-  body,
-}: {
-  n: string;
-  title: string;
-  body: ReactNode;
-}) {
-  return (
-    <div className="panel p-5">
-      <div className="stat-mono text-sm text-accent">{n}</div>
-      <h3 className="mt-1.5 font-serif text-lg text-fg">{title}</h3>
-      <p className="mt-2 text-sm text-fg-dim">{body}</p>
-    </div>
   );
 }

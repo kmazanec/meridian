@@ -50,7 +50,7 @@ describe("LandingView", () => {
         featured={[]}
         activity={activity}
         wins={[]}
-        connect={<button>Connect</button>}
+        connect={() => <button>Connect</button>}
       />
     );
     expect(
@@ -60,16 +60,17 @@ describe("LandingView", () => {
     expect(screen.getByText(/no human oracle/i)).toBeInTheDocument();
   });
 
-  it("renders the injected connect-wallet control", () => {
+  it("renders the injected connect-wallet control in the hero and closing CTA", () => {
     render(
       <LandingView
         featured={[]}
         activity={activity}
         wins={[]}
-        connect={<button>Connect</button>}
+        connect={() => <button>Connect</button>}
       />
     );
-    expect(screen.getByRole("button", { name: "Connect" })).toBeInTheDocument();
+    // The factory is mounted independently in both spots, so the scroll never dead-ends.
+    expect(screen.getAllByRole("button", { name: "Connect" })).toHaveLength(2);
   });
 
   it("shows the live activity bar", () => {
@@ -78,7 +79,7 @@ describe("LandingView", () => {
         featured={[]}
         activity={activity}
         wins={[]}
-        connect={<button>Connect</button>}
+        connect={() => <button>Connect</button>}
       />
     );
     const bar = screen.getByTestId("activity-bar");
@@ -92,7 +93,7 @@ describe("LandingView", () => {
         featured={[call()]}
         activity={activity}
         wins={[]}
-        connect={<button>Connect</button>}
+        connect={() => <button>Connect</button>}
       />
     );
     const card = screen.getByTestId("featured-NVDA");
@@ -109,25 +110,62 @@ describe("LandingView", () => {
         featured={[]}
         activity={activity}
         wins={[]}
-        connect={<button>Connect</button>}
+        connect={() => <button>Connect</button>}
       />
     );
-    const faqLink = screen.getByRole("link", { name: /read the faq/i });
-    expect(faqLink).toHaveAttribute("href", "/faq");
+    // The FAQ is offered both up top (for newcomers) and in the closing CTA; both point to /faq.
+    const faqLinks = screen.getAllByRole("link", { name: /read the faq/i });
+    expect(faqLinks.length).toBeGreaterThanOrEqual(1);
+    for (const link of faqLinks) expect(link).toHaveAttribute("href", "/faq");
   });
 
-  it("shows a graceful note when no markets are open", () => {
+  it("counts down to the opening bell when the board is closed", () => {
     render(
       <LandingView
         featured={[]}
         activity={{ ...activity, openMarkets: 0, stockCount: 0 }}
         wins={[]}
-        connect={<button>Connect</button>}
+        connect={() => <button>Connect</button>}
       />
     );
-    expect(screen.getByTestId("no-markets")).toHaveTextContent(
-      /No open markets right now/i
+    const hero = screen.getByTestId("closed-hero");
+    expect(within(hero).getByTestId("open-countdown")).toHaveTextContent(
+      /trading opens in/i
     );
+    // The open strip is replaced, not shown alongside the closed hero.
+    expect(screen.queryByTestId("activity-bar")).not.toBeInTheDocument();
+  });
+
+  it("hides today's closest calls when the board is closed", () => {
+    render(
+      <LandingView
+        // Even if a stale featured call leaks through, a closed board must not show it.
+        featured={[call()]}
+        activity={{ ...activity, openMarkets: 0, stockCount: 0 }}
+        wins={[]}
+        connect={() => <button>Connect</button>}
+      />
+    );
+    expect(
+      screen.queryByText(/today's closest calls/i)
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("featured-NVDA")).not.toBeInTheDocument();
+  });
+
+  it("shows the live activity strip when the board is open", () => {
+    render(
+      <LandingView
+        featured={[call()]}
+        activity={activity}
+        wins={[]}
+        connect={() => <button>Connect</button>}
+      />
+    );
+    expect(screen.getByTestId("activity-bar")).toBeInTheDocument();
+    expect(screen.queryByTestId("closed-hero")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /today's closest calls/i })
+    ).toBeInTheDocument();
   });
 
   it("shows recent settled results as a wins feed", () => {
@@ -136,7 +174,7 @@ describe("LandingView", () => {
         featured={[]}
         activity={activity}
         wins={[win()]}
-        connect={<button>Connect</button>}
+        connect={() => <button>Connect</button>}
       />
     );
     const feed = screen.getByTestId("recent-wins");
@@ -167,7 +205,7 @@ describe("LandingView", () => {
             outcome: Outcome.NoWins,
           }),
         ]}
-        connect={<button>Connect</button>}
+        connect={() => <button>Connect</button>}
       />
     );
     const row = screen.getByTestId(
@@ -183,7 +221,7 @@ describe("LandingView", () => {
         featured={[]}
         activity={activity}
         wins={[]}
-        connect={<button>Connect</button>}
+        connect={() => <button>Connect</button>}
       />
     );
     expect(screen.getByTestId("no-wins")).toHaveTextContent(
@@ -197,14 +235,53 @@ describe("LandingView", () => {
         featured={[]}
         activity={activity}
         wins={[]}
-        connect={<button>Connect</button>}
+        connect={() => <button>Connect</button>}
       />
     );
     const flow = screen.getByTestId("how-it-works");
     expect(
-      within(flow).getByRole("heading", { name: /how it works/i })
+      within(flow).getByRole("heading", { name: /how a trading day works/i })
     ).toBeInTheDocument();
+    // The day flows from open to auto-settle as a vertical timeline.
+    expect(within(flow).getByTestId("timeline")).toBeInTheDocument();
+    expect(within(flow).getByText(/the board opens/i)).toBeInTheDocument();
     expect(within(flow).getByText(/the bell rings/i)).toBeInTheDocument();
     expect(within(flow).getByText(/auto-settle/i)).toBeInTheDocument();
+  });
+
+  it("closes with a CTA so the scroll never dead-ends", () => {
+    render(
+      <LandingView
+        featured={[]}
+        activity={activity}
+        wins={[]}
+        connect={() => <button>Connect</button>}
+      />
+    );
+    const cta = screen.getByTestId("closing-cta");
+    // Both next steps are offered: connect a wallet, or read the FAQ.
+    expect(
+      within(cta).getByRole("button", { name: "Connect" })
+    ).toBeInTheDocument();
+    expect(
+      within(cta).getByRole("link", { name: /read the faq/i })
+    ).toHaveAttribute("href", "/faq");
+    // Open session: invite to trade now.
+    expect(within(cta).getByText(/take your side today/i)).toBeInTheDocument();
+  });
+
+  it("shifts the closing CTA to 'be ready for the bell' when the board is closed", () => {
+    render(
+      <LandingView
+        featured={[]}
+        activity={{ ...activity, openMarkets: 0, stockCount: 0 }}
+        wins={[]}
+        connect={() => <button>Connect</button>}
+      />
+    );
+    const cta = screen.getByTestId("closing-cta");
+    expect(
+      within(cta).getByText(/be on the board at the bell/i)
+    ).toBeInTheDocument();
   });
 });

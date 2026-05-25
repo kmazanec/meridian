@@ -26,6 +26,7 @@ export {
   isHalfDay,
   isTradingDay,
   closeInstant,
+  nextOpenInstant,
   sessionForDate,
   etParts,
   type SessionInfo,

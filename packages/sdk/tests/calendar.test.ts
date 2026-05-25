@@ -14,6 +14,7 @@ import {
   isHalfDay,
   isHoliday,
   closeInstant,
+  nextOpenInstant,
   sessionForDate,
 } from "../src/calendar";
 
@@ -95,6 +96,59 @@ describe("market calendar", () => {
     it("throws if asked for the close of a non-session date", () => {
       expect(() => closeInstant(d("2026-05-23"))).to.throw(); // Saturday
       expect(() => closeInstant(d("2026-12-25"))).to.throw(); // Christmas
+    });
+  });
+
+  describe("nextOpenInstant — the 9:30 AM ET opening bell", () => {
+    it("returns today's 9:30 AM open when called before the bell", () => {
+      // Thu 2026-05-21, 7:00 AM EDT (UTC-4) = 11:00 UTC — before the 9:30 open.
+      const ts = nextOpenInstant(new Date("2026-05-21T11:00:00Z"));
+      // 9:30 AM EDT = 13:30 UTC.
+      expect(new Date(ts * 1000).toISOString()).to.equal(
+        "2026-05-21T13:30:00.000Z"
+      );
+    });
+
+    it("rolls to the next day once today's bell has rung", () => {
+      // Thu 2026-05-21, 10:00 AM EDT = 14:00 UTC — after that day's open.
+      const ts = nextOpenInstant(new Date("2026-05-21T14:00:00Z"));
+      // Next session is Fri 2026-05-22, 9:30 AM EDT = 13:30 UTC.
+      expect(new Date(ts * 1000).toISOString()).to.equal(
+        "2026-05-22T13:30:00.000Z"
+      );
+    });
+
+    it("skips the weekend to Monday's open", () => {
+      // Sat 2026-05-23, midday — board is dark all weekend.
+      const ts = nextOpenInstant(new Date("2026-05-23T16:00:00Z"));
+      // Next session is Mon 2026-05-25 (Memorial Day is the *next* Monday, 5/25 is... a holiday!)
+      // 2026-05-25 is Memorial Day (last Mon May), so the next open is Tue 2026-05-26.
+      expect(new Date(ts * 1000).toISOString()).to.equal(
+        "2026-05-26T13:30:00.000Z"
+      );
+    });
+
+    it("skips a holiday to the following session", () => {
+      // Christmas 2026-12-25 (Fri holiday) at any time → next session Mon 2026-12-28.
+      const ts = nextOpenInstant(new Date("2026-12-25T16:00:00Z"));
+      // 9:30 AM EST (UTC-5) = 14:30 UTC.
+      expect(new Date(ts * 1000).toISOString()).to.equal(
+        "2026-12-28T14:30:00.000Z"
+      );
+    });
+
+    it("opens half-days at 9:30 AM too (only the close is early)", () => {
+      // Black Friday 2026-11-27 at 7:00 AM EST = 12:00 UTC, before the open.
+      const ts = nextOpenInstant(new Date("2026-11-27T12:00:00Z"));
+      // 9:30 AM EST = 14:30 UTC; the early close is the half-day, not the open.
+      expect(new Date(ts * 1000).toISOString()).to.equal(
+        "2026-11-27T14:30:00.000Z"
+      );
+    });
+
+    it("returns whole unix seconds", () => {
+      const ts = nextOpenInstant(new Date("2026-05-21T11:00:00Z"));
+      expect(Number.isInteger(ts)).to.be.true;
     });
   });
 

@@ -75,6 +75,40 @@ body::before {
   }
 }
 
+/*
+ * The closed-board "trading opens in" clock. A slow, breathing glow on the gold digits
+ * makes the dark board feel alive and builds anticipation toward the bell — never a flash.
+ * Respects prefers-reduced-motion (the glow is decorative, the time is still legible).
+ */
+@keyframes open-clock-pulse {
+  0%,
+  100% {
+    text-shadow: 0 0 0 rgba(232, 177, 76, 0);
+    opacity: 0.92;
+  }
+  50% {
+    text-shadow: 0 0 22px rgba(232, 177, 76, 0.45);
+    opacity: 1;
+  }
+}
+.open-countdown-clock {
+  animation: open-clock-pulse 2.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .open-countdown-clock {
+    animation: none;
+  }
+}
+
+/*
+ * "How it works" timeline: the vertical gold rule the day flows down. A node sits on the
+ * line at each step; on desktop the cards alternate left/right of the spine, on mobile the
+ * spine pins to the left and every card sits to its right.
+ */
+.timeline-node {
+  box-shadow: 0 0 0 4px #0f1115, 0 0 0 5px rgba(232, 177, 76, 0.25);
+}
+
 /* The wallet-adapter modal/button ships its own CSS; tone it to the brand. */
 .wallet-adapter-button {
   font-family: var(--font-sans, "Inter", sans-serif) !important;

@@ -101,6 +101,28 @@ export function tradingDayKey(tradingDay: BN | number): string {
   });
 }
 
+/**
+ * Human label for an opening-bell instant, e.g. `Mon · 9:30 AM ET` — the weekday and ET
+ * wall-clock time the next session begins. Used on the home page's "trading opens in"
+ * countdown so the wait has a concrete when, not just a ticking clock.
+ */
+export function formatOpenLabel(openInstant: BN | number): string {
+  const ms =
+    (typeof openInstant === "number" ? openInstant : openInstant.toNumber()) *
+    1000;
+  const date = new Date(ms);
+  const weekday = date.toLocaleDateString("en-US", {
+    weekday: "short",
+    timeZone: "America/New_York",
+  });
+  const time = date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/New_York",
+  });
+  return `${weekday} · ${time} ET`;
+}
+
 /** Human label for a trading day, e.g. `Thu, May 23` (ET). */
 export function formatTradingDay(tradingDay: BN | number | null): string {
   if (tradingDay === null) return "—";

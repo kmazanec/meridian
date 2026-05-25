@@ -78,7 +78,7 @@ export default function HomePage() {
       featured={featured}
       activity={activity}
       wins={wins}
-      connect={<WalletMultiButton />}
+      connect={() => <WalletMultiButton />}
     />
   );
 }

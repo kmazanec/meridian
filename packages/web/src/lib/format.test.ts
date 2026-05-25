@@ -6,6 +6,7 @@ import {
   formatUsdc,
   formatTokens,
   formatSignedUsdc,
+  formatOpenLabel,
   shortKey,
 } from "./format";
 
@@ -37,6 +38,13 @@ describe("format", () => {
     expect(formatSignedUsdc(400_000)).toBe("+$0.40");
     expect(formatSignedUsdc(new BN(-100_000))).toBe("-$0.10");
     expect(formatSignedUsdc(0)).toBe("+$0.00");
+  });
+
+  it("labels an opening-bell instant with the ET weekday and time", () => {
+    // 9:30 AM EDT on Thu 2026-05-21 (summer, UTC-4) = 13:30 UTC.
+    expect(formatOpenLabel(1_779_370_200)).toBe("Thu · 9:30 AM ET");
+    // 9:30 AM EST on Mon 2026-12-28 (winter, UTC-5) = 14:30 UTC.
+    expect(formatOpenLabel(new BN(1_798_468_200))).toBe("Mon · 9:30 AM ET");
   });
 
   it("shortens a base58 key", () => {

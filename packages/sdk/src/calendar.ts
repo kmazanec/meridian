@@ -275,6 +275,39 @@ export function closeInstant(date: Date): number {
   return etWallClockToUnix(p, half ? 13 : 16, 0);
 }
 
+/** The ET wall-clock opening bell: 9:30 AM ET (regular and half-days alike). */
+const OPEN_HOUR = 9;
+const OPEN_MINUTE = 30;
+
+/** Advance an instant to ET midnight of the following calendar day (DST-safe via UTC noon). */
+function nextEtDay(date: Date): Date {
+  const p = etParts(date);
+  // UTC noon of the *next* ET date is unambiguously inside that ET day across DST.
+  return new Date(Date.UTC(p.year, p.month - 1, p.day + 1, 12, 0, 0));
+}
+
+/**
+ * The next opening-bell instant (unix seconds) at or after `from`: 9:30 AM ET on the next
+ * trading session. If `from` is during a trading day but before that day's 9:30 open, it
+ * returns today's open; once the bell has rung (or on a closed date) it walks forward to the
+ * next session's open, skipping weekends and NYSE holidays. The counterpart to
+ * {@link closeInstant}: together they bracket a session, so the frontend can count down to
+ * "trading opens" when the board is dark and to "settles" once it's live.
+ */
+export function nextOpenInstant(from: Date = new Date()): number {
+  let cursor = from;
+  for (let i = 0; i < 14; i++) {
+    if (isTradingDay(cursor)) {
+      const openTs = etWallClockToUnix(etParts(cursor), OPEN_HOUR, OPEN_MINUTE);
+      // Only today's open counts if the bell hasn't rung yet relative to `from`.
+      if (openTs * 1000 > from.getTime()) return openTs;
+    }
+    cursor = nextEtDay(cursor);
+  }
+  // 14 days is more than any NYSE holiday gap; reaching here means a calendar bug.
+  throw new Error("no trading session found within 14 days");
+}
+
 /** A one-call summary of a date's session status. */
 export interface SessionInfo {
   /** The ET calendar date as `YYYY-MM-DD`. */
