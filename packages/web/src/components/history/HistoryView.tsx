@@ -1,6 +1,18 @@
 import type { HistoryEntry } from "@/lib/history";
-import { formatPrice, formatTokens, shortKey } from "@/lib/format";
+import { formatPrice, formatTokens, formatUsdc, shortKey } from "@/lib/format";
 import { Panel, cx } from "@/components/ui";
+
+/**
+ * The right-hand amount for one entry. Most amounts are Yes-token counts; a cancelled
+ * *bid* refunds USDC, shown as dollars; a cancel whose side we couldn't recover gets a
+ * denomination-neutral "refunded" rather than a (possibly wrong) "tok".
+ */
+function formatAmount(e: HistoryEntry): string {
+  if (!e.size) return "";
+  if (e.asset === "usdc") return formatUsdc(e.size);
+  if (e.asset === null) return `${formatTokens(e.size)} refunded`;
+  return `${formatTokens(e.size)} tok`;
+}
 
 const KIND_TONE: Record<HistoryEntry["kind"], string> = {
   placed: "text-fg",
@@ -88,7 +100,7 @@ export function HistoryView({
                 </div>
               </div>
               <div className="text-right font-mono text-sm tabular-nums text-fg-dim">
-                {e.size && <div>{formatTokens(e.size)} tok</div>}
+                {e.size && <div>{formatAmount(e)}</div>}
                 {e.price && (
                   <div className="text-fg-faint">{formatPrice(e.price)}</div>
                 )}

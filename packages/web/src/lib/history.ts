@@ -17,6 +17,14 @@ export type HistoryKind =
   | "redeemed"
   | "cancelled";
 
+/**
+ * What the `size` amount is denominated in. Yes-tokens (`"tok"`) for everything
+ * that moves tokens; USDC (`"usdc"`) for a cancelled *bid*, whose escrow refund
+ * is dollars, not tokens; `null` when we can't tell (a cancel whose original
+ * `OrderPlaced` isn't in the fetched window — see {@link buildHistory}).
+ */
+export type HistoryAsset = "tok" | "usdc" | null;
+
 export interface HistoryEntry {
   kind: HistoryKind;
   /** Transaction signature. */
@@ -30,6 +38,14 @@ export interface HistoryEntry {
   price: BN | null;
   /** Size/amount in base units, when the event carries one. */
   size: BN | null;
+  /** What {@link size} is denominated in (drives the displayed unit). */
+  asset: HistoryAsset;
+  /**
+   * Order sequence number, for a cancel — used to correlate back to the original
+   * `OrderPlaced` (which carries the side) in {@link buildHistory}. Internal;
+   * undefined for non-cancel kinds.
+   */
+  seq?: BN;
 }
 
 /** A decoded Anchor event: a name + a `data` record of fields. */
@@ -77,6 +93,7 @@ export function eventToEntry(
         summary: "Minted a Yes/No pair",
         price: null,
         size: amount,
+        asset: "tok",
       };
     }
     case "OrderPlaced": {
@@ -88,6 +105,7 @@ export function eventToEntry(
         summary: `Placed order (${side})`,
         price: asBN(d.price),
         size: asBN(d.size),
+        asset: "tok",
       };
     }
     case "OrderMatched": {
@@ -103,6 +121,7 @@ export function eventToEntry(
         summary: `Filled ${role}`,
         price: asBN(d.price),
         size: asBN(d.fillSize),
+        asset: "tok",
       };
     }
     case "Redeemed": {
@@ -114,6 +133,7 @@ export function eventToEntry(
         summary: won ? "Redeemed winning tokens" : "Burned losing tokens",
         price: null,
         size: asBN(d.tokensBurned),
+        asset: "tok",
       };
     }
     case "OrderCancelled": {
@@ -124,6 +144,11 @@ export function eventToEntry(
         summary: "Cancelled an order",
         price: null,
         size: asBN(d.refunded),
+        // The OrderCancelled event carries no side, so the refund's denomination
+        // (USDC for a bid, tokens for an ask) is unknown here. buildHistory fills
+        // this in by correlating with the original OrderPlaced via (market, seq).
+        asset: null,
+        seq: asBN(d.seq) ?? undefined,
       };
     }
     default:
@@ -134,15 +159,43 @@ export function eventToEntry(
 /**
  * Map a batch of decoded events (with their tx context) to the user's history entries,
  * newest first. Events not involving the user, or not of a logged kind, are dropped.
+ *
+ * An `OrderCancelled` event carries no side, so on its own we can't tell whether the
+ * refund is USDC (a cancelled bid) or Yes tokens (a cancelled ask). We recover it by
+ * correlating with the order's `OrderPlaced` event — same `(market, seq)`, which the
+ * place event tags with a side — across the whole batch. If the matching place event
+ * isn't in the fetched window, the cancel's `asset` stays `null` and the UI shows a
+ * denomination-neutral label rather than guess.
  */
 export function buildHistory(
   events: { event: DecodedEvent; ctx: EventContext }[],
   user: PublicKey
 ): HistoryEntry[] {
+  // (market, seq) -> denomination of that order's escrow refund. Built from the
+  // user's own OrderPlaced events: bid (side 0) escrows USDC, ask (side 1) tokens.
+  const refundAsset = new Map<string, HistoryAsset>();
+  for (const { event } of events) {
+    if (event.name !== "OrderPlaced") continue;
+    const d = event.data;
+    if (asKey(d.owner)?.equals(user) !== true) continue;
+    const market = asKey(d.market)?.toBase58();
+    const seq = asBN(d.seq);
+    if (market === undefined || seq === null) continue;
+    refundAsset.set(
+      `${market}:${seq.toString()}`,
+      Number(d.side) === 0 ? "usdc" : "tok"
+    );
+  }
+
   const entries: HistoryEntry[] = [];
   for (const { event, ctx } of events) {
     const entry = eventToEntry(event, ctx, user);
-    if (entry) entries.push(entry);
+    if (!entry) continue;
+    if (entry.kind === "cancelled" && entry.seq) {
+      entry.asset =
+        refundAsset.get(`${entry.market}:${entry.seq.toString()}`) ?? null;
+    }
+    entries.push(entry);
   }
   entries.sort((a, b) => (b.blockTime ?? 0) - (a.blockTime ?? 0));
   return entries;

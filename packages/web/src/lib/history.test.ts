@@ -142,4 +142,108 @@ describe("buildHistory", () => {
     const entries = buildHistory(events, user);
     expect(entries.map((e) => e.signature)).toEqual(["b", "a"]); // newest first, other dropped
   });
+
+  it("labels a cancelled bid's refund as USDC via its OrderPlaced side", () => {
+    const events = [
+      {
+        event: ev("OrderPlaced", {
+          owner: user,
+          side: 0, // Bid → escrow is USDC
+          price: new BN(650_000),
+          size: new BN(2_000_000),
+          seq: new BN(7),
+        }),
+        ctx: { signature: "place", blockTime: 100 },
+      },
+      {
+        event: ev("OrderCancelled", {
+          owner: user,
+          seq: new BN(7),
+          refunded: new BN(6_160_000),
+        }),
+        ctx: { signature: "cancel", blockTime: 200 },
+      },
+    ];
+    const cancelled = buildHistory(events, user).find(
+      (e) => e.kind === "cancelled"
+    )!;
+    expect(cancelled.asset).toBe("usdc");
+  });
+
+  it("labels a cancelled ask's refund as tokens via its OrderPlaced side", () => {
+    const events = [
+      {
+        event: ev("OrderPlaced", {
+          owner: user,
+          side: 1, // Ask → escrow is Yes tokens
+          price: new BN(650_000),
+          size: new BN(5_200_000),
+          seq: new BN(8),
+        }),
+        ctx: { signature: "place", blockTime: 100 },
+      },
+      {
+        event: ev("OrderCancelled", {
+          owner: user,
+          seq: new BN(8),
+          refunded: new BN(5_200_000),
+        }),
+        ctx: { signature: "cancel", blockTime: 200 },
+      },
+    ];
+    const cancelled = buildHistory(events, user).find(
+      (e) => e.kind === "cancelled"
+    )!;
+    expect(cancelled.asset).toBe("tok");
+  });
+
+  it("leaves a cancel's asset null when the OrderPlaced isn't in the window", () => {
+    const events = [
+      {
+        event: ev("OrderCancelled", {
+          owner: user,
+          seq: new BN(99),
+          refunded: new BN(5_200_000),
+        }),
+        ctx: { signature: "cancel", blockTime: 200 },
+      },
+    ];
+    const cancelled = buildHistory(events, user).find(
+      (e) => e.kind === "cancelled"
+    )!;
+    expect(cancelled.asset).toBeNull();
+  });
+
+  it("doesn't cross-match a cancel to another market's same seq", () => {
+    const otherMarket = Keypair.generate().publicKey;
+    const events = [
+      {
+        // Same seq, different market — must NOT resolve the cancel below.
+        event: {
+          name: "OrderPlaced",
+          data: {
+            market: otherMarket,
+            owner: user,
+            side: 0,
+            price: new BN(1),
+            size: new BN(1),
+            seq: new BN(5),
+          },
+        },
+        ctx: { signature: "place", blockTime: 100 },
+      },
+      {
+        event: ev("OrderCancelled", {
+          owner: user,
+          seq: new BN(5),
+          refunded: new BN(1_000_000),
+        }),
+        ctx: { signature: "cancel", blockTime: 200 },
+      },
+    ];
+    const cancelled = buildHistory(events, user).find(
+      (e) => e.kind === "cancelled"
+    )!;
+    expect(cancelled.asset).toBeNull();
+  });
 });
