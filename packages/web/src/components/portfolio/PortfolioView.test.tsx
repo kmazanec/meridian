@@ -154,7 +154,7 @@ describe("PortfolioView", () => {
     );
   });
 
-  it("shows a lifetime record once anything has settled", () => {
+  it("shows a recent record once anything has settled (totals, not a win rate)", () => {
     render(
       <PortfolioView
         rows={[
@@ -170,16 +170,18 @@ describe("PortfolioView", () => {
         connected
       />
     );
-    const stats = screen.getByTestId("lifetime-stats");
-    expect(stats).toHaveTextContent(/win rate/i);
-    expect(stats).toHaveTextContent("50%"); // 1 of 2 won
+    const stats = screen.getByTestId("recent-record");
+    // Deliberately no win-rate (the bounded redeem scan would make it skew low).
+    expect(stats).not.toHaveTextContent(/win rate/i);
     expect(stats).toHaveTextContent("$3.00"); // total won
     expect(stats).toHaveTextContent("2"); // markets traded
+    expect(stats).toHaveTextContent(/claimed/i);
+    expect(stats).toHaveTextContent("winning bet"); // 1 claimed win
   });
 
-  it("hides the lifetime record when nothing has settled", () => {
+  it("hides the recent record when nothing has settled", () => {
     render(<PortfolioView rows={[openRow]} onRedeem={() => {}} connected />);
-    expect(screen.queryByTestId("lifetime-stats")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("recent-record")).not.toBeInTheDocument();
   });
 
   it("previews recent activity with a link to the full history", () => {

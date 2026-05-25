@@ -212,26 +212,32 @@ export function portfolioSummary(rows: PortfolioRow[]): PortfolioSummary {
 }
 
 /**
- * A wallet's lifetime track record, derived from its settled rows — what turns a long "Settled"
+ * A wallet's settled-position record, derived from its settled rows — what turns the "Settled"
  * table into something that reads as a record rather than a graveyard. A position *won* when its
  * payout is positive (it redeems for USDC, whether still redeemable or already claimed); it
  * settled-and-lost otherwise. Counts are over positions (a market can hold both a Yes and No
  * row); `marketsTraded` dedupes to distinct settled markets.
+ *
+ * NOTE on `winRate`: the portfolio reconstructs *winners* from a bounded recent signature scan
+ * (to cap RPC compute-unit cost), while *losers* linger as held tokens across all time — so the
+ * two sides cover different windows and the rate would understate. The portfolio strip therefore
+ * shows the absolute totals (won / markets / claimed) and **not** `winRate`; the field stays for
+ * completeness/tests but should not be surfaced over a bounded scan.
  */
 export interface LifetimeStats {
   /** Settled positions that paid out (won). */
   wins: number;
-  /** All settled positions (won + lost) — the denominator for the win rate. */
+  /** All settled positions (won + lost). */
   decided: number;
   /** Distinct settled markets the wallet had a position in. */
   marketsTraded: number;
-  /** Σ payout across winning settled positions (USDC base units) — total ever won. */
+  /** Σ payout across winning settled positions (USDC base units) — total won. */
   totalWon: BN;
-  /** Win rate in [0,1], or null when nothing has settled yet. */
+  /** Wins / decided in [0,1], or null when nothing has settled. See the NOTE above before showing it. */
   winRate: number | null;
 }
 
-/** Fold settled rows into a lifetime record. Pure — unit-tested directly. */
+/** Fold settled rows into a settled-position record. Pure — unit-tested directly. */
 export function lifetimeStats(rows: PortfolioRow[]): LifetimeStats {
   let wins = 0;
   let decided = 0;

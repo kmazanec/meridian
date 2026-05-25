@@ -23,6 +23,15 @@ import {
 import BN from "bn.js";
 
 /**
+ * How many recent signatures to scan when reconstructing claimed winners. The full history
+ * lives on the History page; the portfolio only needs the recent slice, so we cap the scan well
+ * below `fetchRedeemHistory`'s 1000 default. Each scanned signature costs a `getTransaction`, so
+ * a smaller window means a much smaller compute-unit burst against the RPC (Alchemy meters CU/s)
+ * — trading complete lifetime recall for a reliable, un-throttled portfolio load.
+ */
+const PORTFOLIO_REDEEM_SCAN_LIMIT = 120;
+
+/**
  * Gather the connected wallet's holdings across all discovered markets and fold them
  * into portfolio rows. For each market the user touches we read their Yes/No balance
  * and (for open markets) the book mark; settled markets use their on-chain outcome.
@@ -99,7 +108,9 @@ export function usePortfolio(): {
     // derive the side from the market outcome (YesWins → yes, NoWins → no).
     const loadRedeemed = async (): Promise<RedeemedPosition[]> => {
       const byAddr = new Map(markets.map((m) => [m.address.toBase58(), m]));
-      const history = await fetchRedeemHistory(connection, program, publicKey);
+      const history = await fetchRedeemHistory(connection, program, publicKey, {
+        limit: PORTFOLIO_REDEEM_SCAN_LIMIT,
+      });
       const out: RedeemedPosition[] = [];
       for (const r of history) {
         if (!r.won) continue; // losers linger in holdings; we only need claimed winners here

@@ -21,8 +21,9 @@ import { Panel, Button, cx } from "@/components/ui";
  * carry their payout and a redeem button for winners.
  *
  * The page stays alive for a wallet with little/no history: a wallet strip (spendable USDC +
- * SOL), a lifetime track record, and a recent-activity preview surround the position tables, and
- * the empty states invite the next trade with copy that tracks whether the board is open.
+ * SOL), a recent settled-position record, and a recent-activity preview surround the position
+ * tables, and the empty states invite the next trade with copy that tracks whether the board is
+ * open.
  *
  * Presentational — rows, balances, recent activity, and the redeem handler are all passed in.
  */
@@ -61,7 +62,7 @@ export function PortfolioView({
   const open = rows.filter((r): r is OpenRow => r.kind === "open");
   const settled = rows.filter((r): r is SettledRow => r.kind === "settled");
   const summary = portfolioSummary(rows);
-  const lifetime = lifetimeStats(rows);
+  const record = lifetimeStats(rows);
 
   return (
     <div className="space-y-8">
@@ -115,8 +116,8 @@ export function PortfolioView({
         />
       </section>
 
-      {/* Lifetime record — turns a long settled history into a track record. */}
-      {lifetime.decided > 0 && <LifetimeStrip lifetime={lifetime} />}
+      {/* Recent record — totals from the recent settled slice (no skew-prone win rate). */}
+      {record.decided > 0 && <RecentRecordStrip record={record} />}
 
       {/* Open positions */}
       <section>
@@ -199,40 +200,37 @@ function WalletStrip({
   );
 }
 
-/** The lifetime track record: win rate, markets won, total ever won. */
-function LifetimeStrip({
-  lifetime,
+/**
+ * The recent record: total won, markets traded, and wins claimed. Deliberately *not* a win
+ * rate — the portfolio reconstructs winners from a bounded recent signature scan (to keep the
+ * RPC compute-unit cost low), while losers linger as held tokens across all time, so a rate over
+ * those two would understate. These three totals are honest from the recent slice on their own.
+ */
+function RecentRecordStrip({
+  record,
 }: {
-  lifetime: ReturnType<typeof lifetimeStats>;
+  record: ReturnType<typeof lifetimeStats>;
 }) {
-  const winPct =
-    lifetime.winRate === null ? "—" : `${Math.round(lifetime.winRate * 100)}%`;
   return (
-    <section data-testid="lifetime-stats">
+    <section data-testid="recent-record">
       <h2 className="mb-3 text-sm uppercase tracking-wide text-fg-faint">
-        Lifetime
+        Recent
       </h2>
       <div className="panel grid grid-cols-3 divide-x divide-line-soft p-0">
         <SummaryStat
-          label="Win rate"
-          value={winPct}
-          tone={
-            lifetime.winRate === null
-              ? undefined
-              : lifetime.winRate >= 0.5
-              ? "yes"
-              : "no"
-          }
-          hint={`${lifetime.wins} of ${lifetime.decided} won`}
-        />
-        <SummaryStat
-          label="Total won"
-          value={formatUsdc(lifetime.totalWon)}
-          tone={lifetime.totalWon.gtn(0) ? "yes" : undefined}
+          label="Won"
+          value={formatUsdc(record.totalWon)}
+          tone={record.totalWon.gtn(0) ? "yes" : undefined}
         />
         <SummaryStat
           label="Markets traded"
-          value={String(lifetime.marketsTraded)}
+          value={String(record.marketsTraded)}
+        />
+        <SummaryStat
+          label="Claimed"
+          value={String(record.wins)}
+          tone={record.wins > 0 ? "yes" : undefined}
+          hint={record.wins === 1 ? "winning bet" : "winning bets"}
         />
       </div>
     </section>
