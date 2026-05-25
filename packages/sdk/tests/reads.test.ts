@@ -10,9 +10,11 @@ import {
   dualBook,
   complementPrice,
   payoutFor,
+  redeemRecordsFromEvents,
   type OrderBookAccount,
   type OrderEntry,
   type MarketAccount,
+  type ParsedEvent,
 } from "../src/reads";
 
 /** Decode the order book straight from LiteSVM into the reads-module shape. */
@@ -267,5 +269,90 @@ describe("reads: dual-perspective book + payouts", () => {
         /settlement price/i
       );
     });
+  });
+});
+
+describe("redeemRecordsFromEvents (claimed-position reconstruction)", () => {
+  const me = Keypair.generate().publicKey;
+  const other = Keypair.generate().publicKey;
+  const mkt = Keypair.generate().publicKey;
+  const SIG = "5sig";
+
+  const ev = (
+    data: Record<string, unknown>,
+    name = "Redeemed"
+  ): ParsedEvent => ({
+    name,
+    data,
+  });
+
+  it("keeps only this owner's Redeemed events", () => {
+    const events = [
+      ev({
+        market: mkt,
+        user: me,
+        won: true,
+        tokensBurned: new BN(6_000_000),
+        usdcPaid: new BN(6_000_000),
+      }),
+      ev({
+        market: mkt,
+        user: other,
+        won: true,
+        tokensBurned: new BN(9),
+        usdcPaid: new BN(9),
+      }),
+    ];
+    const recs = redeemRecordsFromEvents(events, me.toBase58(), SIG);
+    expect(recs).to.have.length(1);
+    expect(recs[0].market).to.equal(mkt.toBase58());
+    expect(recs[0].won).to.equal(true);
+    expect(recs[0].usdcPaid.toString()).to.equal("6000000");
+    expect(recs[0].signature).to.equal(SIG);
+  });
+
+  it("ignores non-Redeemed events", () => {
+    const events = [
+      ev({ market: mkt, user: me, amount: new BN(1) }, "PairMinted"),
+      ev({
+        market: mkt,
+        user: me,
+        won: false,
+        tokensBurned: new BN(5),
+        usdcPaid: new BN(0),
+      }),
+    ];
+    const recs = redeemRecordsFromEvents(events, me.toBase58(), SIG);
+    expect(recs).to.have.length(1);
+    expect(recs[0].won).to.equal(false);
+    expect(recs[0].usdcPaid.toString()).to.equal("0");
+  });
+
+  it("accepts both snake_case and camelCase field variants", () => {
+    const snake = ev({
+      market: mkt,
+      user: me,
+      won: true,
+      tokens_burned: 3_000_000,
+      usdc_paid: 3_000_000,
+    });
+    const recs = redeemRecordsFromEvents([snake], me.toBase58(), SIG);
+    expect(recs[0].tokensBurned.toString()).to.equal("3000000");
+    expect(recs[0].usdcPaid.toString()).to.equal("3000000");
+  });
+
+  it("returns [] when the owner has no matching events", () => {
+    const events = [
+      ev({
+        market: mkt,
+        user: other,
+        won: true,
+        tokensBurned: new BN(1),
+        usdcPaid: new BN(1),
+      }),
+    ];
+    expect(redeemRecordsFromEvents(events, me.toBase58(), SIG)).to.deep.equal(
+      []
+    );
   });
 });

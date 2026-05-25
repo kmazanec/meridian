@@ -9,6 +9,7 @@
  */
 
 import BN from "bn.js";
+import { EventParser } from "@anchor-lang/core";
 import { Connection, PublicKey } from "@solana/web3.js";
 import {
   getAccount as getTokenAccount,
@@ -424,4 +425,114 @@ export function payoutFor(
     (side === "no" && market.outcome === Outcome.NoWins);
   // tokens are 6dp and a winning token pays PRICE_SCALE (1e6) per 1.0 token → 1:1 base units.
   return winning ? amt.clone() : new BN(0);
+}
+
+// --- Redeem history (reconstructing claimed positions after their tokens are burned) ---
+
+/** One `Redeemed` event, decoded from a wallet's transaction logs. */
+export interface RedeemRecord {
+  /** The market the redemption was against (base58). */
+  market: string;
+  /** True if the redeemed side won (a claimed winner); false for a burned loser. */
+  won: boolean;
+  /** Outcome-token base units burned by the redeem (6dp). */
+  tokensBurned: BN;
+  /** USDC base units paid out (6dp) — `tokensBurned` for a winner, 0 for a loser. */
+  usdcPaid: BN;
+  /** The transaction signature the event came from. */
+  signature: string;
+}
+
+/** The decoded-event shape `EventParser.parseLogs` yields (name + data). */
+export interface ParsedEvent {
+  name: string;
+  data: Record<string, unknown>;
+}
+
+/**
+ * Map already-parsed program events to {@link RedeemRecord}s for one owner. Pure (no RPC) so
+ * the filtering + field-mapping is unit-tested directly; {@link fetchRedeemHistory} feeds it
+ * the events `EventParser` decodes from each tx's logs. Keeps only `Redeemed` events whose
+ * `user` is `ownerB58`, and normalizes the snake/camel field variants Anchor may emit.
+ */
+export function redeemRecordsFromEvents(
+  events: ParsedEvent[],
+  ownerB58: string,
+  signature: string
+): RedeemRecord[] {
+  const out: RedeemRecord[] = [];
+  for (const ev of events) {
+    if (ev.name !== "redeemed" && ev.name !== "Redeemed") continue;
+    const d = ev.data as {
+      market: PublicKey;
+      user: PublicKey;
+      won: boolean;
+      tokensBurned?: BN | bigint | number;
+      usdcPaid?: BN | bigint | number;
+      tokens_burned?: BN | bigint | number;
+      usdc_paid?: BN | bigint | number;
+    };
+    if (d.user.toBase58() !== ownerB58) continue; // only this wallet's redeems
+    out.push({
+      market: d.market.toBase58(),
+      won: d.won,
+      tokensBurned: new BN((d.tokensBurned ?? d.tokens_burned ?? 0).toString()),
+      usdcPaid: new BN((d.usdcPaid ?? d.usdc_paid ?? 0).toString()),
+      signature,
+    });
+  }
+  return out;
+}
+
+/**
+ * Reconstruct a wallet's redeem history by parsing the program's `Redeemed` events from its
+ * recent transaction logs. This is how the UI recovers **claimed winners**: redeeming a
+ * winning position burns its tokens, so it vanishes from current holdings — but the event
+ * persists in the chain's logs. (Losing tokens are normally never redeemed, so they linger in
+ * the wallet and are read directly from balances; this fills in the other half of the picture.)
+ *
+ * Bounded by `limit` recent signatures (default 1000) to keep RPC cost predictable; a wallet
+ * with redeems older than that window may miss the oldest — callers wanting completeness can
+ * raise the limit or paginate. Best-effort per signature: a transaction whose logs can't be
+ * fetched/parsed is skipped, not fatal.
+ */
+export async function fetchRedeemHistory(
+  connection: Connection,
+  program: MeridianProgram,
+  owner: PublicKey,
+  opts: { limit?: number } = {}
+): Promise<RedeemRecord[]> {
+  const limit = opts.limit ?? 1000;
+  const sigs = await connection.getSignaturesForAddress(owner, { limit });
+  if (sigs.length === 0) return [];
+
+  const parser = new EventParser(program.programId, program.coder);
+  const records: RedeemRecord[] = [];
+
+  // Fetch in modest batches so one big wallet doesn't fire 1000 parallel RPC calls.
+  const BATCH = 25;
+  const ownerB58 = owner.toBase58();
+  for (let i = 0; i < sigs.length; i += BATCH) {
+    const slice = sigs.slice(i, i + BATCH).filter((s) => !s.err); // skip failed txs
+    const txs = await Promise.all(
+      slice.map((s) =>
+        connection
+          .getTransaction(s.signature, {
+            maxSupportedTransactionVersion: 0,
+            commitment: "confirmed",
+          })
+          .catch(() => null)
+      )
+    );
+    for (let j = 0; j < txs.length; j++) {
+      const tx = txs[j];
+      const logs = tx?.meta?.logMessages;
+      if (!logs) continue;
+      const events = [...parser.parseLogs(logs)] as ParsedEvent[];
+      records.push(
+        ...redeemRecordsFromEvents(events, ownerB58, slice[j].signature)
+      );
+    }
+  }
+  return records;
 }
