@@ -5,20 +5,32 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { redeem, RedeemSide } from "@meridian/sdk";
 import { useProgram } from "@/lib/useProgram";
-import { useUsdcMint } from "@/lib/useChain";
+import { useUsdcMint, useMarkets } from "@/lib/useChain";
 import { useSendIx } from "@/lib/useSendIx";
 import { usePortfolio } from "@/lib/usePortfolio";
+import { useUsdcBalance } from "@/lib/useUsdcBalance";
+import { useSolBalance } from "@/lib/useSolBalance";
+import { useHistory } from "@/lib/useHistory";
 import type { SettledRow } from "@/lib/portfolio";
 import { PortfolioView } from "@/components/portfolio/PortfolioView";
 import { TxStatusBanner } from "@/components/trade/TxStatusBanner";
+
+/** How many recent actions to preview on the portfolio (the full log lives on /history). */
+const ACTIVITY_PREVIEW = 5;
 
 export default function PortfolioPage() {
   const program = useProgram();
   const { publicKey } = useWallet();
   const usdcMint = useUsdcMint();
   const { rows, refresh } = usePortfolio();
+  const { balance: usdcBalance } = useUsdcBalance();
+  const { lamports: solLamports } = useSolBalance();
+  const { entries: activity } = useHistory();
+  const { data: markets } = useMarkets();
   const tx = useSendIx();
   const [redeemingKey, setRedeemingKey] = useState<string | null>(null);
+
+  const boardOpen = (markets ?? []).some((m) => m.state === "open");
 
   const onRedeem = async (row: SettledRow) => {
     if (!publicKey || !usdcMint) return;
@@ -49,6 +61,10 @@ export default function PortfolioPage() {
         onRedeem={onRedeem}
         redeemingKey={redeemingKey}
         connected={!!publicKey}
+        usdcBalance={usdcBalance}
+        solLamports={solLamports}
+        recentActivity={activity.slice(0, ACTIVITY_PREVIEW)}
+        boardOpen={boardOpen}
       />
     </div>
   );

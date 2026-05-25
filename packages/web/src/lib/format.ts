@@ -53,6 +53,22 @@ export function formatTokens(
   });
 }
 
+/** Lamports per SOL — the native-token scale (9 decimals). */
+const LAMPORTS_PER_SOL = 1_000_000_000;
+
+/**
+ * Native SOL from lamports, e.g. `2.413 SOL`. Three decimals is enough to read a fee buffer
+ * without noise; tiny non-zero balances still show as `< 0.001 SOL` rather than a bare `0`.
+ */
+export function formatSol(lamports: number): string {
+  const sol = lamports / LAMPORTS_PER_SOL;
+  if (sol > 0 && sol < 0.001) return "< 0.001 SOL";
+  return `${sol.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
+  })} SOL`;
+}
+
 /** A signed USDC P&L, e.g. `+$0.40` / `-$0.10` (for portfolio rows). */
 export function formatSignedUsdc(baseUnits: BN | number | string): string {
   const bn = toBN(baseUnits);

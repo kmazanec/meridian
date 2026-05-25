@@ -210,3 +210,47 @@ export function portfolioSummary(rows: PortfolioRow[]): PortfolioSummary {
     claimableCount,
   };
 }
+
+/**
+ * A wallet's lifetime track record, derived from its settled rows — what turns a long "Settled"
+ * table into something that reads as a record rather than a graveyard. A position *won* when its
+ * payout is positive (it redeems for USDC, whether still redeemable or already claimed); it
+ * settled-and-lost otherwise. Counts are over positions (a market can hold both a Yes and No
+ * row); `marketsTraded` dedupes to distinct settled markets.
+ */
+export interface LifetimeStats {
+  /** Settled positions that paid out (won). */
+  wins: number;
+  /** All settled positions (won + lost) — the denominator for the win rate. */
+  decided: number;
+  /** Distinct settled markets the wallet had a position in. */
+  marketsTraded: number;
+  /** Σ payout across winning settled positions (USDC base units) — total ever won. */
+  totalWon: BN;
+  /** Win rate in [0,1], or null when nothing has settled yet. */
+  winRate: number | null;
+}
+
+/** Fold settled rows into a lifetime record. Pure — unit-tested directly. */
+export function lifetimeStats(rows: PortfolioRow[]): LifetimeStats {
+  let wins = 0;
+  let decided = 0;
+  let totalWon = new BN(0);
+  const markets = new Set<string>();
+  for (const r of rows) {
+    if (r.kind !== "settled") continue;
+    decided += 1;
+    markets.add(r.market);
+    if (r.payout.gtn(0)) {
+      wins += 1;
+      totalWon = totalWon.add(r.payout);
+    }
+  }
+  return {
+    wins,
+    decided,
+    marketsTraded: markets.size,
+    totalWon,
+    winRate: decided > 0 ? wins / decided : null,
+  };
+}

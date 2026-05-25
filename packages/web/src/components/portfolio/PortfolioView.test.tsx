@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import BN from "bn.js";
 import { Ticker } from "@meridian/sdk";
 import type { OpenRow, SettledRow } from "@/lib/portfolio";
+import type { HistoryEntry } from "@/lib/history";
 import { PortfolioView } from "./PortfolioView";
 
 const openRow: OpenRow = {
@@ -105,5 +106,106 @@ describe("PortfolioView", () => {
     expect(screen.getAllByText(/Won · claimed/).length).toBeGreaterThan(0);
     expect(screen.queryByTestId("redeem-MKT2:yes")).not.toBeInTheDocument();
     expect(screen.queryAllByText("Lost")).toHaveLength(0);
+  });
+
+  it("always shows the wallet strip (USDC + SOL) when connected", () => {
+    render(
+      <PortfolioView
+        rows={[]}
+        onRedeem={() => {}}
+        connected
+        usdcBalance={new BN(1_240_000_000)} // $1,240
+        solLamports={2_413_000_000} // 2.413 SOL
+      />
+    );
+    const strip = screen.getByTestId("wallet-strip");
+    expect(strip).toHaveTextContent("$1,240.00");
+    expect(strip).toHaveTextContent("2.413 SOL");
+  });
+
+  it("shows a dash for unknown balances rather than $0", () => {
+    render(<PortfolioView rows={[]} onRedeem={() => {}} connected />);
+    const strip = screen.getByTestId("wallet-strip");
+    expect(strip).toHaveTextContent("USDC balance");
+    // null balances render as em-dashes, not a misleading zero.
+    expect(strip.textContent).toContain("—");
+  });
+
+  it("invites the next trade when there are no open positions and the board is live", () => {
+    render(<PortfolioView rows={[]} onRedeem={() => {}} connected boardOpen />);
+    const empty = screen.getByTestId("open-empty");
+    expect(empty).toHaveTextContent(/board is live/i);
+    expect(
+      screen.getByRole("link", { name: /browse markets/i })
+    ).toHaveAttribute("href", "/markets");
+  });
+
+  it("frames the wait when the board is closed", () => {
+    render(
+      <PortfolioView
+        rows={[]}
+        onRedeem={() => {}}
+        connected
+        boardOpen={false}
+      />
+    );
+    expect(screen.getByTestId("open-empty")).toHaveTextContent(
+      /board is closed/i
+    );
+  });
+
+  it("shows a lifetime record once anything has settled", () => {
+    render(
+      <PortfolioView
+        rows={[
+          settledWinner,
+          {
+            ...settledWinner,
+            market: "MKT3",
+            payout: new BN(0),
+            redeemable: false,
+          },
+        ]}
+        onRedeem={() => {}}
+        connected
+      />
+    );
+    const stats = screen.getByTestId("lifetime-stats");
+    expect(stats).toHaveTextContent(/win rate/i);
+    expect(stats).toHaveTextContent("50%"); // 1 of 2 won
+    expect(stats).toHaveTextContent("$3.00"); // total won
+    expect(stats).toHaveTextContent("2"); // markets traded
+  });
+
+  it("hides the lifetime record when nothing has settled", () => {
+    render(<PortfolioView rows={[openRow]} onRedeem={() => {}} connected />);
+    expect(screen.queryByTestId("lifetime-stats")).not.toBeInTheDocument();
+  });
+
+  it("previews recent activity with a link to the full history", () => {
+    const entry: HistoryEntry = {
+      kind: "redeemed",
+      signature: "sig123",
+      blockTime: 1_700_000_000,
+      market: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+      summary: "Redeemed NVDA Yes",
+      price: null,
+      size: new BN(5_000_000),
+      asset: "tok",
+    };
+    render(
+      <PortfolioView
+        rows={[]}
+        onRedeem={() => {}}
+        connected
+        recentActivity={[entry]}
+      />
+    );
+    const feed = screen.getByTestId("recent-activity");
+    expect(feed).toHaveTextContent("Redeemed NVDA Yes");
+    expect(screen.getByRole("link", { name: /view all/i })).toHaveAttribute(
+      "href",
+      "/history"
+    );
   });
 });

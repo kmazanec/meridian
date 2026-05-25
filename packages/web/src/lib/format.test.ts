@@ -6,6 +6,7 @@ import {
   formatUsdc,
   formatTokens,
   formatSignedUsdc,
+  formatSol,
   formatOpenLabel,
   shortKey,
 } from "./format";
@@ -38,6 +39,14 @@ describe("format", () => {
     expect(formatSignedUsdc(400_000)).toBe("+$0.40");
     expect(formatSignedUsdc(new BN(-100_000))).toBe("-$0.10");
     expect(formatSignedUsdc(0)).toBe("+$0.00");
+  });
+
+  it("formats lamports as SOL", () => {
+    expect(formatSol(0)).toBe("0 SOL");
+    expect(formatSol(2_413_000_000)).toBe("2.413 SOL");
+    expect(formatSol(1_000_000_000)).toBe("1 SOL");
+    // A dust balance reads as a floor rather than rounding to 0.
+    expect(formatSol(500_000)).toBe("< 0.001 SOL");
   });
 
   it("labels an opening-bell instant with the ET weekday and time", () => {

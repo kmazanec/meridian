@@ -4,6 +4,7 @@ import { Outcome, Ticker } from "@meridian/sdk";
 import {
   buildPortfolio,
   portfolioSummary,
+  lifetimeStats,
   type Holding,
   type PortfolioRow,
 } from "./portfolio";
@@ -216,5 +217,42 @@ describe("portfolioSummary", () => {
     expect(s.openCount).toBe(0);
     expect(s.claimable.toNumber()).toBe(0);
     expect(s.claimableCount).toBe(0);
+  });
+
+  it("derives a lifetime record from settled rows (won/lost, total won, markets)", () => {
+    // `rows` has two settled positions: C won $4.00 (redeemable), D lost ($0). Open rows ignored.
+    const l = lifetimeStats(rows);
+    expect(l.decided).toBe(2);
+    expect(l.wins).toBe(1);
+    expect(l.totalWon.toNumber()).toBe(4_000_000);
+    expect(l.marketsTraded).toBe(2);
+    expect(l.winRate).toBe(0.5);
+  });
+
+  it("counts a claimed (redeemed) winner as a win", () => {
+    const claimed: PortfolioRow = {
+      kind: "settled",
+      market: "C",
+      ticker: Ticker.Nvda,
+      strike: new BN(1_180_000000),
+      side: "yes",
+      amount: new BN(4_000000),
+      tradingDay: new BN(1_700_000_000),
+      payout: new BN(4_000000),
+      redeemable: false, // already claimed
+      redeemed: true,
+    };
+    const l = lifetimeStats([claimed]);
+    expect(l.wins).toBe(1);
+    expect(l.totalWon.toNumber()).toBe(4_000_000);
+    expect(l.winRate).toBe(1);
+  });
+
+  it("reports a null win rate when nothing has settled", () => {
+    const l = lifetimeStats([rows[0]]); // an open row only
+    expect(l.decided).toBe(0);
+    expect(l.winRate).toBeNull();
+    expect(l.totalWon.toNumber()).toBe(0);
+    expect(l.marketsTraded).toBe(0);
   });
 });

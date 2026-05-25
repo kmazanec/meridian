@@ -1,12 +1,16 @@
+import Link from "next/link";
 import type BN from "bn.js";
 import { TICKER_SYMBOLS } from "@meridian/sdk";
 import type { PortfolioRow, OpenRow, SettledRow } from "@/lib/portfolio";
-import { portfolioSummary } from "@/lib/portfolio";
+import { portfolioSummary, lifetimeStats } from "@/lib/portfolio";
+import type { HistoryEntry } from "@/lib/history";
 import {
   formatPrice,
   formatTokens,
   formatUsdc,
   formatSignedUsdc,
+  formatSol,
+  shortKey,
 } from "@/lib/format";
 import { Panel, Button, cx } from "@/components/ui";
 
@@ -14,20 +18,37 @@ import { Panel, Button, cx } from "@/components/ui";
  * The portfolio: a top-line summary, then open positions and settled outcomes as dense,
  * scannable tables grouped by stock. Each row reads as the bet it is ("AAPL · closes ≥
  * $300 · Yes") with its size, entry, mark, value, and P&L aligned in columns. Settled rows
- * carry their payout and a redeem button for winners. Presentational — rows and the redeem
- * handler are passed in.
+ * carry their payout and a redeem button for winners.
+ *
+ * The page stays alive for a wallet with little/no history: a wallet strip (spendable USDC +
+ * SOL), a lifetime track record, and a recent-activity preview surround the position tables, and
+ * the empty states invite the next trade with copy that tracks whether the board is open.
+ *
+ * Presentational — rows, balances, recent activity, and the redeem handler are all passed in.
  */
 export function PortfolioView({
   rows,
   onRedeem,
   redeemingKey,
   connected,
+  usdcBalance = null,
+  solLamports = null,
+  recentActivity = [],
+  boardOpen = false,
 }: {
   rows: PortfolioRow[];
   onRedeem: (row: SettledRow) => void;
   /** `market:side` currently redeeming, to disable its button. */
   redeemingKey?: string | null;
   connected: boolean;
+  /** Spendable USDC (base units, 6dp), or null until known. */
+  usdcBalance?: BN | null;
+  /** Native SOL balance (lamports), or null until known. */
+  solLamports?: number | null;
+  /** The wallet's most recent on-chain actions (newest first), for the preview. */
+  recentActivity?: HistoryEntry[];
+  /** Whether any market is open right now — tunes the empty-state copy/CTA. */
+  boardOpen?: boolean;
 }) {
   if (!connected) {
     return (
@@ -40,6 +61,7 @@ export function PortfolioView({
   const open = rows.filter((r): r is OpenRow => r.kind === "open");
   const settled = rows.filter((r): r is SettledRow => r.kind === "settled");
   const summary = portfolioSummary(rows);
+  const lifetime = lifetimeStats(rows);
 
   return (
     <div className="space-y-8">
@@ -51,6 +73,9 @@ export function PortfolioView({
           Portfolio
         </h1>
       </header>
+
+      {/* Wallet balances — what you can spend, always present so the page never reads empty. */}
+      <WalletStrip usdcBalance={usdcBalance} solLamports={solLamports} />
 
       {/* Top-line summary — what's going on, at a glance. */}
       <section
@@ -90,22 +115,26 @@ export function PortfolioView({
         />
       </section>
 
+      {/* Lifetime record — turns a long settled history into a track record. */}
+      {lifetime.decided > 0 && <LifetimeStrip lifetime={lifetime} />}
+
       {/* Open positions */}
       <section>
         <h2 className="mb-3 text-sm uppercase tracking-wide text-fg-faint">
           Open positions
         </h2>
         {open.length === 0 ? (
-          <Panel className="py-10 text-center">
-            <p className="text-sm text-fg-dim">No open positions yet.</p>
-            <p className="mt-1 text-xs text-fg-faint">
-              Pick a stock and take a side to get started.
-            </p>
-          </Panel>
+          <OpenPositionsEmpty
+            boardOpen={boardOpen}
+            hasHistory={rows.length > 0}
+          />
         ) : (
           <PositionsTable rows={open} />
         )}
       </section>
+
+      {/* Recent activity — a compact slice of the full History page. */}
+      {recentActivity.length > 0 && <RecentActivity entries={recentActivity} />}
 
       {/* Settled */}
       <section>
@@ -130,6 +159,190 @@ export function PortfolioView({
       </section>
     </div>
   );
+}
+
+/**
+ * The wallet strip: spendable USDC + native SOL. Always rendered when connected, so even a
+ * brand-new wallet with no positions sees something concrete (and learns it needs SOL for fees).
+ */
+function WalletStrip({
+  usdcBalance,
+  solLamports,
+}: {
+  usdcBalance: BN | null;
+  solLamports: number | null;
+}) {
+  return (
+    <section
+      className="panel grid grid-cols-2 divide-x divide-line-soft p-0"
+      data-testid="wallet-strip"
+    >
+      <div className="p-4">
+        <div className="text-xs uppercase tracking-wide text-fg-faint">
+          USDC balance
+        </div>
+        <div className="stat-mono mt-1 text-xl text-usdc">
+          {usdcBalance === null ? "—" : formatUsdc(usdcBalance)}
+        </div>
+        <div className="mt-0.5 text-xs text-fg-faint">Your stake to trade</div>
+      </div>
+      <div className="p-4">
+        <div className="text-xs uppercase tracking-wide text-fg-faint">
+          SOL balance
+        </div>
+        <div className="stat-mono mt-1 text-xl text-fg">
+          {solLamports === null ? "—" : formatSol(solLamports)}
+        </div>
+        <div className="mt-0.5 text-xs text-fg-faint">Covers network fees</div>
+      </div>
+    </section>
+  );
+}
+
+/** The lifetime track record: win rate, markets won, total ever won. */
+function LifetimeStrip({
+  lifetime,
+}: {
+  lifetime: ReturnType<typeof lifetimeStats>;
+}) {
+  const winPct =
+    lifetime.winRate === null ? "—" : `${Math.round(lifetime.winRate * 100)}%`;
+  return (
+    <section data-testid="lifetime-stats">
+      <h2 className="mb-3 text-sm uppercase tracking-wide text-fg-faint">
+        Lifetime
+      </h2>
+      <div className="panel grid grid-cols-3 divide-x divide-line-soft p-0">
+        <SummaryStat
+          label="Win rate"
+          value={winPct}
+          tone={
+            lifetime.winRate === null
+              ? undefined
+              : lifetime.winRate >= 0.5
+              ? "yes"
+              : "no"
+          }
+          hint={`${lifetime.wins} of ${lifetime.decided} won`}
+        />
+        <SummaryStat
+          label="Total won"
+          value={formatUsdc(lifetime.totalWon)}
+          tone={lifetime.totalWon.gtn(0) ? "yes" : undefined}
+        />
+        <SummaryStat
+          label="Markets traded"
+          value={String(lifetime.marketsTraded)}
+        />
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The open-positions empty state — a real invitation rather than a dead panel. Copy tracks the
+ * board: when it's live, nudge toward a trade now; when it's closed, frame the wait. A wallet
+ * with prior history gets a lighter nudge ("ready for your next bet") than a fresh one.
+ */
+function OpenPositionsEmpty({
+  boardOpen,
+  hasHistory,
+}: {
+  boardOpen: boolean;
+  hasHistory: boolean;
+}) {
+  return (
+    <div className="panel p-5 py-10 text-center" data-testid="open-empty">
+      <p className="text-sm text-fg-dim">
+        {hasHistory ? "No open positions right now." : "No open positions yet."}
+      </p>
+      <p className="mx-auto mt-1 max-w-sm text-xs text-fg-faint">
+        {boardOpen
+          ? "The board is live — pick a stock and take a side."
+          : "The board is closed between sessions. New markets open at the 9:30 AM ET bell."}
+      </p>
+      <div className="mt-4">
+        <Link href="/markets">
+          <Button variant={boardOpen ? "accent" : "ghost"}>
+            {boardOpen ? "Browse markets →" : "See the markets →"}
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+/** The amount label for a recent-activity row (Yes-tokens, USDC refund, or neutral). */
+function activityAmount(e: HistoryEntry): string | null {
+  if (!e.size) return null;
+  if (e.asset === "usdc") return formatUsdc(e.size);
+  if (e.asset === null) return `${formatTokens(e.size)} refunded`;
+  return `${formatTokens(e.size)} tok`;
+}
+
+const ACTIVITY_TONE: Record<HistoryEntry["kind"], string> = {
+  placed: "text-fg",
+  matched: "text-accent",
+  minted: "text-usdc",
+  redeemed: "text-yes",
+  cancelled: "text-fg-faint",
+};
+
+/** A compact preview of the wallet's latest on-chain actions, linking to the full History page. */
+function RecentActivity({ entries }: { entries: HistoryEntry[] }) {
+  return (
+    <section data-testid="recent-activity">
+      <div className="mb-3 flex items-baseline justify-between">
+        <h2 className="text-sm uppercase tracking-wide text-fg-faint">
+          Recent activity
+        </h2>
+        <Link href="/history" className="text-xs text-accent hover:underline">
+          View all →
+        </Link>
+      </div>
+      <div className="panel divide-y divide-line-soft p-0">
+        {entries.map((e) => {
+          const amount = activityAmount(e);
+          return (
+            <div
+              key={`${e.signature}:${e.kind}:${e.market}`}
+              className="flex items-center justify-between px-4 py-2.5"
+            >
+              <div className="min-w-0">
+                <div
+                  className={cx(
+                    "truncate font-mono text-sm",
+                    ACTIVITY_TONE[e.kind]
+                  )}
+                >
+                  {e.summary}
+                </div>
+                <div className="mt-0.5 text-[0.7rem] text-fg-faint">
+                  {shortKey(e.market)} · {formatActivityTime(e.blockTime)}
+                </div>
+              </div>
+              {amount && (
+                <div className="stat-mono shrink-0 pl-3 text-sm text-fg-dim">
+                  {amount}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** A terse "May 23, 2:14 PM" for an activity row (or a dash when the time is unknown). */
+function formatActivityTime(blockTime: number | null): string {
+  if (!blockTime) return "—";
+  return new Date(blockTime * 1000).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function SummaryStat({
