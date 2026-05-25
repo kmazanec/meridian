@@ -159,9 +159,12 @@ export async function runSettlementJob(
 
   // Phase 2: wide-confidence retry loops, all in parallel (no market blocks another).
   // These are NOT pool-bounded: a retry loop is mostly idle (sleeping 30s between
-  // attempts), so running them all costs little, and bounding them would let a stuck
-  // market hold a pool slot for the full 15-min window — exactly the blocking the two-phase
-  // split exists to avoid. Wide-confidence is rare, so this set is small in practice.
+  // attempts), and bounding them would let a stuck market hold a pool slot for the full
+  // 15-min window — exactly the blocking the two-phase split exists to avoid. Wide
+  // confidence is rare, so this set is small in practice; and even if a broad oracle
+  // outage makes many markets retry at once, each attempt goes through the settler's 429
+  // backoff, so the per-tick burst self-throttles under rate pressure rather than
+  // hammering the endpoint.
   const retryResults = await Promise.all(
     needRetry.map(async (m) => ({
       m,
