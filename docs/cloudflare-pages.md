@@ -18,15 +18,36 @@ any other `/trade/<x>` URL falls through to the branded not-found page.
 
 ## Build-time environment variables
 
-These are `NEXT_PUBLIC_*` so they're baked into the static bundle **at build time** (set them
-in the Pages project: *Settings → Environment variables → Production*, or inline before a CLI
-build). The frontend holds no secrets.
+These are `NEXT_PUBLIC_*` so they're baked into the static bundle **at build time** — wherever
+the build runs (see *Where these are set* below). They are **not** read at runtime, so changing
+one only takes effect on the next build + deploy. The frontend holds no secrets.
 
 | Var | Value (devnet) | Notes |
 |---|---|---|
 | `NEXT_PUBLIC_RPC_URL` | `https://api.devnet.solana.com` | the cluster the app reads/writes |
 | `NEXT_PUBLIC_USDC_MINT` | *(devnet USDC mint from the deploy manifest)* | from `make bootstrap-devnet` |
 | `NEXT_PUBLIC_CLUSTER` | `devnet` | header label; gates the localnet dev-wallet off |
+
+### Where these are set
+
+It depends on **who runs the build** — the var has to exist in that environment:
+
+- **GitLab CI (this repo's actual prod path).** The `deploy-web` job in `.gitlab-ci.yml` builds
+  the site itself and then `wrangler pages deploy`s the finished `out/`. So the vars come from
+  **GitLab → Settings → CI/CD → Variables** (`NEXT_PUBLIC_RPC_URL`, `NEXT_PUBLIC_USDC_MINT`,
+  `NEXT_PUBLIC_CLUSTER`), passed into the build container at `/build` and baked into
+  `/build/packages/web/out`. **Setting them in the Cloudflare Pages dashboard does nothing for
+  CI deploys** — wrangler only uploads an already-built bundle. To change the endpoint: edit the
+  GitLab variable, then re-run the pipeline on the default branch.
+- **Manual CLI build** (the *Deploy (CLI)* section below): set them inline before `yarn … build`.
+- **Pages dashboard build** (GitHub-connected, if you use that instead): set them in
+  *Settings → Environment variables → Production*.
+
+> **`NEXT_PUBLIC_RPC_URL` is public.** It ships in the browser bundle, so anyone can read it.
+> Use a **separate** RPC key for the frontend (not the one the bots use), and lock it to the
+> Pages domain via the provider's allowlist (e.g. Alchemy → allowed origins) so a scraped key
+> can't be abused. The endpoint must allow `getProgramAccounts` — the app discovers markets with
+> it (`src/lib/discovery.ts`), so a free tier that blocks gPA will break the dashboard.
 
 > **Never set `NEXT_PUBLIC_LOCAL_WALLET_SECRET` here.** It is a localnet-only signing
 > backdoor; the production build throws if it is present. It lives only in a local,
