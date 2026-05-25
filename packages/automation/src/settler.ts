@@ -39,8 +39,9 @@ export interface PythSettlerOptions {
 // only a numeric `custom program error` without the program logs (some providers do), where
 // a name/msg-only match would misclassify a retryable WideConfidence as a hard error and
 // alert the admin prematurely.
-const WIDE_CONFIDENCE_CODE = 6000 + 17; // WideConfidence
-const MARKET_SETTLED_CODE = 6000 + 3; // MarketSettled
+const ANCHOR_ERROR_BASE = 6000;
+const WIDE_CONFIDENCE_CODE = ANCHOR_ERROR_BASE + 17; // WideConfidence
+const MARKET_SETTLED_CODE = ANCHOR_ERROR_BASE + 3; // MarketSettled
 
 /**
  * Code markers, written in the *specific* forms Anchor/web3.js actually emit so a bare digit

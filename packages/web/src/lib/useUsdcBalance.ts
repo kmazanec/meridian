@@ -7,6 +7,9 @@ import { fetchBalance } from "@meridian/sdk";
 import BN from "bn.js";
 import { useUsdcMint } from "./useChain";
 
+/** How often to re-read the wallet's USDC balance. */
+const BALANCE_POLL_MS = 20_000;
+
 /**
  * The connected wallet's USDC balance (base units, 6dp) — one token-account read against the
  * wallet's USDC associated token account. Returns null until known / when disconnected.
@@ -43,7 +46,7 @@ export function useUsdcBalance(): { balance: BN | null; loading: boolean } {
     };
 
     pull();
-    const id = setInterval(pull, 20_000);
+    const id = setInterval(pull, BALANCE_POLL_MS);
     return () => {
       cancelled = true;
       clearInterval(id);

@@ -57,8 +57,7 @@ function extractCloses(body: unknown): Close[] | null {
 export function makePriceHistoryTool(ctx: BotContext): StructuredToolInterface {
   return tool(
     async ({ symbol }) => {
-      const sym = resolveSymbol(symbol); // validates the symbol; throws if unsupported
-      void sym;
+      resolveSymbol(symbol); // validates the symbol; throws if unsupported
       const base = ctx.env.webBaseUrl;
       if (!base) {
         return JSON.stringify({

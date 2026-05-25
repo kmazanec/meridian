@@ -22,6 +22,9 @@ import {
 } from "./portfolio";
 import BN from "bn.js";
 
+/** How often to re-fold the portfolio so settlement and new fills surface. */
+const PORTFOLIO_POLL_MS = 15_000;
+
 /**
  * How many recent signatures to scan when reconstructing claimed winners. The full history
  * lives on the History page; the portfolio only needs the recent slice, so we cap the scan well
@@ -144,7 +147,7 @@ export function usePortfolio(): {
       if (!cancelled) setLoading(false);
     });
     // Poll so settlement / new fills surface without a manual refresh.
-    const id = setInterval(() => setTick((t) => t + 1), 15_000);
+    const id = setInterval(() => setTick((t) => t + 1), PORTFOLIO_POLL_MS);
     return () => {
       cancelled = true;
       clearInterval(id);
