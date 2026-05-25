@@ -2,6 +2,7 @@ import BN from "bn.js";
 import {
   PRICE_SCALE,
   Outcome,
+  complementPrice,
   type BookView,
   type MarketAccount,
   type UserPosition,
@@ -41,7 +42,7 @@ export function priceFromBook(view: BookView): BN {
 
 /** The complement of a price within the scale: the No price for a Yes price. */
 export function impliedComplement(price: BN): BN {
-  return PRICE_SCALE.sub(price);
+  return complementPrice(price);
 }
 
 /**

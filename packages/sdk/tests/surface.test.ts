@@ -2,9 +2,10 @@ import { expect } from "chai";
 import * as sdk from "../src/index";
 
 /**
- * Locks the public surface F-07/F-08 import. If a symbol here is renamed or dropped, a
- * downstream consumer breaks — so this test is the tripwire. Adding new exports is fine
- * (the assertion is "these exist", not "only these").
+ * Locks the package's public surface: every symbol consumers (automation, traders,
+ * web, ops) import from `@meridian/sdk`. If one is renamed or dropped, a downstream
+ * consumer breaks — so this test is the tripwire. Adding new exports is fine (the
+ * assertion is "these exist", not "only these").
  */
 describe("public surface", () => {
   const required = [
@@ -14,6 +15,7 @@ describe("public surface", () => {
     "getProgram",
     "getProgramFromConnection",
     "PAYOFF_UNIT",
+    "dollarsToBaseUnits",
     "PRICE_SCALE",
     "TOKEN_DECIMALS",
     "USDC_DECIMALS",

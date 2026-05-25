@@ -26,7 +26,7 @@ import { z } from "zod";
 import BN from "bn.js";
 import {
   OrderSide,
-  PRICE_SCALE,
+  complementPrice,
   TradeAction,
   buildTradeIntent,
   fetchMarket,
@@ -88,10 +88,10 @@ function yesLeg(
       return { side: OrderSide.Ask, yesPrice: price };
     case TradeAction.BuyNo:
       // mint pair, sell the Yes at 1 - noPrice (an ask).
-      return { side: OrderSide.Ask, yesPrice: PRICE_SCALE.sub(price) };
+      return { side: OrderSide.Ask, yesPrice: complementPrice(price) };
     case TradeAction.SellNo:
       // buy Yes at 1 - noPrice (a bid).
-      return { side: OrderSide.Bid, yesPrice: PRICE_SCALE.sub(price) };
+      return { side: OrderSide.Bid, yesPrice: complementPrice(price) };
   }
 }
 

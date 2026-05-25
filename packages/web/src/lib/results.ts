@@ -1,5 +1,5 @@
 import BN from "bn.js";
-import { Outcome, Ticker, TICKER_SYMBOLS } from "@meridian/sdk";
+import { Outcome, Ticker, TICKER_SYMBOLS, PRICE_SCALE } from "@meridian/sdk";
 import type { FillRecord, Side } from "./tradeStore";
 
 /**
@@ -15,9 +15,6 @@ import type { FillRecord, Side } from "./tradeStore";
  *
  * Everything here is a pure function over plain inputs — unit-tested directly.
  */
-
-const PRICE_SCALE = new BN(1_000_000); // price units per $1.00
-const PRICE_SCALE_NUM = 1_000_000;
 
 /** What a settled market tells us, looked up by market address (base58). */
 export interface SettledMarketInfo {

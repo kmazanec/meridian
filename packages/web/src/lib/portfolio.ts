@@ -1,5 +1,5 @@
 import BN from "bn.js";
-import { Outcome, Ticker } from "@meridian/sdk";
+import { Outcome, Ticker, complementPrice } from "@meridian/sdk";
 import type { Side, CostBasis } from "./tradeStore";
 import { basisKey } from "./tradeStore";
 import { positionPnl, settledPayout } from "./market-math";
@@ -82,11 +82,9 @@ export interface RedeemedPosition {
 
 export type PortfolioRow = OpenRow | SettledRow;
 
-const PRICE_SCALE = new BN(1_000_000);
-
 /** The mark for a side: the Yes mark for yes, its complement for no. */
 function sideMark(side: Side, yesMark: BN): BN {
-  return side === "yes" ? yesMark : PRICE_SCALE.sub(yesMark);
+  return side === "yes" ? yesMark : complementPrice(yesMark);
 }
 
 /**

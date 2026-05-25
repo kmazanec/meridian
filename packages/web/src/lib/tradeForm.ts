@@ -4,6 +4,7 @@ import {
   OrderSide,
   PAYOFF_UNIT,
   PRICE_SCALE,
+  complementPrice,
   TradeAction,
   MAX_BUY_NO_MINT_PAIRS,
 } from "@meridian/sdk";
@@ -39,7 +40,7 @@ export function isNoAction(action: TradeAction): boolean {
 
 /** The Yes price an action lands on: the No price reflected for No actions. */
 export function yesPriceFor(action: TradeAction, price: BN): BN {
-  return isNoAction(action) ? PRICE_SCALE.sub(price) : price;
+  return isNoAction(action) ? complementPrice(price) : price;
 }
 
 export interface ValidationResult {

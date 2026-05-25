@@ -17,7 +17,7 @@ import {
   Ticker,
   symbolToTicker,
   TICKER_SYMBOLS,
-  PAYOFF_UNIT,
+  dollarsToBaseUnits,
 } from "@meridian/sdk";
 import { loadKeypairFromEnv, AUTOMATION_KEYPAIR_ENV } from "./keypair";
 import type { Keypair } from "@solana/web3.js";
@@ -101,7 +101,7 @@ export function loadConfig(env: Env = process.env): AutomationConfig {
       }
       // Store the *exact* dollar value in base units (not snapped to $10 — the strike
       // rounding happens later in computeStrikes). $214.5 → 214_500000.
-      mockPrices[ticker] = dollarsExactToBaseUnits(dollars);
+      mockPrices[ticker] = dollarsToBaseUnits(dollars);
     }
   }
 
@@ -206,15 +206,6 @@ function parseTickers(value: string | undefined): Ticker[] {
 function parseBool(value: string | undefined): boolean {
   if (!value) return false;
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
-}
-
-/**
- * Exact dollars → USDC base units (6 dp) without the $10 strike snapping. Quantizes to the
- * smallest base unit via integer rounding. (Strike rounding to $10 is `computeStrikes`'s
- * job, applied to this value.)
- */
-function dollarsExactToBaseUnits(dollars: number): BN {
-  return new BN(Math.round(dollars * Number(PAYOFF_UNIT.toString())));
 }
 
 /**

@@ -1,5 +1,5 @@
 import BN from "bn.js";
-import { PRICE_SCALE, TradeAction } from "@meridian/sdk";
+import { complementPrice, TradeAction } from "@meridian/sdk";
 import type { TradeFill } from "@/components/trade/TradePanel";
 import { recordFill, type FillRecord, type Side } from "./tradeStore";
 
@@ -25,7 +25,7 @@ export function fillToRecord(
       // SELL_NO buys Yes at 1 − noPrice; BUY_YES is the Yes price directly.
       price =
         fill.action === TradeAction.SellNo
-          ? PRICE_SCALE.sub(fill.price)
+          ? complementPrice(fill.price)
           : fill.price;
       break;
     case TradeAction.BuyNo:

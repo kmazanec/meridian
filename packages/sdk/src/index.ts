@@ -10,6 +10,7 @@ export {
 } from "./program";
 export {
   PAYOFF_UNIT,
+  dollarsToBaseUnits,
   PRICE_SCALE,
   TOKEN_DECIMALS,
   USDC_DECIMALS,

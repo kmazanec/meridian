@@ -15,7 +15,7 @@ import BN from "bn.js";
 import { PAYOFF_UNIT } from "@meridian/sdk";
 import {
   computeStrikes,
-  dollarsToBaseUnits,
+  dollarsToStrikeUnits,
   STRIKE_OFFSET_BPS,
 } from "../src/strikes";
 
@@ -82,9 +82,9 @@ describe("computeStrikes", () => {
 
   it("rounds to the nearest $10 with .5 rounding up at the $5 midpoint", () => {
     // 615 → nearest $10 is 620 (615 is the midpoint, rounds up).
-    expect(dollarsToBaseUnits(615).eq(usd(620))).to.be.true;
+    expect(dollarsToStrikeUnits(615).eq(usd(620))).to.be.true;
     // 614.99 → 610
-    expect(dollarsToBaseUnits(614.99).eq(usd(610))).to.be.true;
+    expect(dollarsToStrikeUnits(614.99).eq(usd(610))).to.be.true;
   });
 
   it("does no floating-point on the serialized strike values", () => {

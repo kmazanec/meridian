@@ -19,13 +19,12 @@
  */
 
 import BN from "bn.js";
-import { PAYOFF_UNIT, TICKER_SYMBOLS, type TickerSymbol } from "@meridian/sdk";
+import {
+  dollarsToBaseUnits,
+  TICKER_SYMBOLS,
+  type TickerSymbol,
+} from "@meridian/sdk";
 import type { ConsoleLog } from "./log";
-
-/** Convert a dollar amount to USDC base units (6 dp), rounded. */
-function dollarsToBaseUnits(dollars: number): BN {
-  return new BN(Math.round(dollars * Number(PAYOFF_UNIT.toString())));
-}
 
 /**
  * Last-resort hardcoded previous closes (USD), so market creation always has a number to

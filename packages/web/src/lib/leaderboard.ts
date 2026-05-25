@@ -3,6 +3,7 @@ import {
   Outcome,
   OrderSide,
   PRICE_SCALE,
+  complementPrice,
   type OrderBookAccount,
 } from "@meridian/sdk";
 import { settledPayout, markValue } from "./market-math";
@@ -78,7 +79,7 @@ const ZERO = new BN(0);
 
 /** The mark for a side: the Yes mark for yes, its complement (PRICE_SCALE − yes) for no. */
 function sideMark(side: "yes" | "no", yesMark: BN): BN {
-  return side === "yes" ? yesMark : PRICE_SCALE.sub(yesMark);
+  return side === "yes" ? yesMark : complementPrice(yesMark);
 }
 
 /**

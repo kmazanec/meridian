@@ -20,6 +20,18 @@ function idlConstant(name: string): string {
 export const PAYOFF_UNIT = new BN(idlConstant("PAYOFF_UNIT"));
 
 /**
+ * Convert a plain dollar `number` to USDC base units (6 dp), rounded to the nearest
+ * unit. The dollar input is the only float; it is immediately quantized, so callers
+ * carry no float error past this boundary. Throws on a non-finite input.
+ */
+export function dollarsToBaseUnits(dollars: number): BN {
+  if (!Number.isFinite(dollars)) {
+    throw new Error(`dollars must be a finite number (got ${dollars})`);
+  }
+  return new BN(Math.round(dollars * Number(PAYOFF_UNIT.toString())));
+}
+
+/**
  * Order-price scale: prices are integers in USDC-per-Yes over `[0, PRICE_SCALE]`,
  * i.e. `[$0.00, $1.00]`. $0.65 is `650_000`. (Equals {@link PAYOFF_UNIT}.)
  */

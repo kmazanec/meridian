@@ -19,6 +19,7 @@ import BN from "bn.js";
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import {
   PAYOFF_UNIT,
+  dollarsToBaseUnits,
   Ticker,
   tickerFromArg,
   tickerToSymbol,
@@ -50,9 +51,6 @@ export interface SettledMarket {
   outcome: "YesWins" | "NoWins";
   alreadySettled: boolean;
 }
-
-const SCALE = Number(PAYOFF_UNIT.toString());
-const dollarsToBaseUnits = (d: number): BN => new BN(Math.round(d * SCALE));
 
 /** Fetch the synthetic close (curve end, progress=1) for one symbol's market, or null. */
 async function fetchSyntheticClose(

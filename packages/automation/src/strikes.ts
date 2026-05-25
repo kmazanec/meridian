@@ -15,7 +15,7 @@
  */
 
 import BN from "bn.js";
-import { PAYOFF_UNIT } from "@meridian/sdk";
+import { PAYOFF_UNIT, dollarsToBaseUnits } from "@meridian/sdk";
 
 /** The strike offsets from the previous close, in basis points: ±3%, ±6%, ±9%. */
 export const STRIKE_OFFSET_BPS: readonly number[] = [300, 600, 900];
@@ -85,20 +85,13 @@ export function roundToStep(valueBaseUnits: BN): BN {
 }
 
 /**
- * Convert a dollar amount to USDC base units (6 dp), rounded to the nearest $10.
+ * Convert a dollar amount to USDC base units (6 dp), snapped to the nearest $10 strike.
  *
  * Accepts a plain dollar `number` (e.g. a price read from an off-chain source) and
- * snaps it to the strike grid. The cents are carried through as integer base units
- * before rounding so a value like `614.99` rounds correctly without float error in the
- * *result* (the input is the only float, and it is immediately quantized to base units).
+ * snaps it to the strike grid: quantize to base units first (the input is the only float,
+ * immediately quantized), then round to the $10 step so a value like `614.99` lands on
+ * `610` without float error in the result.
  */
-export function dollarsToBaseUnits(dollars: number): BN {
-  if (!Number.isFinite(dollars)) {
-    throw new Error(`dollars must be a finite number (got ${dollars})`);
-  }
-  // Quantize to 6-dp base units first (Math.round on the smallest unit), then snap to $10.
-  const baseUnits = new BN(
-    Math.round(dollars * Number(PAYOFF_UNIT.toString()))
-  );
-  return roundToStep(baseUnits);
+export function dollarsToStrikeUnits(dollars: number): BN {
+  return roundToStep(dollarsToBaseUnits(dollars));
 }
