@@ -3,7 +3,7 @@
 import { useConnection } from "@solana/wallet-adapter-react";
 import { dualBook } from "@meridian/sdk";
 import { useProgram } from "./useProgram";
-import { usePolled, type AsyncResource } from "./useChain";
+import { usePolled, type AsyncResource } from "./usePolled";
 import { useChainData, useUsdcMintFromConfig } from "./ChainDataProvider";
 import { loadLeaderboardInputs, loadMarketHolders } from "./leaderboardData";
 import {

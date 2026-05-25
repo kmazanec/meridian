@@ -8,7 +8,7 @@ import {
   type ConfigAccount,
 } from "@meridian/sdk";
 import { useProgram } from "./useProgram";
-import { usePolled, type AsyncResource } from "./useChain";
+import { usePolled, type AsyncResource } from "./usePolled";
 import { discoverMarkets, type DiscoveredMarket } from "./discovery";
 import { configuredUsdcMint } from "./env";
 import type { BookMap } from "./marketStats";
