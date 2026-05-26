@@ -4,7 +4,14 @@ import { useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
-import { dualBook, symbolToTicker, TICKER_SYMBOLS } from "@meridian/sdk";
+import BN from "bn.js";
+import {
+  dualBook,
+  symbolToTicker,
+  TICKER_SYMBOLS,
+  TradeAction,
+  complementPrice,
+} from "@meridian/sdk";
 import {
   useMarkets,
   useAllBooks,
@@ -36,13 +43,13 @@ import { StrikeLadder } from "@/components/markets/StrikeLadder";
 import { PriceChartPanel } from "@/components/markets/PriceChartPanel";
 import { SpotLine } from "@/components/markets/SpotLine";
 import { MergedBookView } from "@/components/trade/MergedBookView";
-import { PayoffLine } from "@/components/trade/PayoffLine";
+import { TradeBar } from "@/components/trade/TradeBar";
 import { Countdown } from "@/components/trade/Countdown";
-import { TradePanel, type TradeFill } from "@/components/trade/TradePanel";
+import { TradeModal, type TradePreset } from "@/components/trade/TradeModal";
+import type { TradeFill } from "@/components/trade/types";
 import { SettledMarketBanner } from "@/components/trade/SettledMarketPanel";
 import { TxStatusBanner } from "@/components/trade/TxStatusBanner";
 import { Panel, cx } from "@/components/ui";
-import BN from "bn.js";
 
 export default function TradePageClient() {
   const params = useParams<{ symbol: string }>();
@@ -111,6 +118,11 @@ export default function TradePageClient() {
   const { data: market } = useMarket(selected);
   const { data: position, refresh: refreshPosition } = useUserPosition(market);
   const tx = useSendIx();
+
+  // The trade modal: a single shared overlay opened in-context. The Yes/No bar opens a
+  // market entry on a side; an order-book row opens a limit entry at that level's price.
+  const [tradePreset, setTradePreset] = useState<TradePreset | null>(null);
+  const openTrade = (preset: TradePreset) => setTradePreset(preset);
 
   // The selected strike's book comes from the shared allBooks map (its orderBook addr),
   // so the page makes no extra per-strike book fetch.
@@ -251,20 +263,16 @@ export default function TradePageClient() {
         </div>
       </header>
 
-      {/* Persistent trading terminal: strikes · chart + book · ticket.
-          A closed strike has no ticket, so the page collapses to two columns
-          (strikes · chart) and the closed-market verdict becomes a thin banner
-          above the chart — keeping the same two-column rhythm rather than spending
-          a whole right column on a read-only result.
-          Open: three columns at xl; ladder + (chart/book) at lg with the ticket
-          below. Mobile is a single stack with the strike picker first. */}
-      <div
-        className={cx(
-          "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(280px,320px)_minmax(0,1fr)]",
-          !isSettled &&
-            "xl:grid-cols-[minmax(280px,320px)_minmax(0,1fr)_minmax(340px,380px)]"
-        )}
-      >
+      {/* Trading terminal: two columns — strikes (picker) · the chart stack.
+          The chart stack leads with a context banner that mirrors between states:
+          a *settled* strike shows the read-only "Yes won / No won" verdict; an
+          *open* strike shows the thin, clickable Yes/No quote bar — the in-context
+          entry point to a trade. Below it: the price chart, then the order book
+          (whose rows are themselves clickable limit-trade entries). No permanent
+          ticket column anymore — every trade starts from the bar or the book and
+          finishes in a focused modal, so the chart gets the full width.
+          Mobile stacks single-column with the strike picker first. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(280px,320px)_minmax(0,1fr)]">
         {/* Left: strike ladder (the picker). First in the source so it leads on
             mobile; pinned to the left column on lg+. */}
         <section className="panel order-1 p-5">
@@ -285,12 +293,33 @@ export default function TradePageClient() {
           />
         </section>
 
-        {/* Center: closed-market banner (settled only), then the price chart over
-            the order book for the selected strike. */}
+        {/* Right: the context banner (settled verdict OR open Yes/No trade bar),
+            then the price chart over the order book for the selected strike. */}
         <section className="order-2 space-y-6">
-          {market && selected && market.state === "settled" && (
+          {market && selected && isSettled ? (
             <SettledMarketBanner ticker={ticker} market={market} />
-          )}
+          ) : market && selected ? (
+            <TradeBar
+              ticker={ticker}
+              strike={market.strike}
+              yesPrice={yesPrice}
+              disabled={!publicKey}
+              onPick={(action) =>
+                // The bar opens a limit order seeded with that side's live price (Yes price
+                // for Buy Yes, its complement for Buy No), so the user can rest an order even
+                // on an empty book; they can flip to market or change the side in the modal.
+                openTrade({
+                  action,
+                  price:
+                    action === TradeAction.BuyNo
+                      ? complementPrice(yesPrice)
+                      : yesPrice,
+                  isMarket: false,
+                })
+              }
+            />
+          ) : null}
+
           <PriceChartPanel
             symbol={symbol}
             closes={history ?? []}
@@ -300,9 +329,20 @@ export default function TradePageClient() {
             }
             strike={selectedStrikeDollars}
           />
+
+          {!isSettled && <TxStatusBanner state={tx} />}
+
           {market && selected ? (
             dual ? (
-              <MergedBookView view={dual.yes} />
+              <MergedBookView
+                view={dual.yes}
+                onPick={
+                  isSettled || !publicKey
+                    ? undefined
+                    : (action, price) =>
+                        openTrade({ action, price, isMarket: false })
+                }
+              />
             ) : (
               <Panel>
                 <p className="text-sm text-fg-faint">
@@ -310,42 +350,31 @@ export default function TradePageClient() {
                 </p>
               </Panel>
             )
-          ) : null}
+          ) : (
+            <Panel>
+              <p className="text-fg-dim">Select a strike.</p>
+            </Panel>
+          )}
         </section>
-
-        {/* Right: the trade ticket (open markets only). Drops below the chart at
-            lg, beside it at xl. A closed strike shows its verdict in the banner
-            above instead, so this column is omitted entirely. */}
-        {!isSettled && (
-          <section className="order-3 space-y-6 lg:col-span-2 xl:col-span-1">
-            {market && selected ? (
-              <>
-                <PayoffLine
-                  ticker={ticker}
-                  strike={market.strike}
-                  yesPrice={yesPrice}
-                />
-                <TxStatusBanner state={tx} />
-                <TradePanel
-                  program={program}
-                  user={publicKey ?? null}
-                  market={market}
-                  marketAddress={selected}
-                  book={rawBook}
-                  position={position}
-                  usdcMint={usdcMint}
-                  onSubmit={onSubmit}
-                  busy={tx.status === "signing" || tx.status === "confirming"}
-                />
-              </>
-            ) : (
-              <Panel>
-                <p className="text-fg-dim">Select a strike.</p>
-              </Panel>
-            )}
-          </section>
-        )}
       </div>
+
+      {/* The focused trade surface — a single modal driven by whatever was clicked. */}
+      {market && selected && tradePreset && (
+        <TradeModal
+          open
+          onClose={() => setTradePreset(null)}
+          preset={tradePreset}
+          program={program}
+          user={publicKey ?? null}
+          market={market}
+          marketAddress={selected}
+          book={rawBook}
+          position={position}
+          usdcMint={usdcMint}
+          onSubmit={onSubmit}
+          busy={tx.status === "signing" || tx.status === "confirming"}
+        />
+      )}
     </div>
   );
 }

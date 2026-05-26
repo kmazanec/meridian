@@ -1,6 +1,6 @@
 import BN from "bn.js";
 import { complementPrice, TradeAction } from "@meridian/sdk";
-import type { TradeFill } from "@/components/trade/TradePanel";
+import type { TradeFill } from "@/components/trade/types";
 import { recordFill, type FillRecord, type Side } from "./tradeStore";
 
 /**

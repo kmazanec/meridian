@@ -1,10 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import BN from "bn.js";
 import { PublicKey } from "@solana/web3.js";
 import {
   dualBook,
   OrderSide,
+  TradeAction,
   type OrderBookAccount,
   type OrderEntry,
 } from "@meridian/sdk";
@@ -82,5 +84,37 @@ describe("MergedBookView", () => {
     const oneSided: OrderBookAccount = { ...book, asks: [] };
     render(<MergedBookView view={dualBook(oneSided).yes} />);
     expect(screen.getByText("no asks")).toBeInTheDocument();
+  });
+
+  it("opens a Buy Yes limit at the clicked ask price", async () => {
+    const onPick = vi.fn();
+    render(<MergedBookView view={dualBook(book).yes} onPick={onPick} />);
+    // The lone ask is $0.70 → a buyer lifting it is Buy Yes @ 0.70.
+    await userEvent.click(
+      within(screen.getByTestId("side-ask")).getByTestId("row-ask")
+    );
+    expect(onPick).toHaveBeenCalledTimes(1);
+    const [action, price] = onPick.mock.calls[0];
+    expect(action).toBe(TradeAction.BuyYes);
+    expect(price.toNumber()).toBe(700_000);
+  });
+
+  it("opens a Sell Yes limit at the clicked bid price", async () => {
+    const onPick = vi.fn();
+    render(<MergedBookView view={dualBook(book).yes} onPick={onPick} />);
+    // Click the best bid ($0.60) → a seller hitting it is Sell Yes @ 0.60.
+    const bidRows = within(screen.getByTestId("side-bid")).getAllByTestId(
+      "row-bid"
+    );
+    await userEvent.click(bidRows[0]);
+    const [action, price] = onPick.mock.calls[0];
+    expect(action).toBe(TradeAction.SellYes);
+    expect(price.toNumber()).toBe(600_000);
+  });
+
+  it("rows are static (not buttons) without an onPick handler", () => {
+    render(<MergedBookView view={dualBook(book).yes} />);
+    // Read-only context: the price rows must not be clickable.
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 });

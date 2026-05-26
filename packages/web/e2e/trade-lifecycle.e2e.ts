@@ -47,11 +47,20 @@ async function connect(page: Page) {
   ).toBeVisible({ timeout: 20_000 });
 }
 
-/** Submit one trade action on the trade page and wait for a confirmation banner. */
+/**
+ * Submit one trade action and wait for a confirmation banner. The redesigned flow opens a
+ * modal from the Yes/No quote bar, then exposes all four actions inside it:
+ *  1. open the modal (the Yes cell is always present on an open market);
+ *  2. pick the action in the modal's four-button selector;
+ *  3. confirm. The bar seeds a *limit* order at the live price, so each action rests on the
+ *     (initially empty) book rather than failing as a market order with no liquidity.
+ */
 async function tradeOnce(page: Page, action: RegExp) {
-  // Pick the action in the four-button selector (aria-pressed marks selection).
-  await page.getByRole("button", { name: action }).first().click();
-  await page.getByTestId("submit-trade").click();
+  await page.getByTestId("trade-bar-yes").click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: action }).click();
+  await page.getByTestId("confirm-trade").click();
   await expect(page.getByText(/Confirmed/i)).toBeVisible({ timeout: 30_000 });
 }
 
@@ -66,8 +75,8 @@ test.describe("Meridian lifecycle (browser × program)", () => {
     // Yes-side paths on the Yes-funded market (META): Buy Yes (USDC bid), then Sell Yes
     // (escrows pre-funded Yes inventory). Both rest on the empty book.
     await page.goto(`/trade/${localnet.yesMarket.symbol}`);
-    await expect(page.getByTestId("book-yes")).toBeVisible();
-    await expect(page.getByTestId("book-no")).toBeVisible();
+    await expect(page.getByTestId("trade-bar-yes")).toBeVisible();
+    await expect(page.getByTestId("merged-book")).toBeVisible();
     await tradeOnce(page, /^Buy Yes$/);
     await tradeOnce(page, /^Sell Yes$/);
 
@@ -75,7 +84,7 @@ test.describe("Meridian lifecycle (browser × program)", () => {
     // Sell No (buy Yes). Run on a different strike so the position guard isn't tripped
     // by the Yes-market inventory.
     await page.goto(`/trade/${localnet.noMarket.symbol}`);
-    await expect(page.getByTestId("book-yes")).toBeVisible();
+    await expect(page.getByTestId("trade-bar-yes")).toBeVisible();
     await tradeOnce(page, /^Buy No$/);
     await tradeOnce(page, /^Sell No$/);
 

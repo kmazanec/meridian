@@ -1,7 +1,19 @@
 import BN from "bn.js";
-import type { BookView, BookLevel } from "@meridian/sdk";
+import { TradeAction, type BookView, type BookLevel } from "@meridian/sdk";
 import { formatPrice, formatTokens } from "@/lib/format";
 import { cx } from "@/components/ui";
+
+/**
+ * Clicking a book level is an in-context trade entry. The view is the *Yes* perspective, so:
+ *  - an **ask** (someone selling Yes at p) is what a buyer lifts → **Buy Yes** limit @ p;
+ *  - a **bid** (someone buying Yes at p) is what a seller hits → **Sell Yes** limit @ p.
+ * Both are Yes-side limit orders at the level's price; the modal lets the user adjust before
+ * confirming. No-side entries come from the Yes/No bar (the merged axis already encodes No).
+ */
+export type BookPick = (
+  action: TradeAction.BuyYes | TradeAction.SellYes,
+  price: BN
+) => void;
 
 /**
  * The single Yes book on one shared price axis — the "one book" made literal.
@@ -15,7 +27,14 @@ import { cx } from "@/components/ui";
  * The No perspective is just `1 − price` and is intentionally *not* a second column —
  * the merged axis already encodes it.
  */
-export function MergedBookView({ view }: { view: BookView }) {
+export function MergedBookView({
+  view,
+  onPick,
+}: {
+  view: BookView;
+  /** Open a limit trade at a clicked level (Buy Yes on an ask, Sell Yes on a bid). */
+  onPick?: BookPick;
+}) {
   // Scale each side against *its own* biggest level. When depth is lopsided (a wall on
   // one side) a single shared scale would crush the thinner side into invisible nubs;
   // per-side scaling keeps both sides legible relative to themselves (the CLOB-ladder
@@ -33,8 +52,15 @@ export function MergedBookView({ view }: { view: BookView }) {
       aria-label="Order book"
       data-testid="merged-book"
     >
-      <div className="mb-3 font-mono text-sm uppercase tracking-wide text-fg-dim">
-        The book
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <span className="font-mono text-sm uppercase tracking-wide text-fg-dim">
+          The book
+        </span>
+        {onPick && (view.asks.length > 0 || view.bids.length > 0) && (
+          <span className="text-[0.65rem] uppercase tracking-wide text-fg-faint">
+            Click a price to trade it
+          </span>
+        )}
       </div>
 
       {/* Column headers mirror the row grid: size · bar · PRICE · bar · size. */}
@@ -48,12 +74,24 @@ export function MergedBookView({ view }: { view: BookView }) {
 
       {/* Asks: lowest ask is the inside market, so render best-ask *closest* to the
           spread band — i.e. asks descend high→low toward the center. */}
-      <Side levels={view.asks} kind="ask" max={askMax} empty="no asks" />
+      <Side
+        levels={view.asks}
+        kind="ask"
+        max={askMax}
+        empty="no asks"
+        onPick={onPick}
+      />
 
       <SpreadBand spread={spread} />
 
       {/* Bids: best bid (highest) sits just under the spread band, then descends. */}
-      <Side levels={view.bids} kind="bid" max={bidMax} empty="no bids" />
+      <Side
+        levels={view.bids}
+        kind="bid"
+        max={bidMax}
+        empty="no bids"
+        onPick={onPick}
+      />
     </div>
   );
 }
@@ -63,11 +101,13 @@ function Side({
   kind,
   max,
   empty,
+  onPick,
 }: {
   levels: BookLevel[];
   kind: "bid" | "ask";
   max: BN;
   empty: string;
+  onPick?: BookPick;
 }) {
   if (levels.length === 0) {
     return (
@@ -85,7 +125,13 @@ function Side({
   return (
     <div data-testid={`side-${kind}`}>
       {rows.map((lvl) => (
-        <Row key={lvl.price.toString()} level={lvl} kind={kind} max={max} />
+        <Row
+          key={lvl.price.toString()}
+          level={lvl}
+          kind={kind}
+          max={max}
+          onPick={onPick}
+        />
       ))}
     </div>
   );
@@ -95,19 +141,23 @@ function Row({
   level,
   kind,
   max,
+  onPick,
 }: {
   level: BookLevel;
   kind: "bid" | "ask";
   max: BN;
+  onPick?: BookPick;
 }) {
   const pct = pctOf(level.size, max);
   const isBid = kind === "bid";
-  return (
-    <div
-      className="grid grid-cols-[3rem_1fr_4rem_1fr_3rem] items-center gap-x-2 py-0.5 font-mono text-sm tabular-nums"
-      data-testid={`row-${kind}`}
-      data-size-pct={pct}
-    >
+  // An ask is what a buyer lifts (Buy Yes); a bid is what a seller hits (Sell Yes).
+  const action = isBid ? TradeAction.SellYes : TradeAction.BuyYes;
+  const verb = isBid ? "Sell Yes" : "Buy Yes";
+  const grid =
+    "grid grid-cols-[3rem_1fr_4rem_1fr_3rem] items-center gap-x-2 py-0.5 font-mono text-sm tabular-nums";
+
+  const inner = (
+    <>
       {/* Bid size (left edge), shown only on bid rows. */}
       <span className="text-left text-fg-dim">
         {isBid ? formatTokens(level.size) : null}
@@ -142,6 +192,33 @@ function Row({
       <span className="text-right text-fg-dim">
         {isBid ? null : formatTokens(level.size)}
       </span>
+    </>
+  );
+
+  // With a pick handler the whole row is a button: click to open a limit trade at this level.
+  // Without one (e.g. a read-only context) it stays a plain row, unchanged from before.
+  if (onPick) {
+    return (
+      <button
+        type="button"
+        onClick={() => onPick(action, level.price)}
+        title={`${verb} at ${formatPrice(level.price)}`}
+        data-testid={`row-${kind}`}
+        data-size-pct={pct}
+        className={cx(
+          grid,
+          "w-full cursor-pointer rounded-sm text-left transition-colors hover:bg-line-soft/40",
+          isBid ? "hover:bg-yes/10" : "hover:bg-no/10"
+        )}
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <div className={grid} data-testid={`row-${kind}`} data-size-pct={pct}>
+      {inner}
     </div>
   );
 }

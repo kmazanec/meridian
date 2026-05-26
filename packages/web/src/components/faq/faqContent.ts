@@ -201,7 +201,11 @@ export function faqSections(clusterLabel: string): FaqSection[] {
           a: h(
             "p",
             null,
-            "There are four buttons: ",
+            "Tap a side in the ",
+            yes("Yes"),
+            " / ",
+            no("No"),
+            " bar above the chart — or click any price in the order book — and a ticket opens where you set the amount and choose market or limit. Every ticket offers the same four actions: ",
             yes("Buy Yes"),
             ", ",
             yes("Sell Yes"),
@@ -210,7 +214,7 @@ export function faqSections(clusterLabel: string): FaqSection[] {
             ", and ",
             no("Sell No"),
             ". Pick the side you believe in and how much, and you're trading. ",
-            "Behind the scenes those four buttons all feed one shared market, so you always get the best available price for what you asked for — you don't need to understand the plumbing to use it."
+            "Behind the scenes those four actions all feed one shared market, so you always get the best available price for what you asked for — you don't need to understand the plumbing to use it."
           ),
         },
         {
