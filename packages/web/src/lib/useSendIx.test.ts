@@ -6,7 +6,9 @@ import { Keypair, type TransactionInstruction } from "@solana/web3.js";
 const sendTransaction = vi.hoisted(() => vi.fn());
 const connection = vi.hoisted(() => ({
   getLatestBlockhash: vi.fn(),
-  confirmTransaction: vi.fn(),
+  // Confirmation now polls `getSignatureStatuses` via the SDK helper (HTTP, no WS).
+  getSignatureStatuses: vi.fn(),
+  getBlockHeight: vi.fn(),
 }));
 const wallet = vi.hoisted(() => ({
   publicKey: null as unknown,
@@ -30,13 +32,18 @@ describe("useSendIx", () => {
   beforeEach(() => {
     sendTransaction.mockReset();
     connection.getLatestBlockhash.mockReset();
-    connection.confirmTransaction.mockReset();
+    connection.getSignatureStatuses.mockReset();
+    connection.getBlockHeight.mockReset();
     wallet.publicKey = Keypair.generate().publicKey;
     connection.getLatestBlockhash.mockResolvedValue({
       blockhash: "11111111111111111111111111111111",
       lastValidBlockHeight: 100,
     });
-    connection.confirmTransaction.mockResolvedValue({ value: { err: null } });
+    // Happy path: the first poll reports the tx confirmed with no error.
+    connection.getSignatureStatuses.mockResolvedValue({
+      value: [{ err: null, confirmationStatus: "confirmed" }],
+    });
+    connection.getBlockHeight.mockResolvedValue(50);
     sendTransaction.mockResolvedValue("SIGNATURE123");
   });
 
@@ -86,14 +93,15 @@ describe("useSendIx", () => {
   });
 
   it("treats a confirmed-but-reverted transaction as an error, not success", async () => {
-    // The tx lands on-chain but the program reverts: confirmTransaction resolves with
-    // a non-null value.err. This must surface as an error, never as "success".
-    connection.confirmTransaction.mockResolvedValue({
-      value: { err: { InstructionError: [2, { Custom: 1 }] } },
+    // The tx lands on-chain but the program reverts: the status poll reports a non-null
+    // `err`. This must surface as an error, never as "success" — the SDK's poll helper
+    // throws `transaction <sig> failed: <err>` for this case.
+    connection.getSignatureStatuses.mockResolvedValue({
+      value: [{ err: { InstructionError: [2, { Custom: 1 }] } }],
     });
     const { result } = renderHook(() => useSendIx());
     await act(async () => {
-      await expect(result.current.send([ix])).rejects.toThrow(/reverted/i);
+      await expect(result.current.send([ix])).rejects.toThrow(/failed/i);
     });
     await waitFor(() => expect(result.current.status).toBe("error"));
   });
