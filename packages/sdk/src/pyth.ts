@@ -155,8 +155,15 @@ export async function postPriceUpdate(
   await builder.addPostPriceUpdates(update.binary.data);
 
   let priceUpdateAccount: PublicKey | undefined;
+  // The receiver indexes its internal price-update map by `"0x" + feedId.hex`. Hermes returns
+  // `parsed.id` as bare hex (no 0x), so prefix it here or the lookup misses with the
+  // misleading "Make sure to call addPostPriceUpdates" error (the post DID happen — it's the
+  // key format that's off).
+  const lookupId = update.feedId.startsWith("0x")
+    ? update.feedId
+    : "0x" + update.feedId;
   await builder.addPriceConsumerInstructions(async (getPriceUpdateAccount) => {
-    priceUpdateAccount = getPriceUpdateAccount(update.feedId);
+    priceUpdateAccount = getPriceUpdateAccount(lookupId);
     return [];
   });
 
