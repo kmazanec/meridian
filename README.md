@@ -9,6 +9,12 @@
 devnet — connect a wallet, no real money). Prefer to run it yourself? Jump to
 [Quick start](#quick-start).
 
+**⛓ On-chain program:**
+[`9R3jRbvh9jeQLGEggB3VXQTwj88YjUKqKM8x75SefGen`](https://explorer.solana.com/address/9R3jRbvh9jeQLGEggB3VXQTwj88YjUKqKM8x75SefGen?cluster=devnet)
+on Solana Explorer (devnet) — the deployed program, with its
+[published IDL](https://explorer.solana.com/address/9R3jRbvh9jeQLGEggB3VXQTwj88YjUKqKM8x75SefGen/idl?cluster=devnet)
+readable in the browser.
+
 Meridian is a same-day (0DTE) binary options market. The question is always:
 
 > **"Will [STOCK] close at or above [STRIKE] today?"**
@@ -33,6 +39,7 @@ New here? These are the doors in, roughly in the order most people want them:
 | If you want to… | Go to |
 |---|---|
 | **See it running** | [meridian.llmonster.dev](https://meridian.llmonster.dev) (live devnet demo) |
+| **Verify it on-chain** | [program on Solana Explorer](https://explorer.solana.com/address/9R3jRbvh9jeQLGEggB3VXQTwj88YjUKqKM8x75SefGen?cluster=devnet) (devnet) · [its IDL](https://explorer.solana.com/address/9R3jRbvh9jeQLGEggB3VXQTwj88YjUKqKM8x75SefGen/idl?cluster=devnet) |
 | **Run the whole thing locally in one command** | [Quick start](#quick-start) → `make dev` |
 | **Understand the design and *why* each decision was made** | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | **Learn the underlying tech from scratch** (Solana, PDAs, SPL tokens, oracles) | [`RESEARCH.md`](RESEARCH.md) |
@@ -301,10 +308,10 @@ The full testing approach is in
 ---
 
 The committed program keypair makes the program ID
-(`9R3jRbvh9jeQLGEggB3VXQTwj88YjUKqKM8x75SefGen`) reproducible across clones — it
-identifies the on-chain program only, not a funded wallet. CI (Rust fmt/clippy/test +
-the off-chain lint/typecheck/test sweep) runs on every push; the pipeline is defined in
-[`.gitlab-ci.yml`](.gitlab-ci.yml).
+([`9R3jRbvh9jeQLGEggB3VXQTwj88YjUKqKM8x75SefGen`](https://explorer.solana.com/address/9R3jRbvh9jeQLGEggB3VXQTwj88YjUKqKM8x75SefGen?cluster=devnet))
+reproducible across clones — it identifies the on-chain program only, not a funded
+wallet. CI (Rust fmt/clippy/test + the off-chain lint/typecheck/test sweep) runs on
+every push; the pipeline is defined in [`.gitlab-ci.yml`](.gitlab-ci.yml).
 
 ---
 
