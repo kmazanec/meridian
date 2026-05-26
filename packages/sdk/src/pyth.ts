@@ -76,7 +76,11 @@ export async function fetchPriceUpdate(
   });
   const client = new hermes.HermesClient(hermesUrl);
   const id = feedId.startsWith("0x") ? feedId.slice(2) : feedId;
-  const res = await client.getLatestPriceUpdates([id]);
+  // Receiver hardcodes `Buffer.from(priceUpdateData, "base64")` in addPostPriceUpdates, but
+  // Hermes defaults to hex; without overriding the encoding the receiver decodes the hex
+  // string as base64 and rejects the result with "Invalid accumulator message". Ask for
+  // base64 explicitly so the bytes round-trip correctly.
+  const res = await client.getLatestPriceUpdates([id], { encoding: "base64" });
   const parsed = res?.parsed?.[0];
   if (!parsed || !res?.binary) {
     throw new Error(`Hermes returned no price for feed ${id}`);
