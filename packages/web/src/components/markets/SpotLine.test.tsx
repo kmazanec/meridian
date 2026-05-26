@@ -10,8 +10,9 @@ describe("SpotLine", () => {
       />
     );
     const el = screen.getByTestId("spot-line");
-    expect(el).toHaveTextContent("last close $110.00");
+    expect(el).toHaveTextContent("spot $110.00");
     expect(el).toHaveTextContent("▲ +10.00%");
+    expect(el).toHaveTextContent("vs prior close");
   });
 
   it("shows open only when showOpen is set", () => {
@@ -39,14 +40,14 @@ describe("SpotLine", () => {
       />
     );
     const el = screen.getByTestId("spot-line");
-    expect(el).toHaveTextContent("last close $110.00");
+    expect(el).toHaveTextContent("spot $110.00");
     expect(el).toHaveTextContent("open $101.00");
     expect(el).not.toHaveTextContent("%");
   });
 
   it("renders a dash when there is no spot", () => {
     render(<SpotLine spot={null} />);
-    expect(screen.getByTestId("spot-line")).toHaveTextContent("last close —");
+    expect(screen.getByTestId("spot-line")).toHaveTextContent("spot —");
   });
 
   it("omits the change when changePct is null", () => {
@@ -56,7 +57,7 @@ describe("SpotLine", () => {
       />
     );
     const el = screen.getByTestId("spot-line");
-    expect(el).toHaveTextContent("last close $100.00");
+    expect(el).toHaveTextContent("spot $100.00");
     expect(el).not.toHaveTextContent("%");
   });
 });
