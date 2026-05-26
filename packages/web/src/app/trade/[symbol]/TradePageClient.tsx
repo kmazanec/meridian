@@ -49,7 +49,7 @@ import { TradeModal, type TradePreset } from "@/components/trade/TradeModal";
 import type { TradeFill } from "@/components/trade/types";
 import { SettledMarketBanner } from "@/components/trade/SettledMarketPanel";
 import { TxStatusBanner } from "@/components/trade/TxStatusBanner";
-import { Panel, cx } from "@/components/ui";
+import { Button, Panel, cx } from "@/components/ui";
 
 export default function TradePageClient() {
   const params = useParams<{ symbol: string }>();
@@ -291,6 +291,31 @@ export default function TradePageClient() {
             lastClose={spot?.close ?? null}
             currentPrice={live.price}
           />
+
+          {/* Persistent trade CTA: a always-visible entry to the ticket for the selected
+              strike (the quote bar and book rows are the other, more contextual entries).
+              Open markets only; disabled until a wallet connects. */}
+          {market && selected && !isSettled && (
+            <div className="mt-4 border-t border-line-soft pt-4">
+              <Button
+                variant="accent"
+                className="w-full"
+                data-testid="sidebar-trade-cta"
+                disabled={!publicKey}
+                onClick={() =>
+                  openTrade({
+                    action: TradeAction.BuyYes,
+                    price: yesPrice,
+                    isMarket: false,
+                  })
+                }
+              >
+                {publicKey
+                  ? `Trade ${formatUsdc(market.strike, 0)} strike`
+                  : "Connect wallet to trade"}
+              </Button>
+            </div>
+          )}
         </section>
 
         {/* Right: the context banner (settled verdict OR open Yes/No trade bar),

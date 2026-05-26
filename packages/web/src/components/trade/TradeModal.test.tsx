@@ -166,6 +166,44 @@ describe("TradeModal", () => {
     expect(screen.queryByTestId("payoff-line")).not.toBeInTheDocument();
   });
 
+  it("shows the No inventory and a buy-Yes note for Sell No (cost is USDC)", async () => {
+    // Sell No closes No by buying Yes, so it spends USDC. The held line surfaces the No
+    // position being closed; the cost/balance line stays in USDC.
+    renderModal({
+      preset: {
+        action: TradeAction.SellNo,
+        price: new BN(500_000),
+        isMarket: false,
+      },
+      position: {
+        usdc: new BN(100_000_000), // $100
+        yes: new BN(0),
+        no: new BN(12_000_000), // 12 No
+      },
+    });
+    expect(screen.getByTestId("held-line").textContent).toMatch(
+      /You hold.*12\.00 No/
+    );
+    expect(screen.getByTestId("sell-no-note")).toBeInTheDocument();
+    // The cost/balance line is still in USDC (the trade buys Yes with USDC).
+    expect(screen.getByText("Balance").parentElement?.textContent).toMatch(
+      /USDC/
+    );
+  });
+
+  it("does not duplicate a held line for Sell Yes (its balance is already Yes)", async () => {
+    renderModal({
+      preset: {
+        action: TradeAction.SellYes,
+        price: new BN(500_000),
+        isMarket: false,
+      },
+      position: { usdc: new BN(0), yes: new BN(100_000_000), no: new BN(0) },
+    });
+    expect(screen.queryByTestId("held-line")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("sell-no-note")).not.toBeInTheDocument();
+  });
+
   it("passes the entered No price for a Buy No preset", async () => {
     renderModal({
       preset: {

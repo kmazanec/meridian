@@ -199,6 +199,17 @@ export function TradeModal({
   const strikeLabel = formatUsdc(market.strike, 2);
   const priceLabel = isNoAction(action) ? "No price ($)" : "Yes price ($)";
 
+  // For a sell (exit) action, the inventory being closed: No tokens for Sell No, Yes for
+  // Sell Yes. Surfaced so the user sees how much of that side they hold — distinct from the
+  // USDC cost line. (Sell No closes No by *buying Yes*, so it spends USDC, not No tokens; the
+  // note under the preview spells that out.) Null for the two buy actions.
+  const heldForSell =
+    action === TradeAction.SellNo
+      ? { label: "No", amount: balances.no }
+      : action === TradeAction.SellYes
+      ? { label: "Yes", amount: balances.yes }
+      : null;
+
   // Live cost preview, recomputed from the current inputs (best-effort; invalid inputs just
   // hide the preview rather than erroring while the user is still typing).
   const preview = useMemo<TradeCost | null>(() => {
@@ -455,6 +466,25 @@ export function TradeModal({
         {/* Live cost + payoff preview — the "what am I about to do" readout. */}
         {preview && (
           <div className="mt-4 rounded-lg border border-line-soft bg-ink-2/60 p-3">
+            {/* For Sell No the cost asset is USDC (it buys Yes to close), so the No inventory
+                being closed isn't otherwise visible — surface it as its own line. Sell Yes
+                already shows its Yes balance below, so this is skipped there. */}
+            {heldForSell && preview.asset !== heldForSell.label && (
+              <div
+                className="mb-2 flex items-baseline justify-between border-b border-line-soft pb-2 text-sm"
+                data-testid="held-line"
+              >
+                <span className="text-fg-faint">You hold</span>
+                <span
+                  className={cx(
+                    "stat-mono",
+                    heldForSell.label === "No" ? "text-no" : "text-yes"
+                  )}
+                >
+                  {formatAmount(heldForSell.amount)} {heldForSell.label}
+                </span>
+              </div>
+            )}
             <div className="flex items-baseline justify-between text-sm">
               <span className="text-fg-faint">
                 {preview.asset === "Yes"
@@ -473,6 +503,16 @@ export function TradeModal({
                 {formatAmount(preview.have)} {preview.asset}
               </span>
             </div>
+            {action === TradeAction.SellNo && (
+              <p
+                className="mt-2 text-xs text-fg-faint"
+                data-testid="sell-no-note"
+              >
+                Selling No closes it by buying Yes — it costs USDC and leaves
+                you a redeemable{" "}
+                <span className="font-mono text-usdc">$1.00</span>.
+              </p>
+            )}
             {(() => {
               const sentence = preview
                 ? payoffSentence(action, preview, symbol, strikeLabel)
