@@ -14,15 +14,10 @@
  * available (used by tests and by anyone validating an update locally).
  */
 
-import {
-  Connection,
-  Keypair,
-  PublicKey,
-  Transaction,
-  sendAndConfirmTransaction,
-} from "@solana/web3.js";
+import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import type { MeridianProgram } from "./program";
 import { settleMarket, type MarketId } from "./instructions";
+import { sendAndConfirm } from "./confirm";
 
 /** The Pyth Solana Receiver program id — same on devnet and mainnet (ADR-004). */
 export const PYTH_RECEIVER_PROGRAM_ID = new PublicKey(
@@ -262,12 +257,9 @@ export async function settleWithPyth(
     market,
     priceUpdate: priceUpdateAccount,
   });
-  const tx = new Transaction().add(ix);
-  // Preflight ON: a settle that would fail simulation (wrong feed, stale price, wide
-  // confidence) should surface here, not be submitted blind.
-  const settleSignature = await sendAndConfirmTransaction(connection, tx, [
-    cranker,
-  ]);
+  // HTTP-polling confirm via the shared SDK helper — hosted RPCs that don't expose
+  // signatureSubscribe (Alchemy etc.) would otherwise flood the logs with -32601.
+  const settleSignature = await sendAndConfirm(connection, cranker, [ix]);
   return { priceUpdateAccount, settleSignature };
 }
 

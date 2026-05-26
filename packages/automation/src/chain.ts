@@ -16,11 +16,11 @@ import {
   PublicKey,
   Transaction,
   TransactionInstruction,
-  sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import {
   getProgram,
   fetchMarket,
+  sendAndConfirm,
   type MeridianProgram,
   type MarketAccount,
 } from "@meridian/sdk";
@@ -95,12 +95,9 @@ export class RpcChainClient implements ChainClient {
     instructions: TransactionInstruction[],
     extraSigners: Keypair[] = []
   ): Promise<string> {
-    const tx = new Transaction();
-    for (const ix of instructions) tx.add(ix);
-    return sendAndConfirmTransaction(this.connection, tx, [
-      this.keypair,
-      ...extraSigners,
-    ]);
+    return sendAndConfirm(this.connection, this.keypair, instructions, {
+      signers: extraSigners,
+    });
   }
 
   fetchMarket(address: PublicKey): Promise<MarketAccount | null> {
