@@ -136,7 +136,15 @@ function json(body: unknown, status: number, cacheSeconds = 0): Response {
 
 const round4 = (n: number) => Math.round(n * 1e4) / 1e4;
 
-/** Fetch the symbol's most-recent real close as the day's open/reference. */
+/**
+ * Fetch today's regular-session open price from Yahoo's daily bars. The latest bar in a 5d/1d
+ * series is today's in-progress bar — its `open` is today's 9:30 ET print, which is what the
+ * banner's "open" label and the `pctFromOpen` math (`price / open − 1`) both need. (Earlier
+ * versions read `close[last]` here, but on an in-progress bar that's the running last tick, not
+ * the open — flipping the % math toward zero.) Falls back to the most recent finite *prior*
+ * `open` if the latest bar somehow lacks one, so a half-loaded payload still yields a usable
+ * reference instead of null. Synthetic-curve callers depend on a reference price either way.
+ */
 async function fetchOpen(symbol: string): Promise<number | null> {
   const res = await fetch(`${YAHOO}/${symbol}?range=5d&interval=1d`, {
     headers: { "user-agent": "Mozilla/5.0 (Meridian price)" },
@@ -146,14 +154,14 @@ async function fetchOpen(symbol: string): Promise<number | null> {
   const r = (await res.json()) as {
     chart?: {
       result?: Array<{
-        indicators?: { quote?: Array<{ close?: Array<number | null> }> };
+        indicators?: { quote?: Array<{ open?: Array<number | null> }> };
       }>;
     };
   };
-  const closes = r.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
-  for (let i = closes.length - 1; i >= 0; i--) {
-    const c = closes[i];
-    if (typeof c === "number" && Number.isFinite(c) && c > 0) return c;
+  const opens = r.chart?.result?.[0]?.indicators?.quote?.[0]?.open ?? [];
+  for (let i = opens.length - 1; i >= 0; i--) {
+    const o = opens[i];
+    if (typeof o === "number" && Number.isFinite(o) && o > 0) return o;
   }
   return null;
 }

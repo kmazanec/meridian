@@ -130,7 +130,7 @@ function json(body: unknown, status: number, cacheSeconds = 0): Response {
 
 const round4 = (n: number) => Math.round(n * 1e4) / 1e4;
 
-/** Fetch the symbol's most-recent real close as the day's open/reference (same as /api/price). */
+/** Fetch today's regular-session open price from Yahoo's daily bars (same as /api/price). */
 async function fetchOpen(symbol: string): Promise<number | null> {
   const res = await fetch(`${YAHOO}/${symbol}?range=5d&interval=1d`, {
     headers: { "user-agent": "Mozilla/5.0 (Meridian price)" },
@@ -140,14 +140,14 @@ async function fetchOpen(symbol: string): Promise<number | null> {
   const r = (await res.json()) as {
     chart?: {
       result?: Array<{
-        indicators?: { quote?: Array<{ close?: Array<number | null> }> };
+        indicators?: { quote?: Array<{ open?: Array<number | null> }> };
       }>;
     };
   };
-  const closes = r.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
-  for (let i = closes.length - 1; i >= 0; i--) {
-    const c = closes[i];
-    if (typeof c === "number" && Number.isFinite(c) && c > 0) return c;
+  const opens = r.chart?.result?.[0]?.indicators?.quote?.[0]?.open ?? [];
+  for (let i = opens.length - 1; i >= 0; i--) {
+    const o = opens[i];
+    if (typeof o === "number" && Number.isFinite(o) && o > 0) return o;
   }
   return null;
 }
