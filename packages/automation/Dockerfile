@@ -26,6 +26,34 @@ COPY packages/automation/package.json packages/automation/
 # workspaces (web/ops/e2e) are not copied, so yarn installs only what these two need.
 RUN corepack yarn@4.10.2 workspaces focus @meridian/sdk @meridian/automation
 
+# Patch two ESM-resolution bugs in the Pyth Receiver SDK's published ESM build so Node 20's
+# strict ESM resolver can load it. The receiver ships `dist/esm/*.mjs` with two extension-less
+# imports that legacy CJS tolerated but Node ESM rejects:
+#
+#   1. `solana-utils/.../jito.mjs` does `from "jito-ts/dist/sdk/block-engine/types"` (no .js).
+#      jito-ts itself pins a stale nested `@solana/web3.js` that's incompatible with the
+#      modern `rpc-websockets` we pull in (ERR_PACKAGE_PATH_NOT_EXPORTED) — so even fixing the
+#      extension only kicks the can down the road. We *never use Jito* (no jitoTipLamports),
+#      so replace jito.mjs entirely with a stub that exports the same names. The only Jito
+#      function the receiver's build code actually calls is `buildJitoTipInstruction`, which
+#      is pure (web3.js only) — keep it. `sendTransactionsJito` is preserved as an export but
+#      throws if called, so a future opt-in surfaces clearly instead of importing badly.
+#   2. `pyth-solana-receiver/.../vaa.mjs` does `from "@coral-xyz/anchor/dist/cjs/utils/bytes"`
+#      (directory import, no /index.js). Fix in place with a sed; the target file exists.
+#
+# Done here, after `workspaces focus`, so it applies to whatever versions yarn resolved (the
+# Pyth packages pin solana-utils@0.6.0 — `npm view @pythnetwork/pyth-solana-receiver
+# dependencies` — so the surfaces are stable across rebuilds).
+COPY packages/automation/deploy/pyth-receiver-jito-stub.mjs /tmp/pyth-receiver-jito-stub.mjs
+RUN set -eu; \
+    JITO=node_modules/@pythnetwork/solana-utils/dist/esm/jito.mjs; \
+    VAA=node_modules/@pythnetwork/pyth-solana-receiver/dist/esm/vaa.mjs; \
+    test -f "$JITO"; \
+    test -f "$VAA"; \
+    cp /tmp/pyth-receiver-jito-stub.mjs "$JITO"; \
+    sed -i 's|from "@coral-xyz/anchor/dist/cjs/utils/bytes"|from "@coral-xyz/anchor/dist/cjs/utils/bytes/index.js"|' "$VAA"; \
+    rm /tmp/pyth-receiver-jito-stub.mjs
+
 # Build SDK (automation imports its built dist), then automation.
 COPY packages/sdk/ packages/sdk/
 COPY packages/automation/ packages/automation/
