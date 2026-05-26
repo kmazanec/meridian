@@ -17,36 +17,18 @@ import {
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
-import { getProgram, fetchConfig, type MeridianProgram } from "@meridian/sdk";
+import {
+  getProgram,
+  fetchConfig,
+  sendAndConfirm,
+  rateLimitBackoffMs,
+  type MeridianProgram,
+} from "@meridian/sdk";
 
-/** Whether an error looks like RPC rate-limiting (HTTP 429) worth backing off on. */
-function isRateLimited(err: unknown): boolean {
-  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
-  return msg.includes("429") || msg.includes("too many requests");
-}
-
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
- * A jittered backoff delay (ms) for a rate-limited retry. The window grows linearly from
- * `minMs` (attempt 0) toward `maxMs` (attempt ≥3), and the returned delay is a uniform random
- * pick inside that window. The randomness is the point: it scatters a whole fleet's retries
- * across the window instead of having them all wake at the same instant and re-collide.
- * Exported for unit testing.
- */
-export function rateLimitBackoffMs(
-  attempt: number,
-  minMs: number,
-  maxMs: number
-): number {
-  const lo = Math.min(minMs, maxMs);
-  const hi = Math.max(minMs, maxMs);
-  // Widen the ceiling with each attempt (25% of the span per attempt, capped at hi) so later
-  // retries can wait longer, while the floor stays at `lo` to keep the jitter window wide.
-  const ceiling = Math.min(hi, lo + (hi - lo) * (attempt * 0.25 + 0.25));
-  return Math.round(lo + Math.random() * (ceiling - lo));
-}
+// Re-exported from the SDK so the bots' confirm/backoff behavior is the one shared
+// implementation (HTTP polling, not WebSocket signatureSubscribe). Kept exported here for
+// the existing tests that import it from this module.
+export { rateLimitBackoffMs };
 
 /** Minimal Anchor `Wallet` around a Keypair (matches the automation service's shape). */
 function keypairWallet(kp: Keypair) {
@@ -109,98 +91,14 @@ export class BotChain {
       backoffMaxMs?: number;
     } = {}
   ): Promise<string> {
-    const retries = opts.retries ?? 4;
-    const backoffMinMs = opts.backoffMinMs ?? 10_000;
-    const backoffMaxMs = opts.backoffMaxMs ?? 30_000;
-
-    // Phase 1: get the tx on-chain. Retrying here is safe — until sendRawTransaction returns a
-    // signature, nothing has landed, so a 429 backoff + re-send can't double-place an order.
-    let signature: string;
-    let lastValidBlockHeight: number;
-    let attempt = 0;
-    for (;;) {
-      try {
-        const sent = await this.sendOnce(instructions, extraSigners);
-        signature = sent.signature;
-        lastValidBlockHeight = sent.lastValidBlockHeight;
-        break;
-      } catch (err) {
-        if (!isRateLimited(err) || attempt >= retries) throw err;
-        await sleep(rateLimitBackoffMs(attempt, backoffMinMs, backoffMaxMs));
-        attempt++;
-      }
-    }
-
-    // Phase 2: confirm. The tx is already sent, so we must NOT re-send on a 429 here — just keep
-    // polling (a transient 429 on a status read is harmless; we retry the read, not the send).
-    return this.confirmBySignature(signature, lastValidBlockHeight);
-  }
-
-  /**
-   * Build, sign, and submit one transaction with a fresh blockhash; return its signature and
-   * the blockhash's `lastValidBlockHeight` (the confirm deadline). No confirmation here.
-   */
-  private async sendOnce(
-    instructions: TransactionInstruction[],
-    extraSigners: Keypair[]
-  ): Promise<{ signature: string; lastValidBlockHeight: number }> {
-    const { blockhash, lastValidBlockHeight } =
-      await this.connection.getLatestBlockhash("confirmed");
-    const tx = new Transaction({
-      feePayer: this.keypair.publicKey,
-      blockhash,
-      lastValidBlockHeight,
+    // Delegate to the SDK's shared send+confirm: 429-aware retry on the send (safe — no
+    // signature exists yet), then HTTP-polling confirmation (no WebSocket signatureSubscribe).
+    return sendAndConfirm(this.connection, this.keypair, instructions, {
+      signers: extraSigners,
+      retries: opts.retries,
+      backoffMinMs: opts.backoffMinMs,
+      backoffMaxMs: opts.backoffMaxMs,
     });
-    for (const ix of instructions) tx.add(ix);
-    tx.sign(this.keypair, ...extraSigners);
-    const signature = await this.connection.sendRawTransaction(tx.serialize(), {
-      preflightCommitment: "confirmed",
-    });
-    return { signature, lastValidBlockHeight };
-  }
-
-  /**
-   * Confirm a sent transaction by **HTTP polling** (`getSignatureStatuses`), not the WebSocket
-   * `signatureSubscribe` that web3.js's `sendAndConfirmTransaction` uses under the hood. Many
-   * endpoints (e.g. Alchemy's standard Solana endpoints) don't expose `signatureSubscribe`, so
-   * the subscribe path floods the logs with `-32601 Method not found` and falls back to slow
-   * polling anyway. We poll directly: deterministic, no WS dependency, and quiet. A transient
-   * rate-limit on a status read is swallowed (we retry the read); confirmation is bounded by
-   * `lastValidBlockHeight` (once the chain passes it, the tx can never land).
-   */
-  private async confirmBySignature(
-    signature: string,
-    lastValidBlockHeight: number
-  ): Promise<string> {
-    for (;;) {
-      try {
-        const { value } = await this.connection.getSignatureStatuses([
-          signature,
-        ]);
-        const status = value[0];
-        if (status?.err) {
-          throw new Error(
-            `transaction ${signature} failed: ${JSON.stringify(status.err)}`
-          );
-        }
-        if (
-          status?.confirmationStatus === "confirmed" ||
-          status?.confirmationStatus === "finalized"
-        ) {
-          return signature;
-        }
-        const height = await this.connection.getBlockHeight("confirmed");
-        if (height > lastValidBlockHeight) {
-          throw new Error(
-            `transaction ${signature} expired (block height ${height} > ${lastValidBlockHeight})`
-          );
-        }
-      } catch (err) {
-        // A program error / expiry is terminal; a rate-limit on the status read is not.
-        if (!isRateLimited(err)) throw err;
-      }
-      await sleep(1000);
-    }
   }
 
   /**

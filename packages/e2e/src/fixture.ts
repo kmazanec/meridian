@@ -21,9 +21,7 @@ import {
   Connection,
   Keypair,
   PublicKey,
-  Transaction,
   TransactionInstruction,
-  sendAndConfirmTransaction,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import {
@@ -51,6 +49,8 @@ import {
   NUM_TICKERS,
   PAYOFF_UNIT,
   PROGRAM_ID,
+  sendAndConfirm,
+  confirmSignature,
   type MeridianProgram,
   type MarketAccount,
   type MarketId,
@@ -246,7 +246,11 @@ export class Fixture {
       keypair.publicKey,
       sol * LAMPORTS_PER_SOL
     );
-    await this.connection.confirmTransaction(sig, "confirmed");
+    // Confirm by HTTP polling (not WS). Airdrop returns only a signature, so set the
+    // expiry deadline from the current block height + a generous buffer (~150 slots, the
+    // usual blockhash validity window).
+    const deadline = (await this.connection.getBlockHeight("confirmed")) + 150;
+    await confirmSignature(this.connection, sig, deadline);
 
     const usdcAcc = await getOrCreateAssociatedTokenAccount(
       this.connection,
@@ -493,16 +497,25 @@ function isAccountNotFound(e: unknown): boolean {
   );
 }
 
-/** Build, sign, and confirm one transaction. */
+/**
+ * Build, sign, and confirm one transaction — confirming by HTTP polling via the SDK's
+ * shared `sendAndConfirm` (not WebSocket `signatureSubscribe`, which many RPC endpoints
+ * don't expose and which floods devnet runs with `-32601` errors).
+ *
+ * `signers` defaults to `[payer]`. The SDK helper always signs with `payer` as fee payer,
+ * so any extra co-signers are forwarded and `payer` is de-duplicated out of the list.
+ */
 export async function sendTx(
   connection: Connection,
   payer: Keypair,
   instructions: TransactionInstruction[],
   signers: Keypair[] = [payer]
 ): Promise<string> {
-  const tx = new Transaction().add(...instructions);
-  return sendAndConfirmTransaction(connection, tx, signers, {
-    commitment: "confirmed",
+  const extraSigners = signers.filter(
+    (s) => !s.publicKey.equals(payer.publicKey)
+  );
+  return sendAndConfirm(connection, payer, instructions, {
+    signers: extraSigners,
   });
 }
 

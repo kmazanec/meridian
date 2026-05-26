@@ -36,6 +36,16 @@ export * from "./pdas";
 export * from "./instructions";
 export * from "./reads";
 export * from "./intent";
+// Transaction send/confirm via HTTP polling (not WebSocket signatureSubscribe, which many
+// RPCs don't expose). The single home for confirm logic; used by the bots, e2e Fixture,
+// ops bins, and scripts.
+export {
+  sendAndConfirm,
+  confirmSignature,
+  isRateLimited,
+  rateLimitBackoffMs,
+  type SendAndConfirmOptions,
+} from "./confirm";
 // Pyth helpers: the constants + fixture builder are dependency-free; the Hermes/Receiver
 // functions lazy-import their optional peer deps only when called, so re-exporting here
 // does not pull those into a consumer's bundle. A dedicated `@meridian/sdk/pyth` subpath

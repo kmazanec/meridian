@@ -85,6 +85,11 @@ describe("public surface", () => {
     "settleWithPyth",
     "buildPriceUpdateV2",
     "PYTH_RECEIVER_PROGRAM_ID",
+    // confirm (send/confirm via HTTP polling)
+    "sendAndConfirm",
+    "confirmSignature",
+    "isRateLimited",
+    "rateLimitBackoffMs",
   ] as const;
 
   for (const name of required) {

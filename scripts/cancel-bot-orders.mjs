@@ -38,6 +38,7 @@ import {
   PRICE_SCALE,
   tickerToSymbol,
   USDC_DECIMALS,
+  confirmSignature,
 } from "@meridian/sdk";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -62,13 +63,12 @@ function loadKeypair(path) {
   return Keypair.fromSecretKey(Uint8Array.from(secret));
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
 /**
- * Send a signed transaction and confirm it by HTTP polling (getSignatureStatuses), NOT the
- * WebSocket signatureSubscribe that web3.js's sendAndConfirmTransaction uses — Alchemy's
- * standard Solana endpoints don't expose signatureSubscribe and flood the logs with
- * "-32601 Method not found". Mirrors packages/traders/src/chain.ts. Returns the signature.
+ * Send a signed transaction and confirm it by HTTP polling (not the WebSocket
+ * signatureSubscribe that web3.js's sendAndConfirmTransaction uses — many endpoints don't
+ * expose it and flood the logs with "-32601 Method not found"). Confirmation is delegated to
+ * the SDK's shared `confirmSignature` so the polling logic lives in one place. Returns the
+ * signature.
  */
 async function sendAndConfirmByPolling(connection, tx, signers) {
   const { blockhash, lastValidBlockHeight } =
@@ -81,27 +81,7 @@ async function sendAndConfirmByPolling(connection, tx, signers) {
   const signature = await connection.sendRawTransaction(tx.serialize(), {
     preflightCommitment: "confirmed",
   });
-
-  for (;;) {
-    const { value } = await connection.getSignatureStatuses([signature]);
-    const status = value[0];
-    if (status?.err) {
-      throw new Error(
-        `transaction ${signature} failed: ${JSON.stringify(status.err)}`
-      );
-    }
-    if (
-      status?.confirmationStatus === "confirmed" ||
-      status?.confirmationStatus === "finalized"
-    ) {
-      return signature;
-    }
-    const height = await connection.getBlockHeight("confirmed");
-    if (height > lastValidBlockHeight) {
-      throw new Error(`transaction ${signature} expired`);
-    }
-    await sleep(1000);
-  }
+  return confirmSignature(connection, signature, lastValidBlockHeight);
 }
 
 async function main() {
