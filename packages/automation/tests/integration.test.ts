@@ -159,11 +159,11 @@ describeOnChain("automation integration (LiteSVM, real program)", () => {
       alerter,
       logger,
       tradingDay: day.toNumber(),
-      includeClose: false,
       retries: 0,
     });
 
-    expect(summary.created).to.equal(6);
+    // META $680 → 7 strikes (the rounded close, 680, is always included).
+    expect(summary.created).to.equal(7);
     expect(summary.failed).to.equal(0);
     // Every market exists on-chain and is Open with its book wired.
     for (const address of chain.knownMarkets) {
@@ -225,7 +225,7 @@ describeOnChain("automation integration (LiteSVM, real program)", () => {
       nowSeconds: () => day.toNumber() + 1,
     });
 
-    expect(summary.settled).to.equal(6);
+    expect(summary.settled).to.equal(7);
     expect(summary.alerted).to.equal(0);
 
     // Verify each market settled with the expected outcome vs the $700 settlement price.
@@ -258,7 +258,7 @@ describeOnChain("automation integration (LiteSVM, real program)", () => {
       nowSeconds: () => day.toNumber() + 1,
     });
     expect(settleCalls).to.equal(0); // all already settled → settler never called
-    expect(summary.skipped).to.equal(6);
+    expect(summary.skipped).to.equal(7);
     expect(summary.settled).to.equal(0);
   });
 });

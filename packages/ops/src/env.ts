@@ -49,8 +49,6 @@ export interface OpsEnv {
   mockCloses: Partial<Record<TickerSymbol, BN>>;
   /** Per-ticker Pyth feed ids (hex) for devnet; absent tickers use the local test pattern. */
   feedIdsHex: Partial<Record<TickerSymbol, string>>;
-  /** Include the rounded close as an at-the-money strike. Default false. */
-  includeClose: boolean;
   /** Explicit trading-day (unix seconds) for create-markets; default = ~2h from now. */
   tradingDayOverride?: number;
   /**
@@ -294,7 +292,6 @@ export function loadOpsEnv(env: Env = process.env): OpsEnv {
     tickers,
     mockCloses,
     feedIdsHex,
-    includeClose: parseBool(env["INCLUDE_CLOSE"]),
     tradingDayOverride,
     liveCloses,
     webBaseUrl,
@@ -331,7 +328,6 @@ export const OPS_ENV_KEYS = {
     "TICKERS (comma list of symbols to operate on; default all MAG7)",
     "MOCK_CLOSE_<SYMBOL> (mock previous close in dollars, e.g. MOCK_CLOSE_META=680)",
     "FEED_<SYMBOL> (devnet Pyth hex feed id per ticker; absent → local test pattern)",
-    "INCLUDE_CLOSE (1/true to add the at-the-money strike)",
     "TRADING_DAY (unix seconds for create-markets; default ~2h from now)",
     "LIVE_CLOSES (1/true: seed create-markets strikes from the real last close via /api/history)",
     "WEB_BASE_URL (web app base URL for the /api/history live-close source)",

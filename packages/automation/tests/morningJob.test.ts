@@ -62,13 +62,12 @@ describe("runMorningJob", () => {
       alerter,
       logger,
       tradingDay: TRADING_DAY,
-      includeClose: false,
       retries: 0,
     });
 
-    // META $680 → 6 strikes (620,640,660,700,720,740).
-    expect(provisioner.created).to.have.length(6);
-    expect(summary.created).to.equal(6);
+    // META $680 → 7 strikes (620,640,660,680,700,720,740) — the close (680) is always included.
+    expect(provisioner.created).to.have.length(7);
+    expect(summary.created).to.equal(7);
     expect(summary.failed).to.equal(0);
     // every created market carries the same trading_day (the close instant) and ticker.
     for (const m of provisioner.created) {
@@ -93,11 +92,11 @@ describe("runMorningJob", () => {
       alerter,
       logger,
       tradingDay: TRADING_DAY,
-      includeClose: false,
       retries: 0,
     });
 
-    expect(summary.created).to.equal(5);
+    // 7 strikes total (incl. the 680 close); the $700 strike fails → 6 created, 1 failed.
+    expect(summary.created).to.equal(6);
     expect(summary.failed).to.equal(1);
     expect(alerter.alerts).to.have.length(1);
     expect(alerter.alerts[0].severity).to.equal("critical");
@@ -118,13 +117,12 @@ describe("runMorningJob", () => {
       alerter,
       logger,
       tradingDay: TRADING_DAY,
-      includeClose: false,
       retries: 0,
     });
 
-    // Aapl alerted (no price); Meta still produced its 6 strikes.
-    expect(provisioner.created).to.have.length(6);
-    expect(summary.created).to.equal(6);
+    // Aapl alerted (no price); Meta still produced its 7 strikes.
+    expect(provisioner.created).to.have.length(7);
+    expect(summary.created).to.equal(7);
     expect(alerter.alerts.some((a) => a.context?.ticker === "AAPL")).to.be.true;
   });
 
@@ -142,7 +140,6 @@ describe("runMorningJob", () => {
       alerter,
       logger,
       date: new Date("2026-05-23T12:00:00Z"),
-      includeClose: false,
       retries: 0,
     });
 
@@ -168,7 +165,6 @@ describe("runMorningJob", () => {
       alerter,
       logger,
       date: new Date("2026-07-01T12:00:00Z"), // a normal summer session
-      includeClose: false,
       retries: 0,
     });
 

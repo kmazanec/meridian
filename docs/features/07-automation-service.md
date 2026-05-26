@@ -84,7 +84,9 @@ The single source of truth is `ENV_KEYS` in `packages/automation/src/config.ts`.
 - `TICKERS` — comma list of symbols to run (default all MAG7).
 - `ALERT_WEBHOOK_URL` — failure alerts POST here (default: log-only).
 - `HERMES_URL` — Pyth Hermes endpoint override.
-- `INCLUDE_CLOSE` — `1`/`true` to also create the at-the-money (rounded-close) strike.
+
+The strike ladder always includes the at-the-money (rounded-close) strike alongside the
+±3/6/9% legs — it is not configurable.
 
 **Scheduling:** there is no resident scheduler. Run `meridian-run-morning` (~8 AM ET) and
 `meridian-run-settlement` (~4:05 PM ET) from an external cron / systemd timer / CI schedule

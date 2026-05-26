@@ -14,12 +14,12 @@ import { dollars, signedDollars } from "../src/lifecycle";
 
 describe("create-markets strikes (contract)", () => {
   it("derives the same strikes the automation morning job does", () => {
-    // META prev close $680 → ±3/6/9% rounded to $10 (the documented example).
+    // META prev close $680 → ±3/6/9% rounded to $10, plus the rounded close (680).
     const prevClose = new BN(680).mul(PAYOFF_UNIT);
     const strikes = computeStrikes(prevClose);
     const asDollars = strikes.map((s) => Number(s.div(PAYOFF_UNIT).toString()));
-    // ±3% = ±20.4 → 700/660; ±6% = ±40.8 → 720/640; ±9% = ±61.2 → 740/620.
-    expect(asDollars).to.deep.equal([620, 640, 660, 700, 720, 740]);
+    // ±3% = ±20.4 → 700/660; ±6% = ±40.8 → 720/640; ±9% = ±61.2 → 740/620; close → 680.
+    expect(asDollars).to.deep.equal([620, 640, 660, 680, 700, 720, 740]);
   });
 
   it("market id PDA derivation is the SDK's (per ticker/strike/day)", () => {

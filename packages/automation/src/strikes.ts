@@ -4,8 +4,13 @@
  * From a stock's previous close, the service derives the day's strikes:
  *   - offset the close by ±3/6/9%,
  *   - round each offset to the nearest $10,
- *   - optionally include the close itself (rounded),
+ *   - always include the close itself (rounded) as the at-the-money strike,
  *   - deduplicate and sort ascending.
+ *
+ * The at-the-money strike is **not optional**: it is the most-traded level and it keeps the
+ * ladder centered when the rounded close doesn't coincide with a ±% leg (e.g. AAPL @ $308 →
+ * close rounds to $310, which sits between the $300 and $320 legs). Without it the ladder can
+ * have an even count and a gap right at the money, which is exactly where trading concentrates.
  *
  * Everything is integer math on USDC base units (6 dp) — the on-chain `Market.strike`
  * scale (constants.rs `USDC_DECIMALS`). No floats appear in any serialized strike value,
@@ -28,39 +33,27 @@ const BPS_DENOMINATOR = new BN(10_000);
 const ROUND_STEP = new BN(STRIKE_ROUND_DOLLARS).mul(PAYOFF_UNIT);
 const TWO = new BN(2);
 
-export interface ComputeStrikesOptions {
-  /**
-   * Also emit the (rounded) previous close as an at-the-money strike. Defaults to
-   * false at this layer; the morning job's config default is true (INCLUDE_CLOSE).
-   */
-  includeClose?: boolean;
-}
-
 /**
  * Compute the day's strikes for a previous close expressed in USDC base units (6 dp).
  *
- * Returns ascending, unique, strictly-positive strikes (any leg that rounds to $0 — only
- * possible for a near-zero price — is dropped, since a $0 strike is meaningless and the
- * program forbids settling against it). Throws if `prevClose` is not positive.
+ * Returns ascending, unique, strictly-positive strikes: the ±3/6/9% legs plus the rounded
+ * close as a mandatory at-the-money strike. Any leg that rounds to $0 (only possible for a
+ * near-zero price) is dropped, since a $0 strike is meaningless and the program forbids
+ * settling against it. Throws if `prevClose` is not positive.
  */
-export function computeStrikes(
-  prevClose: BN,
-  opts: ComputeStrikesOptions = {}
-): BN[] {
+export function computeStrikes(prevClose: BN): BN[] {
   if (prevClose.lten(0)) {
     throw new Error(
       `previous close must be positive (got ${prevClose.toString()})`
     );
   }
 
-  const raw: BN[] = [];
+  // Always include the rounded close (the at-the-money strike) alongside the ±% legs.
+  const raw: BN[] = [roundToStep(prevClose)];
   for (const bps of STRIKE_OFFSET_BPS) {
     const delta = prevClose.mul(new BN(bps)).div(BPS_DENOMINATOR);
     raw.push(roundToStep(prevClose.sub(delta))); // down leg
     raw.push(roundToStep(prevClose.add(delta))); // up leg
-  }
-  if (opts.includeClose) {
-    raw.push(roundToStep(prevClose));
   }
 
   // Drop non-positive, dedupe, sort ascending.

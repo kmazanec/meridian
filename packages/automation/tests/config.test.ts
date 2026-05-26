@@ -72,17 +72,6 @@ describe("loadConfig", () => {
     expect(cfg.keypair).to.be.instanceOf(Keypair);
   });
 
-  it("includes the at-the-money close strike by default", () => {
-    expect(loadConfig(base).includeClose).to.be.true;
-  });
-
-  it("drops the at-the-money close strike when INCLUDE_CLOSE=0", () => {
-    expect(loadConfig({ ...base, INCLUDE_CLOSE: "0" }).includeClose).to.be
-      .false;
-    expect(loadConfig({ ...base, INCLUDE_CLOSE: "false" }).includeClose).to.be
-      .false;
-  });
-
   // A valid 32-byte (64 hex char) feed id for the tests.
   const FEED = "0x" + "a".repeat(64);
   const FEED2 = "b".repeat(64); // no 0x prefix — also valid

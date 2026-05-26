@@ -65,10 +65,10 @@ describeOnValidator("automation jobs against a real validator", function () {
     // runMorningJob trusts an explicit tradingDay (skips the no-session calendar guard).
     const tradingDay = Math.floor(Date.now() / 1000) - 2 * 3600;
 
-    // META previous close $680 → strikes ±3/6/9% rounded to $10, deduped.
+    // META previous close $680 → strikes ±3/6/9% rounded to $10 plus the close, deduped.
     const prevClose = new BN(680_000_000);
     const expectedStrikes = computeStrikes(prevClose);
-    expect(expectedStrikes.length, "META yields 6 unique strikes").to.equal(6);
+    expect(expectedStrikes.length, "META yields 7 unique strikes").to.equal(7);
 
     const priceSource = new MockPriceSource({ [Ticker.Meta]: prevClose });
     const provisioner = new SdkMarketProvisioner(chain, fx.usdcMint);

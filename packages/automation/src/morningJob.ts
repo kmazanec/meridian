@@ -43,12 +43,6 @@ export interface MorningJobOptions {
   tradingDay?: number;
   /** The session date; defaults to now. Used to derive `tradingDay` and the no-session skip. */
   date?: Date;
-  /**
-   * Include the rounded close as an at-the-money strike. When unset here the field
-   * defaults to false, but the CLI runtime always supplies it from config, where it
-   * defaults to true (set INCLUDE_CLOSE=0 to drop it).
-   */
-  includeClose?: boolean;
   /** Retries per provisioning attempt (exponential backoff). Default 3. */
   retries?: number;
   /** Base backoff delay (ms). Default 1000. */
@@ -106,9 +100,7 @@ export async function runMorningJob(
       continue;
     }
 
-    const strikes = computeStrikes(prevClose, {
-      includeClose: opts.includeClose ?? false,
-    });
+    const strikes = computeStrikes(prevClose);
     opts.logger.info("computed strikes", {
       ticker: symbol,
       prevClose: prevClose.toString(),

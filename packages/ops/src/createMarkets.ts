@@ -35,7 +35,6 @@ export interface CreateMarketsOptions {
   tickers: Ticker[];
   /** Per-ticker previous close in USDC base units (drives the strike computation). */
   mockCloses: Partial<Record<TickerSymbol, BN>>;
-  includeClose: boolean;
   /**
    * The trading-day timestamp (unix seconds) the markets settle for. The program gates
    * mint/trade on `state == Open`, not the clock, so any value is tradable; the lifecycle
@@ -77,9 +76,7 @@ export async function createMarkets(
       );
       continue;
     }
-    const strikes = computeStrikes(prevClose, {
-      includeClose: opts.includeClose,
-    });
+    const strikes = computeStrikes(prevClose);
     opts.log?.step(
       `${symbol}: ${strikes.length} strike(s) from close ${baseUnitsToDollars(
         prevClose

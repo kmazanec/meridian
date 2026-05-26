@@ -48,7 +48,6 @@ async function main(): Promise<void> {
     usdcMint: new PublicKey(manifest.usdcMint),
     tickers: env.tickers,
     mockCloses: closes,
-    includeClose: env.includeClose,
     tradingDay,
     log,
   });

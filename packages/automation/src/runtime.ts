@@ -52,7 +52,6 @@ export function morningDeps(rt: Runtime) {
     provisioner: new SdkMarketProvisioner(rt.chain, rt.config.usdcMint),
     alerter: rt.alerter,
     logger: rt.logger,
-    includeClose: rt.config.includeClose,
   };
 }
 

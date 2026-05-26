@@ -82,7 +82,6 @@ async function main(): Promise<void> {
     usdcMint,
     tickers: env.tickers,
     mockCloses: closes,
-    includeClose: env.includeClose,
     tradingDay: Math.floor(Date.now() / 1000) + 2 * 3600,
     log,
   });

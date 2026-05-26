@@ -45,8 +45,6 @@ export interface AutomationConfig {
   alertWebhookUrl?: string;
   /** Optional Hermes endpoint override. */
   hermesUrl?: string;
-  /** Include the rounded close as an at-the-money strike. Default false. */
-  includeClose: boolean;
 }
 
 function required(env: Env, key: string): string {
@@ -135,10 +133,6 @@ export function loadConfig(env: Env = process.env): AutomationConfig {
     mockPrices,
     alertWebhookUrl,
     hermesUrl: env["HERMES_URL"]?.trim() || undefined,
-    // The at-the-money (rounded previous close) strike is on by default — it's the
-    // most-traded level and guarantees an odd strike count even when ±% legs collide
-    // by rounding (e.g. AAPL @ $230). Set INCLUDE_CLOSE=0 to drop it.
-    includeClose: parseBool(env["INCLUDE_CLOSE"], true),
   };
 }
 
@@ -206,11 +200,6 @@ function parseTickers(value: string | undefined): Ticker[] {
     .map((s) => symbolToTicker(s)); // throws on an unknown symbol
 }
 
-function parseBool(value: string | undefined, defaultValue = false): boolean {
-  if (value === undefined || value.trim() === "") return defaultValue;
-  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
-}
-
 /**
  * The environment keys this service reads, the single source of truth for
  * populating `.env.example`. Required keys are marked.
@@ -228,6 +217,5 @@ export const ENV_KEYS = {
     "TICKERS (comma list of symbols to run; default all MAG7)",
     "ALERT_WEBHOOK_URL (failure alerts POST here; default log-only)",
     "HERMES_URL (Pyth Hermes endpoint override)",
-    "INCLUDE_CLOSE (add the at-the-money rounded-close strike; default on, set 0 to drop)",
   ],
 } as const;

@@ -310,14 +310,17 @@ User wallet                  Program                    Vault
 
 **Strike algorithm (example, META prev close $680):** strikes at −9/−6/−3/+3/+6/+9%
 rounded to nearest $10 → $620, $640, $660, $700, $720, $740, plus the rounded close
-($680) as an at-the-money strike. The close strike is **on by default** (`INCLUDE_CLOSE`,
-set `0` to drop it) — it is the most-traded level and it backfills the at-the-money gap
-that appears when ±% legs collide under rounding. Deduplicate.
+($680) as an at-the-money strike. The at-the-money strike is **always included** (not
+configurable) — it is the most-traded level and it backfills the at-the-money gap that
+appears when the rounded close doesn't coincide with a ±% leg. Deduplicate.
 
-For **low-priced stocks** the ±% legs round onto the same $10 grid points and collapse.
-AAPL prev close $230: −3%/−6% both round to $220 and +3%/+6% both round to $240, so the
-six ± legs yield only `{$210, $220, $240, $250}`; the at-the-money close ($230) fills the
-gap for the brief's five unique strikes `{$210, $220, $230, $240, $250}`.
+The at-the-money strike matters most when the close sits between two legs. AAPL prev close
+**$308**: the ±% legs round to `{$280, $290, $300, $320, $330, $340}` (an even six with a
+hole at the money); the rounded close **$310** fills it, giving a centered seven. For
+**low-priced stocks** the ±% legs can also collapse onto the same $10 grid points: AAPL prev
+close $230 — −3%/−6% both round to $220 and +3%/+6% both round to $240 — so the six ± legs
+yield only `{$210, $220, $240, $250}`, and the close ($230) fills the gap for
+`{$210, $220, $230, $240, $250}`.
 
 ---
 
