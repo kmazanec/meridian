@@ -7,7 +7,7 @@ import {
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import type { Adapter } from "@solana/wallet-adapter-base";
-import { RPC_URL } from "@/lib/env";
+import { RPC_URL, deriveWsEndpoint } from "@/lib/env";
 import { E2EWalletAdapter } from "@/lib/e2eWallet";
 import {
   LocalDevWalletAdapter,
@@ -80,8 +80,19 @@ export function Providers({
     return [...extra, ...wallets];
   }, [wallets]);
 
+  // Derive the WS endpoint from the *actual* endpoint in use (a test/e2e may override it), so
+  // a custom RPC always gets a matching wsEndpoint. `undefined` (localhost) lets web3.js derive
+  // it; a scheme-swapped wss:// is used for hosted providers. See lib/env.ts for the rationale.
+  const config = useMemo(
+    () => ({
+      commitment: "confirmed" as const,
+      wsEndpoint: deriveWsEndpoint(endpoint),
+    }),
+    [endpoint]
+  );
+
   return (
-    <ConnectionProvider endpoint={endpoint}>
+    <ConnectionProvider endpoint={endpoint} config={config}>
       <WalletProvider wallets={walletList} autoConnect>
         <WalletModalProvider>
           {/* Shared chain-data store: one poll each for markets/books/config, app-wide. */}
