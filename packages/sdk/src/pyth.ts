@@ -14,10 +14,15 @@
  * available (used by tests and by anyone validating an update locally).
  */
 
-import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  VersionedTransaction,
+} from "@solana/web3.js";
 import type { MeridianProgram } from "./program";
 import { settleMarket, type MarketId } from "./instructions";
-import { sendAndConfirm } from "./confirm";
+import { confirmSignature, sendAndConfirm } from "./confirm";
 
 /** The Pyth Solana Receiver program id — same on devnet and mainnet (ADR-004). */
 export const PYTH_RECEIVER_PROGRAM_ID = new PublicKey(
@@ -164,11 +169,31 @@ export async function postPriceUpdate(
   const txs = await builder.buildVersionedTransactions({
     computeUnitPriceMicroLamports: 0,
   });
-  // Preflight is ON by default: a settlement post that would fail simulation should be
-  // caught here, not silently submitted. Callers may opt out for known-flaky RPCs.
-  const signatures = await receiver.provider.sendAll(txs, {
-    skipPreflight: opts.skipPreflight ?? false,
-  });
+
+  // Send + confirm each price-post tx ourselves instead of `receiver.provider.sendAll(…)`.
+  // The receiver's sendAll path goes through Anchor's `sendAndConfirmRawTransaction`, which
+  // calls `Connection.confirmTransaction` → `signatureSubscribe` (WS). Hosted RPCs that don't
+  // expose WS (Alchemy etc.) flood the logs with `-32601 Method 'signatureSubscribe' not
+  // found` here. Submit raw + confirm by polling via the SDK helper, matching every other
+  // settle/send site in the repo. Preflight stays ON: a settlement post that would fail
+  // simulation should surface here, not be submitted blind. Use a freshly fetched blockhash
+  // for the expiry bound (slightly conservative — the VT's baked-in blockhash from the
+  // builder is at most a few slots older, so this still gives the standard ~150-slot window).
+  const { lastValidBlockHeight } = await connection.getLatestBlockhash(
+    "confirmed"
+  );
+  const signatures: string[] = [];
+  for (const { tx, signers } of txs) {
+    const vt: VersionedTransaction = tx;
+    if (signers && signers.length > 0) vt.sign(signers);
+    vt.sign([payer]);
+    const signature = await connection.sendRawTransaction(vt.serialize(), {
+      preflightCommitment: "confirmed",
+      skipPreflight: opts.skipPreflight ?? false,
+    });
+    await confirmSignature(connection, signature, lastValidBlockHeight);
+    signatures.push(signature);
+  }
   return { priceUpdateAccount, signatures };
 }
 
