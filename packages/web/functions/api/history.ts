@@ -39,6 +39,11 @@ interface YahooChart {
           close?: Array<number | null>;
         }>;
       };
+      meta?: {
+        currentTradingPeriod?: {
+          regular?: { start?: number };
+        };
+      };
     }>;
     error?: unknown;
   };
@@ -63,18 +68,31 @@ function json(body: unknown, status: number, cacheSeconds = 0): Response {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/** Map a Yahoo chart payload to ascending daily {open?, close}, dropping closeless days. */
+/**
+ * Map a Yahoo chart payload to ascending daily {open?, close}, dropping closeless days AND
+ * today's in-progress bar. During RTH, Yahoo emits a row for today whose `close` is the running
+ * last tick, not a real close — including it would make "last close" mean "current price" and
+ * day-over-day deltas read 0 at the open. We strip it by comparing each row's timestamp to
+ * `currentTradingPeriod.regular.start` (today's 9:30 ET open in unix seconds): any bar at or
+ * after that point belongs to today's session-in-progress and is excluded. Outside RTH the
+ * regular-period start is the *next* session's open, so completed bars sail through.
+ */
 function toClosePoints(data: YahooChart): ClosePoint[] {
   const result = data.chart?.result?.[0];
   const stamps = result?.timestamp ?? [];
   const quote = result?.indicators?.quote?.[0];
   const closes = quote?.close ?? [];
   const opens = quote?.open ?? [];
+  const todayOpenTs = result?.meta?.currentTradingPeriod?.regular?.start;
   const out: ClosePoint[] = [];
   for (let i = 0; i < stamps.length; i++) {
+    const ts = stamps[i];
+    if (typeof ts !== "number" || !Number.isFinite(ts)) continue;
+    // Skip today's in-progress bar; only completed sessions belong in the daily series.
+    if (typeof todayOpenTs === "number" && ts >= todayOpenTs) continue;
     const close = closes[i];
     if (typeof close !== "number" || !Number.isFinite(close)) continue;
-    const date = new Date(stamps[i] * 1000).toISOString().slice(0, 10);
+    const date = new Date(ts * 1000).toISOString().slice(0, 10);
     const open = opens[i];
     const point: ClosePoint = { date, close: round2(close) };
     if (typeof open === "number" && Number.isFinite(open)) {
