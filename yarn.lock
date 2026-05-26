@@ -536,6 +536,8 @@ __metadata:
   resolution: "@meridian/automation@workspace:packages/automation"
   dependencies:
     "@meridian/sdk": "workspace:^"
+    "@pythnetwork/hermes-client": "npm:^1.0.0"
+    "@pythnetwork/pyth-solana-receiver": "npm:^0.16.0"
     "@solana/web3.js": "npm:^1.98.0"
     "@types/bn.js": "npm:^5.1.5"
     "@types/chai": "npm:^4.3.0"
@@ -548,14 +550,6 @@ __metadata:
     ts-mocha: "npm:^10.0.0"
     ts-node: "npm:^10.9.2"
     typescript: "npm:^5.7.3"
-  peerDependencies:
-    "@pythnetwork/hermes-client": ^1.0.0
-    "@pythnetwork/pyth-solana-receiver": ^0.16.0
-  peerDependenciesMeta:
-    "@pythnetwork/hermes-client":
-      optional: true
-    "@pythnetwork/pyth-solana-receiver":
-      optional: true
   bin:
     meridian-run-morning: ./dist/bin/run-morning.js
     meridian-run-settlement: ./dist/bin/run-settlement.js

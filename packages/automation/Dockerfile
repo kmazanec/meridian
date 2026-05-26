@@ -20,11 +20,11 @@ COPY package.json yarn.lock .yarnrc.yml ./
 COPY packages/sdk/package.json packages/sdk/
 COPY packages/automation/package.json packages/automation/
 
-# Install the SDK + automation workspaces (and the optional Pyth peer deps, which the
-# live PRICE_SOURCE=pyth / genuine-settlement path lazy-imports at runtime). Other
+# Install the SDK + automation workspaces. The Pyth client (`@pythnetwork/hermes-client`,
+# `@pythnetwork/pyth-solana-receiver`) is a regular dependency of @meridian/automation, so
+# `workspaces focus` installs it and its transitive deps (e.g. axios) into the image. Other
 # workspaces (web/ops/e2e) are not copied, so yarn installs only what these two need.
-RUN corepack yarn@4.10.2 workspaces focus @meridian/sdk @meridian/automation && \
-    corepack yarn@4.10.2 add -D @pythnetwork/hermes-client@^1.0.0 @pythnetwork/pyth-solana-receiver@^0.16.0
+RUN corepack yarn@4.10.2 workspaces focus @meridian/sdk @meridian/automation
 
 # Build SDK (automation imports its built dist), then automation.
 COPY packages/sdk/ packages/sdk/

@@ -23,20 +23,10 @@
   },
   "dependencies": {
     "@meridian/sdk": "workspace:^",
+    "@pythnetwork/hermes-client": "^1.0.0",
+    "@pythnetwork/pyth-solana-receiver": "^0.16.0",
     "@solana/web3.js": "^1.98.0",
     "bn.js": "^5.2.1"
-  },
-  "peerDependencies": {
-    "@pythnetwork/hermes-client": "^1.0.0",
-    "@pythnetwork/pyth-solana-receiver": "^0.16.0"
-  },
-  "peerDependenciesMeta": {
-    "@pythnetwork/hermes-client": {
-      "optional": true
-    },
-    "@pythnetwork/pyth-solana-receiver": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.5",
